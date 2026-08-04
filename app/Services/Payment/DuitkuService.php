@@ -172,7 +172,32 @@ class DuitkuService
             . $this->apiKey
         );
 
-        return hash_equals($expected, (string) $notification['signature']);
+        $valid = hash_equals($expected, (string) $notification['signature']);
+
+        // TEMPORARY diagnostic — every real production callback is
+        // currently failing this check even though the formula matches
+        // Duitku's own SDK byte-for-byte, so the mismatch has to be in
+        // the actual values (most likely $this->apiKey / merchantCode
+        // not matching what's on the Duitku dashboard, or a stale
+        // cached config on the server). Logs the received signature and
+        // our computed one side by side so the exact mismatch is
+        // visible in storage/logs/laravel.log on the next callback —
+        // remove once the root cause is confirmed and fixed.
+        if (! $valid) {
+            \Illuminate\Support\Facades\Log::warning('duitku-callback: signature mismatch detail', [
+                'received_signature' => $notification['signature'],
+                'expected_signature' => $expected,
+                'merchantCode_from_notification' => $notification['merchantCode'],
+                'merchantCode_configured' => $this->merchantCode,
+                'amount_from_notification' => $notification['amount'],
+                'merchantOrderId' => $notification['merchantOrderId'],
+                'apiKey_length_configured' => strlen($this->apiKey),
+                'apiKey_first4_configured' => substr($this->apiKey, 0, 4),
+                'apiKey_last4_configured' => substr($this->apiKey, -4),
+            ]);
+        }
+
+        return $valid;
     }
 
     /**
