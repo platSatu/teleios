@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+    <meta charset="utf-8" />
+    <title>Blank | Mirbal - Bootstrap Admin & Dashboard Template</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta content="Bootstrap Admin & Dashboard Template" name="description" />
+    <meta content="SRBThemes" name="author" />
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+
+    <!-- layout setup -->
+    <script type="module" src="{{asset('be')}}/assets/js/layout-setup.js"></script>
+    
+    <!-- App favicon -->
+    <link rel="shortcut icon" href="{{asset('be')}}/assets/images/favicon.png">
+    <!-- Simplebar Css -->
+    <link rel="stylesheet" href="{{asset('be')}}/assets/libs/simplebar/simplebar.min.css">
+    
+    <!-- Swiper Css -->
+    <link href="{{asset('be')}}/assets/libs/swiper/swiper-bundle.min.css" rel="stylesheet">
+    
+    <!-- Nouislider Css -->
+    <link href="{{asset('be')}}/assets/libs/nouislider/nouislider.min.css" rel="stylesheet">
+    
+    <!-- Bootstrap Css -->
+    <link href="{{asset('be')}}/assets/css/bootstrap.min.css" id="bootstrap-style" rel="stylesheet" type="text/css">
+    
+    <!--icons css-->
+    <link href="{{asset('be')}}/assets/css/icons.min.css" rel="stylesheet" type="text/css">
+    
+    <!-- App Css-->
+    <link href="{{asset('be')}}/assets/css/app.min.css" id="app-style" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+<!-- <div class="h-200px w-200px bg-danger"></div> -->
+
+<!-- begin::App -->
+<div id="layout-wrapper">
+
+    <!-- Begin Header -->
+    @include('layouts.partials.header')
+    <!-- END Header -->
+    
+    <div class="header-wrapper"></div>
+    
+    
+    @include('layouts.partials.menu')
+    
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+    <main class="app-wrapper">
+        <div class="container-fluid">
+
+            <div class="main-breadcrumb d-flex flex-wrap align-items-center my-4 position-relative gap-3">
+                <h2 class="breadcrumb-title mb-0 flex-grow-1 fs-16">Blank</h2>
+                <div class="flex-shrink-0">
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb justify-content-end mb-0">
+                            <li><i class="ri-home-4-line fs-16 me-2 lh-sm text-primary"></i></li>
+                            <li class="breadcrumb-item"><a href="javascript:void(0)">Pages</a></li>
+                            <li class="breadcrumb-item active" aria-current="page">Blank</li>
+                        </ol>
+                    </nav>
+                </div>
+                <div class="gap-4 content-title d-none">
+                    <div class="text-end">
+                        <h5 class="mb-2 text-white fs-16">Blank</h5>
+                        <h6 class="text-opacity-50 text-white fs-14 fw-medium mb-0">Page Overview</h6>
+                    </div>
+                    <div class="avatar-item avatar-lg rounded avatar-title text-white bg-white bg-opacity-10 border-0">
+                        <i class="uil uil-layers fs-4"></i>
+                    </div>
+                </div>
+            </div>
+            @yield('content')
+        </div><!--End container-fluid-->
+    </main><!--End app-wrapper-->
+
+   
+    <!-- Begin scroll top -->
+   @include('layouts.partials.scroll')
+    <!-- END scroll top -->
+    <!-- Begin Footer -->
+   @include('layouts.partials.footer')
+    <!-- END Footer -->
+</div>
+<!-- End Begin page -->
+
+<!-- Swiper bundle js -->
+<script src="{{asset('be')}}/assets/libs/swiper/swiper-bundle.min.js"></script>
+
+<!-- Bootstrap bundle js -->
+<script src="{{asset('be')}}/assets/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
+
+<!-- simplebar js -->
+<script src="{{asset('be')}}/assets/libs/simplebar/simplebar.min.js"></script>
+
+<!-- Scroll Top init -->
+<script src="{{asset('be')}}/assets/js/scroll-top.init.js"></script>
+<!-- App js -->
+<script src="{{asset('be')}}/assets/js/app.js"></script>
+
+</body>
+
+</html>

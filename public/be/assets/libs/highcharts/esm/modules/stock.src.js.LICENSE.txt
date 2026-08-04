@@ -1,0 +1,11 @@
+/**
+ * @license Highstock JS v12.4.0 (2025-09-04)
+ * @module highcharts/modules/stock
+ * @requires highcharts
+ *
+ * Highcharts Stock as a plugin for Highcharts
+ *
+ * (c) 2010-2025 Torstein Honsi
+ *
+ * License: www.highcharts.com/license
+ */

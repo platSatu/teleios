@@ -1,0 +1,11 @@
+/**
+ * @license Highcharts JS v12.4.0 (2025-09-04)
+ * @module highcharts/modules/bullet
+ * @requires highcharts
+ *
+ * Bullet graph series type for Highcharts
+ *
+ * (c) 2010-2025 Kacper Madej
+ *
+ * License: www.highcharts.com/license
+ */
