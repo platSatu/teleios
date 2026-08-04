@@ -36,6 +36,13 @@ class Voucher extends Model
         'valid_until',
         'redeemed_at',
         'status',
+        // Stamped by App\Console\Commands\SendPackageExpiryReminders as
+        // each expiry-reminder milestone is sent — see that migration's
+        // docblock (2026_08_05_090000_add_expiry_reminder_columns_to_vouchers_table).
+        'reminder_7d_sent_at',
+        'reminder_3d_sent_at',
+        'reminder_1d_sent_at',
+        'reminder_0d_sent_at',
     ];
 
     protected $casts = [
@@ -46,6 +53,10 @@ class Voucher extends Model
         'valid_from' => 'datetime',
         'valid_until' => 'datetime',
         'redeemed_at' => 'datetime',
+        'reminder_7d_sent_at' => 'datetime',
+        'reminder_3d_sent_at' => 'datetime',
+        'reminder_1d_sent_at' => 'datetime',
+        'reminder_0d_sent_at' => 'datetime',
     ];
 
     public function user(): BelongsTo

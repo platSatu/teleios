@@ -33,6 +33,15 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('wa-schedules:dispatch-due')
             ->everyMinute()
             ->withoutOverlapping();
+
+        // H-7/H-3/H-1/H0 package expiry reminder emails — see
+        // App\Console\Commands\SendPackageExpiryReminders for the full
+        // logic (idempotent per voucher+milestone, skips already-renewed
+        // vouchers). Once a day is enough since milestones are computed
+        // off calendar dates, not time-of-day.
+        $schedule->command('package:send-expiry-reminders')
+            ->dailyAt('08:00')
+            ->withoutOverlapping();
     })
      ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
@@ -41,6 +50,18 @@ return Application::configure(basePath: dirname(__DIR__))
             'golang.api-key' => \App\Http\Middleware\VerifyGolangApiKey::class,
             'menu.access' => \App\Http\Middleware\EnsureMenuAccess::class,
             'wa.api-key' => \App\Http\Middleware\VerifyWaApiKey::class,
+        ]);
+
+        // Stops the browser Back/Forward button from repainting a cached
+        // page (e.g. the checkout/payment screens) after logout instead of
+        // hitting the server, where 'auth' would otherwise catch it and
+        // redirect to /login. See App\Http\Middleware\
+        // PreventBackHistoryCache's docblock for the full explanation.
+        // Appended to the whole 'web' group (not just 'auth' routes) so
+        // any route added later is covered without needing to remember to
+        // tag it.
+        $middleware->web(append: [
+            \App\Http\Middleware\PreventBackHistoryCache::class,
         ]);
     })
     ->withMiddleware(function (Middleware $middleware): void {

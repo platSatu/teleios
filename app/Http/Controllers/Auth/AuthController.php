@@ -119,7 +119,7 @@ class AuthController extends Controller
         try {
             $token = $this->golangAuth->login($validated['email'], $validated['password']);
             session(['golang_jwt_token' => $token]);
-        } catch (\Throwable $e) {
+         } catch (\Throwable $e) {
             report($e);
         }
 

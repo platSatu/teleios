@@ -17,6 +17,7 @@ use App\Models\Voucher;
 use App\Models\VoucherUser;
 use App\Models\VoucherUserRedemption;
 use App\Models\Wallet;
+use App\Notifications\PackagePurchasedNotification;
 use App\Services\Wallet\WalletLedgerService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -346,6 +347,15 @@ class PackageCheckoutController extends Controller
         } catch (RuntimeException $e) {
             return back()->withInput()->with('error', $e->getMessage());
         }
+
+        // Sent only after the DB transaction above has fully committed
+        // (Subscription + PaymentTransaction + activation Voucher all
+        // saved) — never inside the transaction itself, so a mail/queue
+        // failure can't roll back a successful purchase. Queued (see
+        // PackagePurchasedNotification), so this doesn't slow down the
+        // redirect below.
+        $subscription->loadMissing(['package', 'voucher']);
+        $user->notify(new PackagePurchasedNotification($subscription));
 
         return redirect()
             ->route('dashboard.package.invoice', $subscription->id)
