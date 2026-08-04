@@ -369,6 +369,11 @@
                                     Payment Transaction
                                 </a>
                             </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('queue-monitor.index') }}" class="pe-nav-link">
+                                    Queue Monitor
+                                </a>
+                            </li>
                         </ul>
                     </li>
 

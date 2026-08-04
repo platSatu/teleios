@@ -29,6 +29,8 @@ use App\Http\Controllers\Superadmin\PaymentTransactionController;
 
 use App\Http\Controllers\Superadmin\AuditLogController;
 
+use App\Http\Controllers\Superadmin\QueueMonitorController;
+
 use App\Http\Controllers\Superadmin\RoleController;
 
 use App\Http\Controllers\Superadmin\HistoryUserLoginController;
@@ -596,6 +598,22 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
 
         Route::get('/audit-log', [AuditLogController::class, 'index'])
             ->name('audit-log.index');
+
+        // Read-only view over the `jobs` (pending) / `failed_jobs`
+        // (gave up after exhausting retries) tables that the `database`
+        // queue driver itself uses (see .env's QUEUE_CONNECTION) — lets
+        // superadmin eyeball what the queue worker (supervisord:
+        // teleios-worker) is actually chewing through without SSH'ing
+        // into the VPS. See Superadmin\QueueMonitorController's
+        // docblock.
+        Route::prefix('queue-monitor')
+            ->controller(QueueMonitorController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('queue-monitor.index');
+                Route::post('/failed/retry-all', 'retryAllFailed')->name('queue-monitor.failed.retry-all');
+                Route::post('/failed/{id}/retry', 'retryFailed')->name('queue-monitor.failed.retry');
+                Route::delete('/failed/{id}', 'destroyFailed')->name('queue-monitor.failed.destroy');
+            });
 
         Route::prefix('roles')
             ->controller(RoleController::class)
