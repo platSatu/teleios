@@ -75,6 +75,18 @@ class ConnectDeviceService
     }
 
     /**
+     * One device's connection history (connected/disconnected/logged out/
+     * reconnect attempts), newest first — lets a user see why their
+     * device dropped instead of just its current status.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function history(string $jwt, string $deviceId): array
+    {
+        return $this->request('get', "/api/wa/devices/{$deviceId}/history", $jwt)['history'] ?? [];
+    }
+
+    /**
      * @throws RuntimeException if the Go backend rejects the request or is
      *                          unreachable.
      */

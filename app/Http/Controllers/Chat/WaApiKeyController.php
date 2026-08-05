@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\WaApiKey;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\View\View;
 
 /**
  * Lets a company generate/regenerate a token+secret_key pair for one of
@@ -39,11 +40,33 @@ class WaApiKeyController extends Controller
     use ResolvesCompanyContext;
 
     /**
-     * Current key info for one device, or null if none has been
-     * generated yet — the modal uses this to decide whether to show
+     * The API Key page itself — was a Bootstrap modal launched from the
+     * Device list ("API Key" button per row); now its own full page you
+     * land on, so the URL is shareable/bookmarkable and refreshing it
+     * doesn't lose your place back on the Device list. Renders an empty
+     * shell; the page's own JS calls data() below to actually load the
+     * key (avoids a second Golang-JWT-bearing round trip just to decide
+     * which template to show).
+     *
+     * ?phone= is optional — passed through from the Device list link so
+     * the page can pre-fill "Nomor WhatsApp Tujuan Feedback" and label a
+     * freshly-generated key, without an extra request to look the phone
+     * number back up.
+     */
+    public function page(Request $request, string $device): View
+    {
+        return view('chat.konekdevice.api-key', [
+            'deviceId' => $device,
+            'devicePhone' => $request->query('phone', ''),
+        ]);
+    }
+
+    /**
+     * AJAX: current key info for one device, or null if none has been
+     * generated yet — the page uses this to decide whether to show
      * "Generate" or the existing token/secret + "Regenerate" buttons.
      */
-    public function show(Request $request, string $device): JsonResponse
+    public function data(Request $request, string $device): JsonResponse
     {
         $company = $this->ownedCompanyOrFail($request);
 

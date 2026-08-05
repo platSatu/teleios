@@ -97,6 +97,19 @@ class ConnectDeviceController extends Controller
     }
 
     /**
+     * AJAX: one device's connection history (connected/disconnected/
+     * logged out/reconnect attempts) — powers the "Riwayat" panel on the
+     * Device list, so a user can see why their device dropped instead of
+     * just its current status.
+     */
+    public function history(string $device): JsonResponse
+    {
+        return $this->safeJson(fn (string $jwt) => [
+            'history' => $this->connectDeviceService->history($jwt, $device),
+        ]);
+    }
+
+    /**
      * Run a callback that needs the Golang JWT, translating a missing
      * session or an upstream failure into a consistent JSON error
      * response instead of leaking exceptions to the frontend.

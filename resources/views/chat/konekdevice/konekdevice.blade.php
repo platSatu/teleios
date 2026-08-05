@@ -38,100 +38,6 @@
         </div>
     </div>
 
-    {{-- API Key modal — token/secret_key a third party uses to send
-         messages through one specific device (e.g. as a notification
-         channel), without ever logging into this dashboard. See
-         App\Http\Controllers\Chat\WaApiKeyController and
-         App\Models\WaApiKey. Shared by every row's "API Key" button. --}}
-    <div class="modal fade" id="wa-api-key-modal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">API Key Device</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <p class="text-muted small mb-3">
-                        Dipakai pihak ketiga (mis. sistem lain) untuk <strong>mengirim pesan</strong> lewat device ini,
-                        tanpa perlu login ke dashboard. Lihat dokumentasi lengkap di
-                        <a href="{{ url('/dokumentasi') }}" target="_blank" rel="noopener">/dokumentasi</a>.
-                    </p>
-
-                    <div id="wa-api-key-loading" class="text-center text-muted py-4">Memuat...</div>
-
-                    <div id="wa-api-key-empty" class="d-none text-center py-3">
-                        <p class="text-muted mb-3">Device ini belum punya API Key.</p>
-                        <button type="button" id="wa-api-key-generate-btn" class="btn btn-primary btn-sm">
-                            <i class="ri-key-2-line"></i> Generate Token &amp; Secret Key
-                        </button>
-                    </div>
-
-                    <div id="wa-api-key-details" class="d-none">
-                        <div class="mb-2">
-                            <label class="form-label fw-semibold mb-1">API Host</label>
-                            <div class="input-group input-group-sm">
-                                <input type="text" class="form-control" id="wa-api-key-host" readonly>
-                                <button type="button" class="btn btn-outline-secondary wa-copy-btn" data-target="wa-api-key-host"><i class="ri-file-copy-line"></i></button>
-                            </div>
-                        </div>
-                        <div class="mb-2">
-                            <label class="form-label fw-semibold mb-1">Token</label>
-                            <div class="input-group input-group-sm">
-                                <input type="text" class="form-control" id="wa-api-key-token" readonly>
-                                <button type="button" class="btn btn-outline-secondary wa-copy-btn" data-target="wa-api-key-token"><i class="ri-file-copy-line"></i></button>
-                            </div>
-                        </div>
-                        <div class="mb-2">
-                            <label class="form-label fw-semibold mb-1">Secret Key</label>
-                            <div class="input-group input-group-sm">
-                                <input type="text" class="form-control" id="wa-api-key-secret" readonly>
-                                <button type="button" class="btn btn-outline-secondary wa-copy-btn" data-target="wa-api-key-secret"><i class="ri-file-copy-line"></i></button>
-                            </div>
-                        </div>
-                        <p class="text-muted fs-12 mb-3">Terakhir dipakai: <span id="wa-api-key-last-used">-</span></p>
-
-                        <div class="d-flex gap-2 flex-wrap">
-                            <button type="button" id="wa-api-key-regen-token-btn" class="btn btn-outline-secondary btn-sm">
-                                <i class="ri-refresh-line"></i> Regenerate Token
-                            </button>
-                            <button type="button" id="wa-api-key-regen-secret-btn" class="btn btn-outline-secondary btn-sm">
-                                <i class="ri-refresh-line"></i> Regenerate Secret Key
-                            </button>
-                        </div>
-                        <p class="text-danger fs-12 mt-2 mb-0">
-                            Regenerate langsung mematikan token/secret lama — perbarui juga di pihak ketiga yang memakainya.
-                        </p>
-
-                        <hr class="my-3">
-
-                        <p class="fw-semibold mb-1">Feedback dari Google Form ke WhatsApp</p>
-                        <p class="text-muted fs-12 mb-2">
-                            Tempel script di bawah ke Google Form kamu (Extensions &gt; Apps Script), lalu pasang trigger
-                            "On form submit" — setiap jawaban baru otomatis dikirim ke nomor WhatsApp di bawah lewat device ini.
-                        </p>
-
-                        <div class="mb-2">
-                            <label class="form-label fw-semibold mb-1">Nomor WhatsApp Tujuan Feedback</label>
-                            <input type="text" class="form-control form-control-sm" id="wa-api-key-feedback-target"
-                                placeholder="628xxxxxxxxxx">
-                        </div>
-
-                        <div class="mb-1">
-                            <label class="form-label fw-semibold mb-1">Script Google Apps Script</label>
-                            <textarea class="form-control form-control-sm" id="wa-api-key-feedback-script" rows="10"
-                                readonly style="font-family: monospace; font-size: 11px;"></textarea>
-                        </div>
-                        <div class="text-end">
-                            <button type="button" class="btn btn-outline-secondary btn-sm wa-copy-btn" data-target="wa-api-key-feedback-script">
-                                <i class="ri-file-copy-line"></i> Salin Script
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     {{-- QR pairing modal, shared by "Tambah Device" and per-row "Refresh" --}}
     <div class="modal fade" id="wa-qr-modal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
         <div class="modal-dialog modal-dialog-centered">
@@ -159,6 +65,27 @@
                         <p class="mb-0 fw-semibold">WhatsApp berhasil terhubung!</p>
                         <p class="text-muted" id="wa-qr-phone-number"></p>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Device history modal — timestamped log of connect/disconnect/
+         logout/reconnect events for one device, so a user can see WHY it
+         dropped instead of just a bare "Terputus" badge. Shared by every
+         row's "Riwayat" button. See WaConnectDeviceService::logHistory
+         (Go) and App\Http\Controllers\Chat\ConnectDeviceController::history(). --}}
+    <div class="modal fade" id="wa-history-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Riwayat Koneksi <span id="wa-history-phone" class="text-muted fs-14"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+                    <div id="wa-history-loading" class="text-center text-muted py-4">Memuat...</div>
+                    <div id="wa-history-empty" class="d-none text-center text-muted py-4">Belum ada riwayat untuk device ini.</div>
+                    <ul id="wa-history-list" class="list-unstyled mb-0"></ul>
                 </div>
             </div>
         </div>
@@ -203,6 +130,13 @@
             70% { box-shadow: 0 0 0 8px rgba(245, 158, 11, 0); }
             100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
         }
+
+        .wa-history-item { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+        .wa-history-item:last-child { border-bottom: none; }
+        .wa-history-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+        .wa-history-label { font-weight: 600; font-size: 0.86rem; }
+        .wa-history-detail { font-size: 0.8rem; color: #6b7280; margin-top: 2px; }
+        .wa-history-time { font-size: 0.72rem; color: #9ca3af; margin-top: 2px; }
     </style>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -224,10 +158,8 @@
             const reconnectUrlTemplate = @json(route('chat.connect-device.reconnect', ['device' => '__ID__']));
             const disconnectUrlTemplate = @json(route('chat.connect-device.disconnect', ['device' => '__ID__']));
             const inboxUrlTemplate = @json(route('inbox.index', ['device' => '__ID__']));
-            const apiKeyShowUrlTemplate = @json(route('chat.connect-device.api-key.show', ['device' => '__ID__']));
-            const apiKeyGenerateUrlTemplate = @json(route('chat.connect-device.api-key.generate', ['device' => '__ID__']));
-            const apiKeyRegenTokenUrlTemplate = @json(route('chat.connect-device.api-key.regenerate-token', ['device' => '__ID__']));
-            const apiKeyRegenSecretUrlTemplate = @json(route('chat.connect-device.api-key.regenerate-secret', ['device' => '__ID__']));
+            const apiKeyPageUrlTemplate = @json(route('chat.connect-device.api-key.show', ['device' => '__ID__']));
+            const historyUrlTemplate = @json(route('chat.connect-device.history', ['device' => '__ID__']));
             const csrfToken = @json(csrf_token());
 
             const tableBody = document.getElementById('wa-device-table-body');
@@ -352,17 +284,27 @@
                         disconnectDevice(device.id, disconnectBtn);
                     });
 
-                    const apiKeyBtn = document.createElement('button');
-                    apiKeyBtn.type = 'button';
+                    const apiKeyBtn = document.createElement('a');
                     apiKeyBtn.className = 'btn btn-outline-dark';
                     apiKeyBtn.innerHTML = '<i class="ri-key-2-line"></i> API Key';
-                    apiKeyBtn.addEventListener('click', function () {
-                        openApiKeyModal(device.id, device.phone_number);
+                    let apiKeyHref = urlFor(apiKeyPageUrlTemplate, device.id);
+                    if (device.phone_number) {
+                        apiKeyHref += '?phone=' + encodeURIComponent(device.phone_number);
+                    }
+                    apiKeyBtn.href = apiKeyHref;
+
+                    const historyBtn = document.createElement('button');
+                    historyBtn.type = 'button';
+                    historyBtn.className = 'btn btn-outline-secondary';
+                    historyBtn.innerHTML = '<i class="ri-history-line"></i> Riwayat';
+                    historyBtn.addEventListener('click', function () {
+                        openHistoryModal(device.id, device.phone_number);
                     });
 
                     actionGroup.appendChild(inboxBtn);
                     actionGroup.appendChild(refreshBtn);
                     actionGroup.appendChild(apiKeyBtn);
+                    actionGroup.appendChild(historyBtn);
                     actionGroup.appendChild(disconnectBtn);
                     actionCell.appendChild(actionGroup);
 
@@ -509,166 +451,94 @@
             loadDevices();
             tablePollTimer = setInterval(loadDevices, 5000);
 
-            // --- API Key modal -------------------------------------------------
-            const apiKeyModalEl = document.getElementById('wa-api-key-modal');
-            const apiKeyModal = new bootstrap.Modal(apiKeyModalEl);
-            const apiKeyLoading = document.getElementById('wa-api-key-loading');
-            const apiKeyEmpty = document.getElementById('wa-api-key-empty');
-            const apiKeyDetails = document.getElementById('wa-api-key-details');
-            const apiKeyGenerateBtn = document.getElementById('wa-api-key-generate-btn');
-            const apiKeyRegenTokenBtn = document.getElementById('wa-api-key-regen-token-btn');
-            const apiKeyRegenSecretBtn = document.getElementById('wa-api-key-regen-secret-btn');
-            const apiKeyHostInput = document.getElementById('wa-api-key-host');
-            const apiKeyTokenInput = document.getElementById('wa-api-key-token');
-            const apiKeySecretInput = document.getElementById('wa-api-key-secret');
-            const apiKeyLastUsedEl = document.getElementById('wa-api-key-last-used');
-            const apiKeyFeedbackTargetInput = document.getElementById('wa-api-key-feedback-target');
-            const apiKeyFeedbackScriptTextarea = document.getElementById('wa-api-key-feedback-script');
+            // --- history modal --------------------------------------------
+            const historyModalEl = document.getElementById('wa-history-modal');
+            const historyModal = new bootstrap.Modal(historyModalEl);
+            const historyPhoneEl = document.getElementById('wa-history-phone');
+            const historyLoadingEl = document.getElementById('wa-history-loading');
+            const historyEmptyEl = document.getElementById('wa-history-empty');
+            const historyListEl = document.getElementById('wa-history-list');
 
-            let currentApiKeyDeviceId = null;
-            let currentApiKeyDevicePhone = '';
+            const HISTORY_META = {
+                connected: { label: 'Terhubung', color: '#22c55e' },
+                reconnected: { label: 'Berhasil Tersambung Ulang', color: '#22c55e' },
+                disconnected: { label: 'Terputus Sementara', color: '#f59e0b' },
+                reconnecting: { label: 'Mencoba Menyambung Ulang', color: '#f59e0b' },
+                pending_qr: { label: 'Menunggu Scan QR', color: '#f59e0b' },
+                reconnect_failed: { label: 'Gagal Menyambung Ulang', color: '#ef4444' },
+                logged_out: { label: 'Logout dari WhatsApp', color: '#ef4444' },
+                manual_disconnect: { label: 'Diputuskan Manual', color: '#6b7280' },
+            };
 
-            function apiKeyShowState(state) {
-                apiKeyLoading.classList.toggle('d-none', state !== 'loading');
-                apiKeyEmpty.classList.toggle('d-none', state !== 'empty');
-                apiKeyDetails.classList.toggle('d-none', state !== 'details');
+            function historyTimeLabel(iso) {
+                if (!iso) return '-';
+                const date = new Date(iso);
+                if (isNaN(date.getTime())) return '-';
+                return date.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
             }
 
-            // Builds the ready-to-paste Google Apps Script for "Feedback dari
-            // Google Form ke WhatsApp" (see the modal section right below the
-            // token/secret fields) — POSTs to the SAME public endpoint any
-            // third party uses (App\Http\Controllers\Api\
-            // WaApiSendMessageController, X-WA-Token/X-WA-Secret headers),
-            // just from Apps Script's onFormSubmit trigger instead of another
-            // backend. Regenerated live whenever the token/secret/target
-            // number change so it's always copy-paste ready.
-            function buildFeedbackScript() {
-                const apiUrl = (apiKeyHostInput.value || '').replace(/\/+$/, '') + '/api/wa-api/v1/send-message';
-                const target = apiKeyFeedbackTargetInput.value.trim() || '628xxxxxxxxxx';
+            function renderHistory(items) {
+                historyListEl.innerHTML = '';
+                historyEmptyEl.classList.toggle('d-none', items.length > 0);
 
-                return [
-                    'function onFormSubmit(e) {',
-                    '  var CONFIG = {',
-                    '    apiUrl: ' + JSON.stringify(apiUrl) + ',',
-                    '    waToken: ' + JSON.stringify(apiKeyTokenInput.value || '') + ',',
-                    '    waSecret: ' + JSON.stringify(apiKeySecretInput.value || '') + ',',
-                    '    targetNumber: ' + JSON.stringify(target),
-                    '  };',
-                    '',
-                    '  var lines = ["Feedback Baru:", ""];',
-                    '  e.response.getItemResponses().forEach(function (item) {',
-                    '    lines.push(item.getItem().getTitle() + ": " + item.getResponse());',
-                    '  });',
-                    '',
-                    '  var options = {',
-                    '    method: "post",',
-                    '    contentType: "application/json",',
-                    '    headers: {',
-                    '      "X-WA-Token": CONFIG.waToken,',
-                    '      "X-WA-Secret": CONFIG.waSecret',
-                    '    },',
-                    '    payload: JSON.stringify({ to: CONFIG.targetNumber, message: lines.join("\\n") }),',
-                    '    muteHttpExceptions: true',
-                    '  };',
-                    '',
-                    '  UrlFetchApp.fetch(CONFIG.apiUrl, options);',
-                    '}',
-                ].join('\n');
-            }
+                items.forEach(function (item) {
+                    const meta = HISTORY_META[item.event] || { label: item.event, color: '#9ca3af' };
 
-            function refreshFeedbackScript() {
-                if (apiKeyFeedbackScriptTextarea) {
-                    apiKeyFeedbackScriptTextarea.value = buildFeedbackScript();
-                }
-            }
+                    const li = document.createElement('li');
+                    li.className = 'wa-history-item';
 
-            if (apiKeyFeedbackTargetInput) {
-                apiKeyFeedbackTargetInput.addEventListener('input', refreshFeedbackScript);
-            }
+                    const dot = document.createElement('span');
+                    dot.className = 'wa-history-dot';
+                    dot.style.background = meta.color;
+                    li.appendChild(dot);
 
-            function renderApiKey(apiKey) {
-                if (!apiKey) {
-                    apiKeyShowState('empty');
-                    return;
-                }
+                    const body = document.createElement('div');
 
-                apiKeyHostInput.value = apiKey.api_host || '';
-                apiKeyTokenInput.value = apiKey.token || '';
-                apiKeySecretInput.value = apiKey.secret_key || '';
-                apiKeyLastUsedEl.textContent = apiKey.last_used_at || 'Belum pernah dipakai';
+                    const label = document.createElement('div');
+                    label.className = 'wa-history-label';
+                    label.textContent = meta.label;
+                    body.appendChild(label);
 
-                if (apiKeyFeedbackTargetInput && !apiKeyFeedbackTargetInput.value) {
-                    apiKeyFeedbackTargetInput.value = currentApiKeyDevicePhone || '';
-                }
-                refreshFeedbackScript();
+                    if (item.detail) {
+                        const detail = document.createElement('div');
+                        detail.className = 'wa-history-detail';
+                        detail.textContent = item.detail;
+                        body.appendChild(detail);
+                    }
 
-                apiKeyShowState('details');
-            }
+                    const time = document.createElement('div');
+                    time.className = 'wa-history-time';
+                    time.textContent = historyTimeLabel(item.created_at);
+                    body.appendChild(time);
 
-            function loadApiKey(deviceId) {
-                apiKeyShowState('loading');
-                fetchJson(urlFor(apiKeyShowUrlTemplate, deviceId))
-                    .then(function (data) { renderApiKey(data.api_key); })
-                    .catch(function () { apiKeyShowState('empty'); });
-            }
-
-            function openApiKeyModal(deviceId, phoneNumber) {
-                currentApiKeyDeviceId = deviceId;
-                currentApiKeyDevicePhone = phoneNumber || '';
-                if (apiKeyFeedbackTargetInput) {
-                    apiKeyFeedbackTargetInput.value = '';
-                }
-                apiKeyModal.show();
-                loadApiKey(deviceId);
-
-                apiKeyGenerateBtn.onclick = function () {
-                    apiKeyGenerateBtn.disabled = true;
-                    const url = urlFor(apiKeyGenerateUrlTemplate, deviceId);
-                    const body = phoneNumber ? ('device_label=' + encodeURIComponent('+' + phoneNumber)) : '';
-                    fetchJson(url, {
-                        method: 'POST',
-                        headers: {
-                            'X-CSRF-TOKEN': csrfToken,
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                        },
-                        body: body,
-                    })
-                        .then(function (data) { renderApiKey(data.api_key); })
-                        .finally(function () { apiKeyGenerateBtn.disabled = false; });
-                };
-            }
-
-            function regenerateApiKeyPart(urlTemplate, confirmMessage) {
-                if (!currentApiKeyDeviceId) return;
-                if (!confirm(confirmMessage)) return;
-
-                fetchJson(urlFor(urlTemplate, currentApiKeyDeviceId), {
-                    method: 'POST',
-                    headers: { 'X-CSRF-TOKEN': csrfToken },
-                }).then(function (data) { renderApiKey(data.api_key); });
-            }
-
-            apiKeyRegenTokenBtn.addEventListener('click', function () {
-                regenerateApiKeyPart(apiKeyRegenTokenUrlTemplate, 'Generate ulang Token? Token lama langsung berhenti berfungsi.');
-            });
-
-            apiKeyRegenSecretBtn.addEventListener('click', function () {
-                regenerateApiKeyPart(apiKeyRegenSecretUrlTemplate, 'Generate ulang Secret Key? Secret lama langsung berhenti berfungsi.');
-            });
-
-            document.querySelectorAll('.wa-copy-btn').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    const input = document.getElementById(btn.getAttribute('data-target'));
-                    if (!input || !input.value) return;
-
-                    navigator.clipboard.writeText(input.value).then(function () {
-                        const icon = btn.querySelector('i');
-                        const original = icon.className;
-                        icon.className = 'ri-check-line text-success';
-                        setTimeout(function () { icon.className = original; }, 1200);
-                    });
+                    li.appendChild(body);
+                    historyListEl.appendChild(li);
                 });
-            });
+            }
+
+            function loadHistory(deviceId) {
+                historyLoadingEl.classList.remove('d-none');
+                historyEmptyEl.classList.add('d-none');
+                historyListEl.innerHTML = '';
+
+                fetchJson(urlFor(historyUrlTemplate, deviceId))
+                    .then(function (data) {
+                        renderHistory(data.history || []);
+                    })
+                    .catch(function () {
+                        historyEmptyEl.textContent = 'Gagal memuat riwayat.';
+                        historyEmptyEl.classList.remove('d-none');
+                    })
+                    .finally(function () {
+                        historyLoadingEl.classList.add('d-none');
+                    });
+            }
+
+            function openHistoryModal(deviceId, phoneNumber) {
+                historyPhoneEl.textContent = phoneNumber ? ('— +' + phoneNumber) : '';
+                historyModal.show();
+                loadHistory(deviceId);
+            }
         })();
         });
     </script>

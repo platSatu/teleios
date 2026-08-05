@@ -169,6 +169,7 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::get('/{device}/status', 'status')->name('chat.connect-device.status');
                 Route::post('/{device}/reconnect', 'reconnect')->name('chat.connect-device.reconnect');
                 Route::post('/{device}/disconnect', 'disconnect')->name('chat.connect-device.disconnect');
+                Route::get('/{device}/history', 'history')->name('chat.connect-device.history');
             });
 
         // Per-device third-party API credentials (token + secret_key) —
@@ -179,7 +180,13 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
         Route::prefix('connect-device/{device}/api-key')
             ->controller(WaApiKeyController::class)
             ->group(function () {
-                Route::get('/', 'show')->name('chat.connect-device.api-key.show');
+                // '/' renders the dedicated API Key page (was a modal on
+                // the Device list page) — 'data' is the JSON the page's
+                // own JS calls to actually load the key, same split
+                // InboxController uses (index() renders the shell,
+                // chats()/messages() feed it data).
+                Route::get('/', 'page')->name('chat.connect-device.api-key.show');
+                Route::get('/data', 'data')->name('chat.connect-device.api-key.data');
                 Route::post('/generate', 'generate')->name('chat.connect-device.api-key.generate');
                 Route::post('/regenerate-token', 'regenerateToken')->name('chat.connect-device.api-key.regenerate-token');
                 Route::post('/regenerate-secret', 'regenerateSecret')->name('chat.connect-device.api-key.regenerate-secret');
