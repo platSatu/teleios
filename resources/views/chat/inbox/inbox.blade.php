@@ -99,7 +99,10 @@
                         <div class="wa-detail-section-title">
                             <span><i class="ri-user-add-line"></i> ASSIGNMENT</span>
                         </div>
-                        <button type="button" class="wa-inert-btn" disabled title="Fitur assign ke tim/agent belum tersedia">+ Assign</button>
+                        <select id="wa-contact-assign-select" class="wa-assign-select" disabled>
+                            <option value="">Memuat...</option>
+                        </select>
+                        <div class="text-muted small mt-1 d-none" id="wa-contact-branch"></div>
                     </div>
 
                     <div class="wa-detail-section wa-label-section">
@@ -344,6 +347,8 @@
         .wa-detail-section-title i { margin-right: 4px; }
 
         .wa-inert-btn { width: 100%; border: 1px dashed #d1d5db; background: transparent; color: #9ca3af; border-radius: 8px; padding: 8px; font-size: 0.82rem; cursor: not-allowed; }
+        .wa-assign-select { width: 100%; border: 1px solid #d1d5db; background: #fff; color: #374151; border-radius: 8px; padding: 7px 10px; font-size: 0.82rem; }
+        .wa-assign-select:disabled { color: #9ca3af; background: #f9fafb; cursor: not-allowed; }
 
         /* --- labels --- */
         .wa-label-section { position: relative; }
@@ -400,6 +405,8 @@
             const labelAttachUrlTemplate = @json(route('inbox.labels.attach', ['device' => $deviceId, 'jid' => '__JID__']));
             const notesUrlTemplate = @json(route('inbox.notes', ['device' => $deviceId, 'jid' => '__JID__']));
             const mediaListUrlTemplate = @json(route('inbox.media-list', ['device' => $deviceId, 'jid' => '__JID__']));
+            const contactUrlTemplate = @json(route('inbox.contact', ['device' => $deviceId, 'jid' => '__JID__']));
+            const contactAssignUrlTemplate = @json(route('inbox.contact.assign', ['device' => $deviceId, 'jid' => '__JID__']));
             const csrfToken = @json(csrf_token());
 
             // Detach re-uses the attach URL above instead of its own
@@ -446,6 +453,8 @@
             const detailAvatarEl = document.getElementById('wa-detail-avatar');
             const detailNameEl = document.getElementById('wa-detail-name');
             const detailPhoneEl = document.getElementById('wa-detail-phone');
+            const contactAssignSelectEl = document.getElementById('wa-contact-assign-select');
+            const contactBranchEl = document.getElementById('wa-contact-branch');
             const toggleDetailBtnEl = document.getElementById('wa-toggle-detail-btn');
             const threadBackBtnEl = document.getElementById('wa-thread-back-btn');
             const inboxShellEl = document.querySelector('.wa-inbox-shell');
@@ -958,6 +967,72 @@
                 detailPhoneEl.textContent = chat.phone || phoneFromJid(chat.chat_jid);
             }
 
+            // --- contact assignment ---
+            // A group/channel isn't a "contact" (no single phone number to
+            // key on) — WaContact is only ever keyed by (company, phone),
+            // so those chat types just show the select disabled instead of
+            // calling the endpoint at all.
+            let currentContactPhone = '';
+
+            function loadContact() {
+                if (!activeChatJid) return;
+
+                if (activeChatJid.indexOf('@g.us') !== -1 || activeChatJid.indexOf('@newsletter') !== -1) {
+                    currentContactPhone = '';
+                    contactAssignSelectEl.innerHTML = '<option value="">Tidak tersedia untuk grup/channel</option>';
+                    contactAssignSelectEl.disabled = true;
+                    contactBranchEl.classList.add('d-none');
+                    return;
+                }
+
+                const requestedChatJid = activeChatJid;
+                const phone = (activeChat && activeChat.phone) ? activeChat.phone : activeChatJid.split('@')[0];
+                const name = (activeChat && activeChat.name) ? activeChat.name : '';
+                const url = urlFor(contactUrlTemplate, requestedChatJid)
+                    + '?phone=' + encodeURIComponent(phone)
+                    + '&name=' + encodeURIComponent(name);
+
+                fetchJson(url).then(function (data) {
+                    if (activeChatJid !== requestedChatJid) return;
+                    renderContact(data.contact, data.team_members || []);
+                });
+            }
+
+            function renderContact(contact, teamMembers) {
+                currentContactPhone = contact ? contact.phone : '';
+
+                let html = '<option value="">Belum ditugaskan</option>';
+                teamMembers.forEach(function (member) {
+                    const selected = contact && String(contact.assigned_to) === String(member.id) ? ' selected' : '';
+                    html += '<option value="' + member.id + '"' + selected + '>' + member.name + '</option>';
+                });
+                contactAssignSelectEl.innerHTML = html;
+                contactAssignSelectEl.disabled = !contact;
+
+                if (contact && contact.branch_office_name) {
+                    contactBranchEl.textContent = 'Cabang: ' + contact.branch_office_name;
+                    contactBranchEl.classList.remove('d-none');
+                } else {
+                    contactBranchEl.classList.add('d-none');
+                }
+            }
+
+            contactAssignSelectEl.addEventListener('change', function () {
+                if (!activeChatJid || !currentContactPhone) return;
+
+                fetchJson(urlFor(contactAssignUrlTemplate, activeChatJid), {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                    },
+                    body: JSON.stringify({ assigned_to: contactAssignSelectEl.value, phone: currentContactPhone }),
+                }).then(function (data) {
+                    if (data.error) alert(data.error);
+                });
+            });
+
             // --- labels ---
             let currentLabels = [];
 
@@ -1323,6 +1398,7 @@
                 loadLabels();
                 loadNotes();
                 loadMedia();
+                loadContact();
                 // Opening a chat clears its unread count server-side; pull
                 // the chat list again right away instead of waiting for the
                 // next scheduled poll, so the badge disappears immediately.

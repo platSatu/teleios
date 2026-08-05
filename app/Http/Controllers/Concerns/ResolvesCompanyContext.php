@@ -3,8 +3,11 @@
 namespace App\Http\Controllers\Concerns;
 
 use App\Models\Company;
+use App\Models\CompanyToUser;
+use App\Models\User;
 use App\Services\Company\CompanyContext;
 use App\Services\Company\CompanyContextResolver;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 
 /**
@@ -39,5 +42,40 @@ trait ResolvesCompanyContext
     protected function ownedCompanyOrFail(Request $request): Company
     {
         return $this->companyContext($request)->company;
+    }
+
+    /**
+     * Every real (non-invited-but-pending) user who could plausibly be
+     * assigned a contact or a chat: the company owner, plus every member
+     * with a CompanyToUser row — deduplicated, since a member can have
+     * several rows (one per CategoryApplication granted, see
+     * App\Models\CompanyToUser's docblock). Used by the Kontak page and
+     * the Inbox detail panel's assignee dropdown.
+     *
+     * $branchOfficeId narrows to members locked to that one branch (plus
+     * the owner, who is never branch-locked) — pass the acting user's own
+     * CompanyContext->branchOffice?->id to keep the dropdown to "people
+     * who can actually see this contact", or leave null for every member
+     * company-wide.
+     *
+     * @return Collection<int, User>
+     */
+    protected function companyTeamMembers(Company $company, ?string $branchOfficeId = null): Collection
+    {
+        $memberQuery = CompanyToUser::where('company_id', $company->id)
+            ->where('status', 'active');
+
+        if ($branchOfficeId) {
+            $memberQuery->where(function ($q) use ($branchOfficeId) {
+                $q->where('branch_office_id', $branchOfficeId)
+                    ->orWhereNull('branch_office_id');
+            });
+        }
+
+        $memberUserIds = $memberQuery->pluck('user_id');
+
+        $userIds = $memberUserIds->push($company->user_id)->unique()->values();
+
+        return User::whereIn('id', $userIds)->orderBy('name')->get();
     }
 }

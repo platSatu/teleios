@@ -171,7 +171,13 @@
                     '    muteHttpExceptions: true',
                     '  };',
                     '',
-                    '  UrlFetchApp.fetch(CONFIG.apiUrl, options);',
+                    '  var response = UrlFetchApp.fetch(CONFIG.apiUrl, options);',
+                    '  // Logged so a failed send is visible in Apps Script\'s',
+                    '  // "Executions" panel (View > Executions) instead of failing',
+                    '  // silently — muteHttpExceptions above stops a non-2xx',
+                    '  // response from throwing, so without this log line there',
+                    '  // would be no way to tell a send failed at all.',
+                    '  Logger.log("WA API response %s: %s", response.getResponseCode(), response.getContentText());',
                     '}',
                 ].join('\n');
             }

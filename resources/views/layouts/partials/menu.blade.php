@@ -118,11 +118,13 @@
                                             <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
                                         </a>
                                         <ul class="pe-slide-menu collapse" id="collapseBukuTelephone">
+                                            @if ($canSeeChatMenu('chat.contacts.index'))
                                             <li class="pe-slide-item">
-                                                <a href="apps-social-inbox.html" class="pe-nav-link">
+                                                <a href="{{ route('chat.contacts.index') }}" class="pe-nav-link">
                                                     Kontak
                                                 </a>
                                             </li>
+                                            @endif
                                             <li class="pe-slide-item">
                                                 <a href="apps-social-compose.html" class="pe-nav-link">
                                                     Kelompok

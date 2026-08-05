@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\WaChatLabel;
 use App\Models\WaChatLabelAssignment;
 use App\Models\WaChatNote;
+use App\Models\WaContact;
 use App\Services\Chat\InboxService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -312,6 +313,113 @@ class InboxController extends Controller
             ->delete();
 
         return response()->json(['status' => 'ok']);
+    }
+
+    /**
+     * AJAX: this chat's CRM contact record — auto-creating/refreshing it
+     * the first time a chat is opened (?phone= carries the Go-resolved
+     * phone number the frontend already has from the chat list, since
+     * that's the one place @lid resolution already happened; see
+     * App\Models\WaContact's docblock for why phone rather than chat_jid
+     * is the identity key). Powers the detail panel's assignee dropdown
+     * and branch label — replaces what used to be a permanently-disabled
+     * "+ Assign" button with no data behind it at all.
+     *
+     * Groups/channels have no individual phone number and so never get a
+     * contact record — returns null for those rather than erroring, so
+     * the detail panel can just hide the section.
+     */
+    public function contact(Request $request, string $device, string $jid): JsonResponse
+    {
+        $context = $this->companyContext($request);
+
+        if (str_ends_with($jid, '@g.us') || str_ends_with($jid, '@newsletter')) {
+            return response()->json(['contact' => null, 'team_members' => []]);
+        }
+
+        $phone = WaContact::normalizePhone((string) $request->query('phone', ''));
+
+        $teamMembers = $this->companyTeamMembers(
+            $context->company,
+            $context->isLockedToBranch() ? $context->branchOffice?->id : null
+        );
+
+        if ($phone === '') {
+            // Nothing to key a contact on yet (phone hasn't resolved on
+            // the Go side, e.g. right after a brand new chat starts) —
+            // still return the team member list so the UI has something
+            // to render, just no contact row.
+            return response()->json(['contact' => null, 'team_members' => $this->presentUsers($teamMembers)]);
+        }
+
+        $contact = WaContact::firstOrNew([
+            'company_id' => $context->company->id,
+            'phone' => $phone,
+        ]);
+
+        if (! $contact->exists) {
+            $contact->branch_office_id = $context->isLockedToBranch() ? $context->branchOffice?->id : null;
+            $contact->name = $request->string('name')->value() ?: null;
+            $contact->source = 'whatsapp';
+        } elseif (! $contact->name && $request->filled('name')) {
+            $contact->name = $request->string('name')->value();
+        }
+
+        $contact->last_contacted_at = now();
+        $contact->save();
+        $contact->load(['branchOffice:id,name', 'assignee:id,name']);
+
+        return response()->json([
+            'contact' => [
+                'id' => $contact->id,
+                'name' => $contact->name,
+                'phone' => $contact->phone,
+                'branch_office_name' => $contact->branchOffice?->name,
+                'assigned_to' => $contact->assigned_to,
+                'assigned_to_name' => $contact->assignee?->name,
+            ],
+            'team_members' => $this->presentUsers($teamMembers),
+        ]);
+    }
+
+    /**
+     * AJAX: hand this chat's contact to a team member (or clear it —
+     * assigned_to may be sent empty/null).
+     */
+    public function assignContact(Request $request, string $device, string $jid): JsonResponse
+    {
+        $context = $this->companyContext($request);
+
+        $validated = $request->validate([
+            'assigned_to' => ['nullable', 'uuid', 'exists:users,id'],
+        ]);
+
+        $phone = WaContact::normalizePhone((string) $request->input('phone', ''));
+
+        if ($phone === '') {
+            return response()->json(['error' => 'Kontak belum ditemukan untuk chat ini.'], 422);
+        }
+
+        $contact = WaContact::where('company_id', $context->company->id)
+            ->where('phone', $phone)
+            ->firstOrFail();
+
+        $contact->update(['assigned_to' => $validated['assigned_to'] ?? null]);
+        $contact->load('assignee:id,name');
+
+        return response()->json([
+            'assigned_to' => $contact->assigned_to,
+            'assigned_to_name' => $contact->assignee?->name,
+        ]);
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, \App\Models\User>  $users
+     * @return array<int, array<string, string>>
+     */
+    private function presentUsers($users): array
+    {
+        return $users->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values()->all();
     }
 
     /**

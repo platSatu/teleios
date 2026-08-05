@@ -88,6 +88,7 @@ use App\Http\Controllers\User\History\HistoryUserController;
 use App\Http\Controllers\Chat\ConnectDeviceController;
 use App\Http\Controllers\Chat\WaApiKeyController;
 use App\Http\Controllers\Chat\ChatLabelController;
+use App\Http\Controllers\Chat\ContactController;
 use App\Http\Controllers\Chat\InboxController;
 use App\Http\Controllers\Chat\MessageScheduleController;
 use App\Http\Controllers\Chat\MessageTemplateController;
@@ -158,6 +159,8 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::put('/chats/{jid}/notes', 'updateNote')->name('inbox.notes.update');
                 Route::delete('/chats/{jid}/notes', 'deleteNote')->name('inbox.notes.destroy');
                 Route::get('/chats/{jid}/media-list', 'mediaList')->name('inbox.media-list');
+                Route::get('/chats/{jid}/contact', 'contact')->name('inbox.contact');
+                Route::post('/chats/{jid}/contact/assign', 'assignContact')->name('inbox.contact.assign');
             });
 
         Route::prefix('connect-device')
@@ -227,6 +230,18 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::post('/', 'store')->name('chat.labels.store');
                 Route::put('/{id}', 'update')->name('chat.labels.update');
                 Route::delete('/{id}', 'destroy')->name('chat.labels.destroy');
+            });
+
+        // "Kontak" — the CRM contact book (Chat > Kontak). See
+        // App\Http\Controllers\Chat\ContactController's docblock for how
+        // this differs from InboxController's per-chat contact()/
+        // assignContact() (also below, under inbox/{device}).
+        Route::prefix('contacts')
+            ->controller(ContactController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('chat.contacts.index');
+                Route::get('/list', 'list')->name('chat.contacts.list');
+                Route::put('/{contact}', 'update')->name('chat.contacts.update');
             });
 
         Route::prefix('message-auto-replies')
