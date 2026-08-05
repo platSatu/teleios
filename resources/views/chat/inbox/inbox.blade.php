@@ -369,8 +369,19 @@
             const presenceUrlTemplate = @json(route('inbox.presence', ['device' => $deviceId, 'jid' => '__JID__']));
             const labelsUrlTemplate = @json(route('inbox.labels', ['device' => $deviceId, 'jid' => '__JID__']));
             const labelAttachUrlTemplate = @json(route('inbox.labels.attach', ['device' => $deviceId, 'jid' => '__JID__']));
-            const labelDetachUrlTemplate = @json(route('inbox.labels.detach', ['device' => $deviceId, 'jid' => '__JID__', 'labelId' => '__LABELID__']));
             const csrfToken = @json(csrf_token());
+
+            // Detach re-uses the attach URL (POST .../labels) rather than
+            // its own @json(route(...)) with a 3rd placeholder — Blade's
+            // @json compile broke specifically once a 3rd key => value
+            // pair was added to the array literal (confirmed via the
+            // actual ParseError: 2-key @json(route()) calls above this
+            // one are all fine, only the 3-key version wasn't). Detach's
+            // URL is just the attach URL with /{labelId} appended, so no
+            // extra placeholder — or extra route() call — is needed.
+            function labelDetachUrl(chatJid, labelId) {
+                return urlFor(labelAttachUrlTemplate, chatJid) + '/' + encodeURIComponent(labelId);
+            }
 
             const chatListEl = document.getElementById('wa-chat-list');
             const chatListEmptyEl = document.getElementById('wa-chat-list-empty');
@@ -1012,7 +1023,7 @@
             function detachLabel(labelId) {
                 if (!activeChatJid) return;
 
-                fetchJson(labelDetachUrlTemplate.replace('__JID__', encodeURIComponent(activeChatJid)).replace('__LABELID__', encodeURIComponent(labelId)), {
+                fetchJson(labelDetachUrl(activeChatJid, labelId), {
                     method: 'DELETE',
                     headers: {
                         'Accept': 'application/json',
