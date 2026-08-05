@@ -371,14 +371,10 @@
             const labelAttachUrlTemplate = @json(route('inbox.labels.attach', ['device' => $deviceId, 'jid' => '__JID__']));
             const csrfToken = @json(csrf_token());
 
-            // Detach re-uses the attach URL (POST .../labels) rather than
-            // its own @json(route(...)) with a 3rd placeholder — Blade's
-            // @json compile broke specifically once a 3rd key => value
-            // pair was added to the array literal (confirmed via the
-            // actual ParseError: 2-key @json(route()) calls above this
-            // one are all fine, only the 3-key version wasn't). Detach's
-            // URL is just the attach URL with /{labelId} appended, so no
-            // extra placeholder — or extra route() call — is needed.
+            // Detach re-uses the attach URL above instead of its own
+            // Blade route helper call with a third URL placeholder, since
+            // that pattern broke Blade's template compiler. The detach
+            // URL is simply the attach URL with the label id appended.
             function labelDetachUrl(chatJid, labelId) {
                 return urlFor(labelAttachUrlTemplate, chatJid) + '/' + encodeURIComponent(labelId);
             }
