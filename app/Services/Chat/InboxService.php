@@ -125,6 +125,16 @@ class InboxService
     }
 
     /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function mediaList(string $jwt, string $deviceId, string $chatJid, string $type): array
+    {
+        $path = "/api/wa/devices/{$deviceId}/chats/".rawurlencode($chatJid).'/media-list?type='.rawurlencode($type);
+
+        return $this->request('get', $path, $jwt)['items'] ?? [];
+    }
+
+    /**
      * @return array{state: string, last_seen: string}
      */
     public function presence(string $jwt, string $deviceId, string $chatJid): array

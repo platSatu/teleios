@@ -122,21 +122,31 @@
                         <div class="wa-detail-section-title">
                             <span><i class="ri-image-line"></i> MEDIA &amp; FILES</span>
                         </div>
-                        <div class="wa-media-tabs">
-                            <span class="wa-media-tab active">Photos</span>
-                            <span class="wa-media-tab">Videos</span>
-                            <span class="wa-media-tab">Docs</span>
+                        <div class="wa-media-tabs" id="wa-media-tabs">
+                            <span class="wa-media-tab active" data-media-type="image">Photos</span>
+                            <span class="wa-media-tab" data-media-type="video">Videos</span>
+                            <span class="wa-media-tab" data-media-type="document">Docs</span>
                         </div>
-                        <div class="text-muted small fst-italic">Belum ada media (pesan media belum didukung)</div>
+                        <div id="wa-media-grid" class="wa-media-grid"></div>
+                        <div class="text-muted small fst-italic d-none" id="wa-media-empty">Belum ada media.</div>
                     </div>
 
                     <div class="wa-detail-section">
                         <div class="wa-detail-section-title">
                             <span><i class="ri-file-text-line"></i> NOTES</span>
-                            <button type="button" class="wa-inert-link" disabled title="Fitur catatan belum tersedia">+ Add</button>
+                            <button type="button" class="wa-label-add-btn" id="wa-note-add-btn">+ Add</button>
                         </div>
-                        <div class="text-muted small fst-italic">Belum ada catatan.</div>
+                        <div id="wa-note-form" class="wa-note-form d-none">
+                            <textarea id="wa-note-input" class="wa-note-textarea" rows="2" placeholder="Tulis catatan tentang kontak/chat ini..." maxlength="2000"></textarea>
+                            <div class="wa-note-form-actions">
+                                <button type="button" class="wa-modal-btn-cancel" id="wa-note-cancel">Batal</button>
+                                <button type="button" class="wa-modal-btn-primary" id="wa-note-save">Simpan</button>
+                            </div>
+                        </div>
+                        <div id="wa-note-list" class="wa-note-list"></div>
+                        <div class="text-muted small fst-italic d-none" id="wa-note-empty">Belum ada catatan.</div>
                     </div>
+
                 </div>
             </div>
 
@@ -334,7 +344,6 @@
         .wa-detail-section-title i { margin-right: 4px; }
 
         .wa-inert-btn { width: 100%; border: 1px dashed #d1d5db; background: transparent; color: #9ca3af; border-radius: 8px; padding: 8px; font-size: 0.82rem; cursor: not-allowed; }
-        .wa-inert-link { border: none; background: transparent; color: #9ca3af; font-size: 0.78rem; font-weight: 600; cursor: not-allowed; }
 
         /* --- labels --- */
         .wa-label-section { position: relative; }
@@ -354,9 +363,29 @@
         .wa-label-picker-manage { display: flex; align-items: center; gap: 6px; padding: 8px; font-size: 0.78rem; color: #6b7280; border-top: 1px solid #f0f0f0; margin-top: 4px; }
         .wa-label-picker-manage:hover { color: #16a34a; }
 
+        /* --- media & files --- */
         .wa-media-tabs { display: flex; gap: 14px; margin-bottom: 10px; font-size: 0.8rem; }
-        .wa-media-tab { color: #9ca3af; padding-bottom: 4px; }
+        .wa-media-tab { color: #9ca3af; padding-bottom: 4px; cursor: pointer; }
         .wa-media-tab.active { color: #16a34a; font-weight: 600; border-bottom: 2px solid #16a34a; }
+        .wa-media-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+        .wa-media-grid-item { position: relative; display: block; border-radius: 6px; overflow: hidden; background: #f3f4f6; aspect-ratio: 1 / 1; }
+        .wa-media-grid-item img { width: 100%; height: 100%; object-fit: cover; }
+        .wa-media-grid-item.wa-media-doc { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 6px; text-align: center; }
+        .wa-media-grid-item.wa-media-doc i { font-size: 1.4rem; color: #6b7280; }
+        .wa-media-grid-item.wa-media-doc span { font-size: 0.68rem; color: #6b7280; word-break: break-all; line-clamp: 2; overflow: hidden; }
+
+        /* --- notes --- */
+        .wa-note-form { margin-bottom: 10px; }
+        .wa-note-textarea { width: 100%; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 10px; font-size: 0.82rem; resize: vertical; }
+        .wa-note-textarea:focus { outline: none; border-color: #16a34a; }
+        .wa-note-form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+        .wa-note-list { display: flex; flex-direction: column; gap: 8px; }
+        .wa-note-item { background: #f9fafb; border: 1px solid #f0f0f0; border-radius: 8px; padding: 8px 10px; }
+        .wa-note-item-text { font-size: 0.82rem; color: #1f2937; white-space: pre-wrap; word-break: break-word; }
+        .wa-note-item-meta { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; font-size: 0.7rem; color: #9ca3af; }
+        .wa-note-item-actions button { border: none; background: transparent; color: #9ca3af; font-size: 0.9rem; padding: 0 2px; cursor: pointer; }
+        .wa-note-item-actions button:hover { color: #16a34a; }
+        .wa-note-item-actions .wa-note-delete-btn:hover { color: #dc2626; }
     </style>
 
     <script>
@@ -369,6 +398,8 @@
             const presenceUrlTemplate = @json(route('inbox.presence', ['device' => $deviceId, 'jid' => '__JID__']));
             const labelsUrlTemplate = @json(route('inbox.labels', ['device' => $deviceId, 'jid' => '__JID__']));
             const labelAttachUrlTemplate = @json(route('inbox.labels.attach', ['device' => $deviceId, 'jid' => '__JID__']));
+            const notesUrlTemplate = @json(route('inbox.notes', ['device' => $deviceId, 'jid' => '__JID__']));
+            const mediaListUrlTemplate = @json(route('inbox.media-list', ['device' => $deviceId, 'jid' => '__JID__']));
             const csrfToken = @json(csrf_token());
 
             // Detach re-uses the attach URL above instead of its own
@@ -424,6 +455,18 @@
             const labelEmptyEl = document.getElementById('wa-label-empty');
             const labelPickerEl = document.getElementById('wa-label-picker');
             const labelPickerListEl = document.getElementById('wa-label-picker-list');
+
+            const mediaTabsEl = document.getElementById('wa-media-tabs');
+            const mediaGridEl = document.getElementById('wa-media-grid');
+            const mediaEmptyEl = document.getElementById('wa-media-empty');
+
+            const noteAddBtnEl = document.getElementById('wa-note-add-btn');
+            const noteFormEl = document.getElementById('wa-note-form');
+            const noteInputEl = document.getElementById('wa-note-input');
+            const noteSaveBtnEl = document.getElementById('wa-note-save');
+            const noteCancelBtnEl = document.getElementById('wa-note-cancel');
+            const noteListEl = document.getElementById('wa-note-list');
+            const noteEmptyEl = document.getElementById('wa-note-empty');
 
             let activeChatJid = null;
             let activeChat = null;
@@ -1030,6 +1073,215 @@
                 });
             }
 
+            // --- media & files ---
+            let activeMediaType = 'image';
+
+            function renderMedia(items) {
+                mediaGridEl.innerHTML = '';
+                mediaEmptyEl.classList.toggle('d-none', items.length > 0);
+
+                items.forEach(function (item) {
+                    const box = document.createElement('a');
+                    box.href = item.media_url;
+                    box.target = '_blank';
+                    box.rel = 'noopener';
+
+                    if (activeMediaType === 'document') {
+                        box.className = 'wa-media-grid-item wa-media-doc';
+
+                        const icon = document.createElement('i');
+                        icon.className = 'ri-file-3-line';
+                        box.appendChild(icon);
+
+                        const label = document.createElement('span');
+                        label.textContent = item.file_name || 'Dokumen';
+                        box.appendChild(label);
+                    } else {
+                        box.className = 'wa-media-grid-item';
+
+                        if (activeMediaType === 'video') {
+                            const video = document.createElement('video');
+                            video.src = item.media_url;
+                            video.muted = true;
+                            box.appendChild(video);
+                        } else {
+                            const img = document.createElement('img');
+                            img.src = item.media_url;
+                            img.loading = 'lazy';
+                            img.alt = '';
+                            box.appendChild(img);
+                        }
+                    }
+
+                    mediaGridEl.appendChild(box);
+                });
+            }
+
+            function loadMedia() {
+                if (!activeChatJid) return;
+
+                const requestedChatJid = activeChatJid;
+                const requestedType = activeMediaType;
+                fetchJson(urlFor(mediaListUrlTemplate, requestedChatJid) + '?type=' + encodeURIComponent(requestedType))
+                    .then(function (data) {
+                        if (activeChatJid !== requestedChatJid || activeMediaType !== requestedType) return;
+                        renderMedia(data.items || []);
+                    });
+            }
+
+            if (mediaTabsEl) {
+                mediaTabsEl.querySelectorAll('.wa-media-tab').forEach(function (tab) {
+                    tab.addEventListener('click', function () {
+                        mediaTabsEl.querySelectorAll('.wa-media-tab').forEach(function (t) { t.classList.remove('active'); });
+                        tab.classList.add('active');
+                        activeMediaType = tab.dataset.mediaType;
+                        loadMedia();
+                    });
+                });
+            }
+
+            // --- notes ---
+            let currentNotes = [];
+            let editingNoteId = null;
+
+            function formatNoteDate(iso) {
+                if (!iso) return '';
+                return new Date(iso).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+            }
+
+            function renderNotes() {
+                noteListEl.innerHTML = '';
+                noteEmptyEl.classList.toggle('d-none', currentNotes.length > 0);
+
+                currentNotes.forEach(function (note) {
+                    const item = document.createElement('div');
+                    item.className = 'wa-note-item';
+
+                    const text = document.createElement('div');
+                    text.className = 'wa-note-item-text';
+                    text.textContent = note.note;
+                    item.appendChild(text);
+
+                    const meta = document.createElement('div');
+                    meta.className = 'wa-note-item-meta';
+
+                    const info = document.createElement('span');
+                    info.textContent = (note.author ? note.author + ' · ' : '') + formatNoteDate(note.created_at);
+                    meta.appendChild(info);
+
+                    const actions = document.createElement('span');
+                    actions.className = 'wa-note-item-actions';
+
+                    const editBtn = document.createElement('button');
+                    editBtn.type = 'button';
+                    editBtn.title = 'Edit catatan';
+                    editBtn.innerHTML = '<i class="ri-pencil-line"></i>';
+                    editBtn.addEventListener('click', function () { startEditNote(note); });
+                    actions.appendChild(editBtn);
+
+                    const delBtn = document.createElement('button');
+                    delBtn.type = 'button';
+                    delBtn.className = 'wa-note-delete-btn';
+                    delBtn.title = 'Hapus catatan';
+                    delBtn.innerHTML = '<i class="ri-delete-bin-line"></i>';
+                    delBtn.addEventListener('click', function () {
+                        if (confirm('Hapus catatan ini?')) deleteNote(note.id);
+                    });
+                    actions.appendChild(delBtn);
+
+                    meta.appendChild(actions);
+                    item.appendChild(meta);
+
+                    noteListEl.appendChild(item);
+                });
+            }
+
+            function loadNotes() {
+                if (!activeChatJid) return;
+
+                const requestedChatJid = activeChatJid;
+                fetchJson(urlFor(notesUrlTemplate, requestedChatJid)).then(function (data) {
+                    if (activeChatJid !== requestedChatJid) return;
+                    currentNotes = data.notes || [];
+                    renderNotes();
+                });
+            }
+
+            function showNoteForm() {
+                noteFormEl.classList.remove('d-none');
+                noteInputEl.focus();
+            }
+
+            function hideNoteForm() {
+                noteFormEl.classList.add('d-none');
+                noteInputEl.value = '';
+                editingNoteId = null;
+                noteSaveBtnEl.textContent = 'Simpan';
+            }
+
+            function startEditNote(note) {
+                editingNoteId = note.id;
+                noteInputEl.value = note.note;
+                noteSaveBtnEl.textContent = 'Update';
+                showNoteForm();
+            }
+
+            function saveNote() {
+                if (!activeChatJid) return;
+                const text = noteInputEl.value.trim();
+                if (!text) return;
+
+                const isEdit = !!editingNoteId;
+                const payload = isEdit ? { id: editingNoteId, note: text } : { note: text };
+
+                fetchJson(urlFor(notesUrlTemplate, activeChatJid), {
+                    method: isEdit ? 'PUT' : 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                    },
+                    body: JSON.stringify(payload),
+                }).then(function () {
+                    hideNoteForm();
+                    loadNotes();
+                });
+            }
+
+            function deleteNote(noteId) {
+                if (!activeChatJid) return;
+
+                fetchJson(urlFor(notesUrlTemplate, activeChatJid), {
+                    method: 'DELETE',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                    },
+                    body: JSON.stringify({ id: noteId }),
+                }).then(function () {
+                    loadNotes();
+                });
+            }
+
+            if (noteAddBtnEl) {
+                noteAddBtnEl.addEventListener('click', function () {
+                    if (noteFormEl.classList.contains('d-none')) {
+                        showNoteForm();
+                    } else {
+                        hideNoteForm();
+                    }
+                });
+            }
+
+            if (noteCancelBtnEl) {
+                noteCancelBtnEl.addEventListener('click', hideNoteForm);
+            }
+
+            if (noteSaveBtnEl) {
+                noteSaveBtnEl.addEventListener('click', saveNote);
+            }
+
             function openChat(chat) {
                 activeChatJid = chat.chat_jid;
                 activeChat = chat;
@@ -1055,10 +1307,22 @@
 
                 renderDetail(chat);
                 if (labelPickerEl) labelPickerEl.classList.add('d-none');
+                hideNoteForm();
+
+                // Media tab resets to Photos for every newly-opened chat,
+                // matching the tab row's default active state in the HTML.
+                activeMediaType = 'image';
+                if (mediaTabsEl) {
+                    mediaTabsEl.querySelectorAll('.wa-media-tab').forEach(function (t) {
+                        t.classList.toggle('active', t.dataset.mediaType === 'image');
+                    });
+                }
 
                 loadMessages();
                 loadPresence();
                 loadLabels();
+                loadNotes();
+                loadMedia();
                 // Opening a chat clears its unread count server-side; pull
                 // the chat list again right away instead of waiting for the
                 // next scheduled poll, so the badge disappears immediately.
@@ -1298,10 +1562,17 @@
 
                 const body = sendInputEl.value.trim();
                 if (!body) return;
+                const sentToChatJid = activeChatJid;
 
-                sendInputEl.disabled = true;
+                // Clear the box and let the user keep typing/hitting Enter
+                // right away, instead of disabling the input for the whole
+                // round trip — disabling it mid-keystroke is what made
+                // Enter feel unresponsive (a fast second Enter press landed
+                // on a disabled field and was silently dropped). Sends are
+                // fire-and-forget from here, same as WhatsApp Web itself.
+                sendInputEl.value = '';
 
-                fetchJson(urlFor(sendUrlTemplate, activeChatJid), {
+                fetchJson(urlFor(sendUrlTemplate, sentToChatJid), {
                     method: 'POST',
                     headers: {
                         'Accept': 'application/json',
@@ -1311,21 +1582,20 @@
                     body: JSON.stringify({ body: body }),
                 }).then(function (data) {
                     if (!data.error) {
-                        sendInputEl.value = '';
                         // Show the message right away using the response we
                         // already have, instead of waiting for the next
                         // 3-second poll to pick it up — this is what made
                         // sending feel delayed.
-                        if (data.message && messagesInitialized) {
+                        if (data.message && messagesInitialized && activeChatJid === sentToChatJid) {
                             appendMessages([data.message]);
-                        } else {
+                        } else if (activeChatJid === sentToChatJid) {
                             loadMessages();
                         }
                         loadChats();
+                    } else {
+                        alert(data.error || 'Gagal mengirim pesan.');
+                        sendInputEl.value = body;
                     }
-                }).finally(function () {
-                    sendInputEl.disabled = false;
-                    sendInputEl.focus();
                 });
             });
 

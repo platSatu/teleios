@@ -153,6 +153,11 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::get('/chats/{jid}/labels', 'labels')->name('inbox.labels');
                 Route::post('/chats/{jid}/labels', 'attachLabel')->name('inbox.labels.attach');
                 Route::delete('/chats/{jid}/labels/{labelId}', 'detachLabel')->name('inbox.labels.detach');
+                Route::get('/chats/{jid}/notes', 'notes')->name('inbox.notes');
+                Route::post('/chats/{jid}/notes', 'addNote')->name('inbox.notes.store');
+                Route::put('/chats/{jid}/notes', 'updateNote')->name('inbox.notes.update');
+                Route::delete('/chats/{jid}/notes', 'deleteNote')->name('inbox.notes.destroy');
+                Route::get('/chats/{jid}/media-list', 'mediaList')->name('inbox.media-list');
             });
 
         Route::prefix('connect-device')

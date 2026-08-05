@@ -6,6 +6,7 @@ use App\Http\Controllers\Concerns\ResolvesCompanyContext;
 use App\Http\Controllers\Controller;
 use App\Models\WaChatLabel;
 use App\Models\WaChatLabelAssignment;
+use App\Models\WaChatNote;
 use App\Services\Chat\InboxService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -216,6 +217,115 @@ class InboxController extends Controller
             ->delete();
 
         return response()->json(['status' => 'ok']);
+    }
+
+    /**
+     * AJAX: every note on this chat, newest first — powers the NOTES
+     * section of the Inbox detail panel.
+     */
+    public function notes(Request $request, string $device, string $jid): JsonResponse
+    {
+        $company = $this->ownedCompanyOrFail($request);
+
+        $notes = WaChatNote::with('author')
+            ->where('company_id', $company->id)
+            ->where('device_id', $device)
+            ->where('chat_jid', $jid)
+            ->orderByDesc('created_at')
+            ->get();
+
+        return response()->json([
+            'notes' => $notes->map(fn (WaChatNote $note) => [
+                'id' => $note->id,
+                'note' => $note->note,
+                'author' => $note->author->name ?? null,
+                'created_at' => $note->created_at?->toIso8601String(),
+                'updated_at' => $note->updated_at?->toIso8601String(),
+            ]),
+        ]);
+    }
+
+    /**
+     * AJAX: add a note to this chat.
+     */
+    public function addNote(Request $request, string $device, string $jid): JsonResponse
+    {
+        $company = $this->ownedCompanyOrFail($request);
+
+        $validated = $request->validate([
+            'note' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $note = WaChatNote::create([
+            'company_id' => $company->id,
+            'device_id' => $device,
+            'chat_jid' => $jid,
+            'created_by' => $request->user()?->id,
+            'note' => $validated['note'],
+        ]);
+
+        return response()->json(['status' => 'ok', 'id' => $note->id]);
+    }
+
+    /**
+     * AJAX: edit a note's text. The note id travels in the request body
+     * (not the URL) so this stays on the same 2-placeholder route shape
+     * (device, jid) as every other Inbox route — see labelDetachUrl in
+     * inbox.blade.php for why a 3rd URL placeholder is avoided here.
+     */
+    public function updateNote(Request $request, string $device, string $jid): JsonResponse
+    {
+        $company = $this->ownedCompanyOrFail($request);
+
+        $validated = $request->validate([
+            'id' => ['required', 'uuid'],
+            'note' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $note = WaChatNote::where('company_id', $company->id)
+            ->where('device_id', $device)
+            ->where('chat_jid', $jid)
+            ->where('id', $validated['id'])
+            ->firstOrFail();
+
+        $note->update(['note' => $validated['note']]);
+
+        return response()->json(['status' => 'ok']);
+    }
+
+    /**
+     * AJAX: delete a note. Same "id in the body, not the URL" shape as
+     * updateNote() above.
+     */
+    public function deleteNote(Request $request, string $device, string $jid): JsonResponse
+    {
+        $company = $this->ownedCompanyOrFail($request);
+
+        $validated = $request->validate([
+            'id' => ['required', 'uuid'],
+        ]);
+
+        WaChatNote::where('company_id', $company->id)
+            ->where('device_id', $device)
+            ->where('chat_jid', $jid)
+            ->where('id', $validated['id'])
+            ->delete();
+
+        return response()->json(['status' => 'ok']);
+    }
+
+    /**
+     * AJAX: this chat's media messages (image/video/document), for the
+     * detail panel's MEDIA & FILES tabs. ?type= filters to one of those
+     * three — see InboxService::mediaList().
+     */
+    public function mediaList(Request $request, string $device, string $jid): JsonResponse
+    {
+        $type = $request->query('type', 'image');
+
+        return $this->safeJson(fn (string $jwt) => [
+            'items' => $this->inboxService->mediaList($jwt, $device, $jid, $type),
+        ]);
     }
 
     /**
