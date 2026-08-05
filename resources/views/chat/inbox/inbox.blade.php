@@ -24,6 +24,12 @@
                     <input type="text" id="wa-search-input" placeholder="Search chats...">
                 </div>
 
+                <div class="wa-chat-tabs" id="wa-chat-tabs">
+                    <button type="button" class="wa-chat-tab active" data-tab="chat">Chat</button>
+                    <button type="button" class="wa-chat-tab" data-tab="group">Grup</button>
+                    <button type="button" class="wa-chat-tab" data-tab="channel">Channel</button>
+                </div>
+
                 <div id="wa-chat-list" class="wa-chat-list">
                     <div class="wa-chat-list-empty" id="wa-chat-list-empty">Memuat percakapan...</div>
                 </div>
@@ -96,12 +102,20 @@
                         <button type="button" class="wa-inert-btn" disabled title="Fitur assign ke tim/agent belum tersedia">+ Assign</button>
                     </div>
 
-                    <div class="wa-detail-section">
+                    <div class="wa-detail-section wa-label-section">
                         <div class="wa-detail-section-title">
                             <span><i class="ri-price-tag-3-line"></i> LABELS</span>
-                            <button type="button" class="wa-inert-link" disabled title="Fitur label belum tersedia">+ Add</button>
+                            <button type="button" class="wa-label-add-btn" id="wa-label-add-btn">+ Add</button>
                         </div>
-                        <div class="text-muted small fst-italic">No labels assigned</div>
+                        <div id="wa-label-chips" class="wa-label-chips"></div>
+                        <div class="text-muted small fst-italic d-none" id="wa-label-empty">Belum ada label ditempel.</div>
+
+                        <div class="wa-label-picker d-none" id="wa-label-picker">
+                            <div id="wa-label-picker-list"></div>
+                            <a href="{{ route('chat.labels.index') }}" class="wa-label-picker-manage" target="_blank">
+                                <i class="ri-settings-3-line"></i> Kelola label
+                            </a>
+                        </div>
                     </div>
 
                     <div class="wa-detail-section">
@@ -126,6 +140,27 @@
                 </div>
             </div>
 
+        </div>
+    </div>
+
+    {{-- New chat modal — replaces the old browser prompt() so starting a
+         chat looks like part of the app instead of a native OS dialog. --}}
+    <div class="wa-modal-overlay d-none" id="wa-new-chat-overlay">
+        <div class="wa-modal-box">
+            <div class="wa-modal-header">
+                <h6 class="mb-0">Mulai Chat Baru</h6>
+                <button type="button" class="wa-icon-btn" id="wa-new-chat-close" title="Tutup"><i class="ri-close-line"></i></button>
+            </div>
+            <div class="wa-modal-body">
+                <label class="wa-modal-label" for="wa-new-chat-input">Nomor WhatsApp</label>
+                <input type="text" id="wa-new-chat-input" class="wa-modal-input" placeholder="Contoh: 6281234567890" inputmode="numeric" autocomplete="off">
+                <div class="wa-modal-hint">Masukkan nomor lengkap dengan kode negara (62 untuk Indonesia), tanpa tanda + atau spasi.</div>
+                <div class="text-danger small mt-1 d-none" id="wa-new-chat-error"></div>
+            </div>
+            <div class="wa-modal-footer">
+                <button type="button" class="wa-modal-btn-cancel" id="wa-new-chat-cancel">Batal</button>
+                <button type="button" class="wa-modal-btn-primary" id="wa-new-chat-start">Mulai Chat</button>
+            </div>
         </div>
     </div>
 
@@ -191,6 +226,28 @@
         .wa-search-wrap i { position: absolute; left: 26px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 0.95rem; }
         .wa-search-wrap input { width: 100%; border: 1px solid #e5e7eb; border-radius: 8px; padding: 7px 12px 7px 32px; font-size: 0.85rem; background: #f9fafb; }
         .wa-search-wrap input:focus { outline: none; border-color: #16a34a; background: #fff; }
+
+        /* --- chat/group/channel tabs --- */
+        .wa-chat-tabs { display: flex; gap: 6px; padding: 8px 14px; border-bottom: 1px solid #f0f0f0; }
+        .wa-chat-tab { border: 1px solid #e5e7eb; background: #fff; color: #6b7280; border-radius: 999px; padding: 4px 12px; font-size: 0.78rem; font-weight: 600; }
+        .wa-chat-tab:hover { background: #f9fafb; }
+        .wa-chat-tab.active { background: #16a34a; border-color: #16a34a; color: #fff; }
+
+        /* --- new chat modal --- */
+        .wa-modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: flex; align-items: center; justify-content: center; z-index: 1050; padding: 16px; }
+        .wa-modal-overlay.d-none { display: none; }
+        .wa-modal-box { background: #fff; border-radius: 12px; width: 380px; max-width: 100%; box-shadow: 0 20px 50px rgba(0,0,0,0.25); overflow: hidden; }
+        .wa-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #f0f0f0; }
+        .wa-modal-body { padding: 18px; }
+        .wa-modal-label { display: block; font-size: 0.8rem; font-weight: 600; color: #374151; margin-bottom: 6px; }
+        .wa-modal-input { width: 100%; border: 1px solid #e5e7eb; border-radius: 8px; padding: 9px 12px; font-size: 0.9rem; }
+        .wa-modal-input:focus { outline: none; border-color: #16a34a; }
+        .wa-modal-hint { font-size: 0.75rem; color: #9ca3af; margin-top: 6px; }
+        .wa-modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 18px; border-top: 1px solid #f0f0f0; }
+        .wa-modal-btn-cancel { border: 1px solid #e5e7eb; background: #fff; color: #374151; border-radius: 8px; padding: 7px 16px; font-size: 0.85rem; font-weight: 600; }
+        .wa-modal-btn-cancel:hover { background: #f9fafb; }
+        .wa-modal-btn-primary { border: none; background: #16a34a; color: #fff; border-radius: 8px; padding: 7px 16px; font-size: 0.85rem; font-weight: 600; }
+        .wa-modal-btn-primary:hover { background: #128a3e; }
 
         .wa-chat-list { flex: 1 1 auto; overflow-y: auto; }
         .wa-chat-list-empty { padding: 32px 16px; text-align: center; color: #9ca3af; font-size: 0.85rem; }
@@ -279,6 +336,24 @@
         .wa-inert-btn { width: 100%; border: 1px dashed #d1d5db; background: transparent; color: #9ca3af; border-radius: 8px; padding: 8px; font-size: 0.82rem; cursor: not-allowed; }
         .wa-inert-link { border: none; background: transparent; color: #9ca3af; font-size: 0.78rem; font-weight: 600; cursor: not-allowed; }
 
+        /* --- labels --- */
+        .wa-label-section { position: relative; }
+        .wa-label-add-btn { border: none; background: transparent; color: #16a34a; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
+        .wa-label-add-btn:hover { text-decoration: underline; }
+        .wa-label-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+        .wa-label-chip { display: inline-flex; align-items: center; gap: 5px; color: #fff; border-radius: 999px; padding: 3px 10px; font-size: 0.76rem; font-weight: 600; }
+        .wa-label-chip button { border: none; background: transparent; color: inherit; opacity: 0.8; padding: 0; line-height: 1; font-size: 0.9rem; }
+        .wa-label-chip button:hover { opacity: 1; }
+
+        .wa-label-picker { position: absolute; right: 0; top: 30px; z-index: 20; width: 220px; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); padding: 8px; }
+        .wa-label-picker-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 0.82rem; }
+        .wa-label-picker-item:hover { background: #f9fafb; }
+        .wa-label-picker-item .wa-label-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .wa-label-picker-item .ri-check-line { margin-left: auto; color: #16a34a; }
+        .wa-label-picker-empty { padding: 8px; font-size: 0.78rem; color: #9ca3af; }
+        .wa-label-picker-manage { display: flex; align-items: center; gap: 6px; padding: 8px; font-size: 0.78rem; color: #6b7280; border-top: 1px solid #f0f0f0; margin-top: 4px; }
+        .wa-label-picker-manage:hover { color: #16a34a; }
+
         .wa-media-tabs { display: flex; gap: 14px; margin-bottom: 10px; font-size: 0.8rem; }
         .wa-media-tab { color: #9ca3af; padding-bottom: 4px; }
         .wa-media-tab.active { color: #16a34a; font-weight: 600; border-bottom: 2px solid #16a34a; }
@@ -292,6 +367,9 @@
             const sendMediaUrlTemplate = @json(route('inbox.send-media', ['device' => $deviceId, 'jid' => '__JID__']));
             const mediaUrlTemplate = @json(route('inbox.media', ['device' => $deviceId, 'messageId' => '__MSGID__']));
             const presenceUrlTemplate = @json(route('inbox.presence', ['device' => $deviceId, 'jid' => '__JID__']));
+            const labelsUrlTemplate = @json(route('inbox.labels', ['device' => $deviceId, 'jid' => '__JID__']));
+            const labelAttachUrlTemplate = @json(route('inbox.labels.attach', ['device' => $deviceId, 'jid' => '__JID__']));
+            const labelDetachUrlTemplate = @json(route('inbox.labels.detach', ['device' => $deviceId, 'jid' => '__JID__', 'labelId' => '__LABELID__']));
             const csrfToken = @json(csrf_token());
 
             const chatListEl = document.getElementById('wa-chat-list');
@@ -299,6 +377,14 @@
             const chatCountEl = document.getElementById('wa-chat-count');
             const searchInputEl = document.getElementById('wa-search-input');
             const newChatBtnEl = document.getElementById('wa-new-chat-btn');
+            const chatTabsEl = document.getElementById('wa-chat-tabs');
+
+            const newChatOverlayEl = document.getElementById('wa-new-chat-overlay');
+            const newChatInputEl = document.getElementById('wa-new-chat-input');
+            const newChatErrorEl = document.getElementById('wa-new-chat-error');
+            const newChatCloseEl = document.getElementById('wa-new-chat-close');
+            const newChatCancelEl = document.getElementById('wa-new-chat-cancel');
+            const newChatStartEl = document.getElementById('wa-new-chat-start');
 
             const threadHeaderEl = document.getElementById('wa-thread-header');
             const threadAvatarEl = document.getElementById('wa-thread-avatar');
@@ -326,10 +412,17 @@
             const threadBackBtnEl = document.getElementById('wa-thread-back-btn');
             const inboxShellEl = document.querySelector('.wa-inbox-shell');
 
+            const labelAddBtnEl = document.getElementById('wa-label-add-btn');
+            const labelChipsEl = document.getElementById('wa-label-chips');
+            const labelEmptyEl = document.getElementById('wa-label-empty');
+            const labelPickerEl = document.getElementById('wa-label-picker');
+            const labelPickerListEl = document.getElementById('wa-label-picker-list');
+
             let activeChatJid = null;
             let activeChat = null;
             let allChats = [];
             let searchTerm = '';
+            let activeTab = 'chat'; // 'chat' | 'group' | 'channel' — see classifyChat()
             let renderedChatsSignature = '';
             let detailVisible = true;
 
@@ -399,7 +492,21 @@
             function phoneFromJid(jid) {
                 if (!jid) return '';
                 if (jid.indexOf('@g.us') !== -1) return 'Grup';
+                if (jid.indexOf('@newsletter') !== -1) return 'Channel';
                 return '+' + jid.split('@')[0];
+            }
+
+            // Classifies a chat_jid into one of the 3 tabs above the chat
+            // list. WhatsApp uses a distinct JID "server" suffix per chat
+            // type (@s.whatsapp.net = normal 1:1, @g.us = group,
+            // @newsletter = channel/broadcast) — same convention the Go
+            // backend and webhook filtering already rely on (see
+            // WaIncomingMessageWebhookController's @newsletter skip).
+            function classifyChat(jid) {
+                if (!jid) return 'chat';
+                if (jid.indexOf('@g.us') !== -1) return 'group';
+                if (jid.indexOf('@newsletter') !== -1) return 'channel';
+                return 'chat';
             }
 
             // Populates an *existing* avatar container in place (clears and
@@ -445,12 +552,19 @@
             }
 
             function applyFilter(chats) {
-                if (!searchTerm) return chats;
-                const term = searchTerm.toLowerCase();
-                return chats.filter(function (c) {
-                    return (c.name || '').toLowerCase().indexOf(term) !== -1 ||
-                        (c.chat_jid || '').toLowerCase().indexOf(term) !== -1;
+                let result = chats.filter(function (c) {
+                    return classifyChat(c.chat_jid) === activeTab;
                 });
+
+                if (searchTerm) {
+                    const term = searchTerm.toLowerCase();
+                    result = result.filter(function (c) {
+                        return (c.name || '').toLowerCase().indexOf(term) !== -1 ||
+                            (c.chat_jid || '').toLowerCase().indexOf(term) !== -1;
+                    });
+                }
+
+                return result;
             }
 
             // The Go backend sometimes echoes the same chat_jid more than
@@ -489,13 +603,18 @@
             function renderChatList(rawChats) {
                 const chats = dedupeChats(rawChats);
                 allChats = chats;
-                chatCountEl.textContent = '(' + chats.length + ')';
 
                 const filtered = applyFilter(chats);
 
+                // Count reflects the current tab (Chat/Grup/Channel), not
+                // the raw total — matches how "Grup 53" style counters
+                // work in the WhatsApp Web reference, rather than always
+                // showing every chat type combined regardless of tab.
+                chatCountEl.textContent = '(' + filtered.length + ')';
+
                 const signature = filtered.map(function (c) {
                     return c.chat_jid + ':' + c.last_message + ':' + c.unread_count + ':' + c.avatar_url + ':' + c.name;
-                }).join('|') + '|active:' + activeChatJid + '|q:' + searchTerm;
+                }).join('|') + '|active:' + activeChatJid + '|q:' + searchTerm + '|tab:' + activeTab;
 
                 if (signature === renderedChatsSignature) return;
                 renderedChatsSignature = signature;
@@ -781,7 +900,127 @@
                 applyAvatar(detailAvatarEl, chat, 64);
 
                 detailNameEl.textContent = chat.name || chat.chat_jid;
-                detailPhoneEl.textContent = phoneFromJid(chat.chat_jid);
+                // Prefer the Go backend's resolved phone (chat.phone) —
+                // it correctly handles "@lid" chats via WhatsApp's own
+                // LID<->phone mapping, which the client-side fallback
+                // (phoneFromJid) can't do since that resolution needs a
+                // live whatsmeow client, not just string parsing.
+                detailPhoneEl.textContent = chat.phone || phoneFromJid(chat.chat_jid);
+            }
+
+            // --- labels ---
+            let currentLabels = [];
+
+            function renderLabelChips() {
+                labelChipsEl.innerHTML = '';
+                const assigned = currentLabels.filter(function (l) { return l.assigned; });
+
+                labelEmptyEl.classList.toggle('d-none', assigned.length > 0);
+
+                assigned.forEach(function (label) {
+                    const chip = document.createElement('span');
+                    chip.className = 'wa-label-chip';
+                    chip.style.background = label.color || '#6b7280';
+
+                    const text = document.createElement('span');
+                    text.textContent = label.name;
+                    chip.appendChild(text);
+
+                    const remove = document.createElement('button');
+                    remove.type = 'button';
+                    remove.innerHTML = '&times;';
+                    remove.title = 'Lepas label';
+                    remove.addEventListener('click', function () {
+                        detachLabel(label.id);
+                    });
+                    chip.appendChild(remove);
+
+                    labelChipsEl.appendChild(chip);
+                });
+            }
+
+            function renderLabelPicker() {
+                labelPickerListEl.innerHTML = '';
+
+                if (currentLabels.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.className = 'wa-label-picker-empty';
+                    empty.textContent = 'Belum ada label dibuat.';
+                    labelPickerListEl.appendChild(empty);
+                    return;
+                }
+
+                currentLabels.forEach(function (label) {
+                    const item = document.createElement('div');
+                    item.className = 'wa-label-picker-item';
+
+                    const dot = document.createElement('span');
+                    dot.className = 'wa-label-dot';
+                    dot.style.background = label.color || '#6b7280';
+                    item.appendChild(dot);
+
+                    const name = document.createElement('span');
+                    name.textContent = label.name;
+                    item.appendChild(name);
+
+                    if (label.assigned) {
+                        const check = document.createElement('i');
+                        check.className = 'ri-check-line';
+                        item.appendChild(check);
+                    }
+
+                    item.addEventListener('click', function () {
+                        if (label.assigned) {
+                            detachLabel(label.id);
+                        } else {
+                            attachLabel(label.id);
+                        }
+                    });
+
+                    labelPickerListEl.appendChild(item);
+                });
+            }
+
+            function loadLabels() {
+                if (!activeChatJid) return;
+
+                const requestedChatJid = activeChatJid;
+                fetchJson(urlFor(labelsUrlTemplate, requestedChatJid)).then(function (data) {
+                    if (activeChatJid !== requestedChatJid) return;
+                    currentLabels = data.labels || [];
+                    renderLabelChips();
+                    renderLabelPicker();
+                });
+            }
+
+            function attachLabel(labelId) {
+                if (!activeChatJid) return;
+
+                fetchJson(urlFor(labelAttachUrlTemplate, activeChatJid), {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                    },
+                    body: JSON.stringify({ wa_chat_label_id: labelId }),
+                }).then(function () {
+                    loadLabels();
+                });
+            }
+
+            function detachLabel(labelId) {
+                if (!activeChatJid) return;
+
+                fetchJson(labelDetachUrlTemplate.replace('__JID__', encodeURIComponent(activeChatJid)).replace('__LABELID__', encodeURIComponent(labelId)), {
+                    method: 'DELETE',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                    },
+                }).then(function () {
+                    loadLabels();
+                });
             }
 
             function openChat(chat) {
@@ -808,9 +1047,11 @@
                 applyAvatar(threadAvatarEl, chat, 40);
 
                 renderDetail(chat);
+                if (labelPickerEl) labelPickerEl.classList.add('d-none');
 
                 loadMessages();
                 loadPresence();
+                loadLabels();
                 // Opening a chat clears its unread count server-side; pull
                 // the chat list again right away instead of waiting for the
                 // next scheduled poll, so the badge disappears immediately.
@@ -865,20 +1106,83 @@
                 renderChatList(allChats);
             });
 
-            newChatBtnEl.addEventListener('click', function () {
-                const raw = prompt('Masukkan nomor WhatsApp tujuan (contoh: 6281234567890):');
-                if (!raw) return;
+            if (chatTabsEl) {
+                chatTabsEl.addEventListener('click', function (e) {
+                    const btn = e.target.closest('.wa-chat-tab');
+                    if (!btn || btn.classList.contains('active')) return;
 
+                    chatTabsEl.querySelectorAll('.wa-chat-tab').forEach(function (el) {
+                        el.classList.toggle('active', el === btn);
+                    });
+
+                    activeTab = btn.getAttribute('data-tab');
+                    renderedChatsSignature = ''; // force re-render for the new tab
+                    renderChatList(allChats);
+                });
+            }
+
+            // --- new chat modal (replaces the old prompt()) ---
+            function openNewChatModal() {
+                if (!newChatOverlayEl) return;
+                newChatInputEl.value = '';
+                newChatErrorEl.classList.add('d-none');
+                newChatOverlayEl.classList.remove('d-none');
+                setTimeout(function () { newChatInputEl.focus(); }, 0);
+            }
+
+            function closeNewChatModal() {
+                if (newChatOverlayEl) newChatOverlayEl.classList.add('d-none');
+            }
+
+            function startNewChatFromModal() {
+                const raw = newChatInputEl.value.trim();
                 let digits = raw.replace(/\D/g, '');
                 if (digits.charAt(0) === '0') digits = '62' + digits.slice(1);
 
-                if (!digits) {
-                    alert('Nomor tidak valid.');
+                if (!digits || digits.length < 8) {
+                    newChatErrorEl.textContent = 'Masukkan nomor WhatsApp yang valid.';
+                    newChatErrorEl.classList.remove('d-none');
                     return;
                 }
 
+                closeNewChatModal();
                 openChat({ chat_jid: digits + '@s.whatsapp.net', name: '+' + digits, avatar_url: '', last_message_at: null });
-            });
+            }
+
+            newChatBtnEl.addEventListener('click', openNewChatModal);
+            if (newChatCloseEl) newChatCloseEl.addEventListener('click', closeNewChatModal);
+            if (newChatCancelEl) newChatCancelEl.addEventListener('click', closeNewChatModal);
+            if (newChatOverlayEl) {
+                newChatOverlayEl.addEventListener('click', function (e) {
+                    if (e.target === newChatOverlayEl) closeNewChatModal();
+                });
+            }
+            if (newChatStartEl) newChatStartEl.addEventListener('click', startNewChatFromModal);
+            if (newChatInputEl) {
+                newChatInputEl.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        startNewChatFromModal();
+                    }
+                });
+            }
+
+            if (labelAddBtnEl && labelPickerEl) {
+                labelAddBtnEl.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    labelPickerEl.classList.toggle('d-none');
+                });
+
+                // Click anywhere outside the picker (or its trigger) closes
+                // it — the picker is absolutely positioned over the rest
+                // of the detail panel, so without this it'd stay open
+                // until "+ Add" is clicked again.
+                document.addEventListener('click', function (e) {
+                    if (labelPickerEl.classList.contains('d-none')) return;
+                    if (labelPickerEl.contains(e.target) || e.target === labelAddBtnEl) return;
+                    labelPickerEl.classList.add('d-none');
+                });
+            }
 
             toggleDetailBtnEl.addEventListener('click', function () {
                 detailVisible = !detailVisible;

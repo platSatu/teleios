@@ -157,11 +157,13 @@
                                             <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
                                         </a>
                                         <ul class="pe-slide-menu collapse" id="collapseMessages">
+                                            @if ($canSeeChatMenu('chat.labels.index'))
                                             <li class="pe-slide-item">
-                                                <a href="apps-social-inbox.html" class="pe-nav-link">
+                                                <a href="{{ route('chat.labels.index') }}" class="pe-nav-link">
                                                     Label
                                                 </a>
                                             </li>
+                                            @endif
                                             <li class="pe-slide-item">
                                                 <a href="apps-social-compose.html" class="pe-nav-link">
                                                     Pesan

@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers\Chat;
 
+use App\Http\Controllers\Concerns\ResolvesCompanyContext;
 use App\Http\Controllers\Controller;
+use App\Models\WaChatLabel;
+use App\Models\WaChatLabelAssignment;
 use App\Services\Chat\InboxService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -17,9 +20,17 @@ use Throwable;
  * lives in ConnectDeviceController, kept separate on purpose. Every
  * route here carries a {device} id, since a user can have several
  * devices connected and each has its own independent set of chats.
+ *
+ * labels()/attachLabel()/detachLabel() below tag a specific chat with
+ * the company's App\Models\WaChatLabel catalog (managed separately at
+ * Chat > Pengaturan > Label, see Chat\ChatLabelController) — kept here
+ * rather than on that controller since these three are scoped to one
+ * device+chat, the same shape as every other method in this class.
  */
 class InboxController extends Controller
 {
+    use ResolvesCompanyContext;
+
     public function __construct(
         protected InboxService $inboxService,
     ) {}
@@ -134,6 +145,77 @@ class InboxController extends Controller
             'Content-Type' => $result['content_type'],
             'Content-Disposition' => $result['content_disposition'],
         ]));
+    }
+
+    /**
+     * AJAX: every label the company has defined, flagged with whether
+     * each one is currently attached to this chat — powers the LABELS
+     * section of the Inbox detail panel.
+     */
+    public function labels(Request $request, string $device, string $jid): JsonResponse
+    {
+        $company = $this->ownedCompanyOrFail($request);
+
+        $all = WaChatLabel::where('company_id', $company->id)
+            ->orderBy('name')
+            ->get();
+
+        $assignedIds = WaChatLabelAssignment::where('company_id', $company->id)
+            ->where('device_id', $device)
+            ->where('chat_jid', $jid)
+            ->pluck('wa_chat_label_id');
+
+        return response()->json([
+            'labels' => $all->map(fn (WaChatLabel $label) => [
+                'id' => $label->id,
+                'name' => $label->name,
+                'color' => $label->color,
+                'assigned' => $assignedIds->contains($label->id),
+            ]),
+        ]);
+    }
+
+    /**
+     * AJAX: tag this chat with one of the company's labels. Idempotent —
+     * clicking an already-assigned label again is a no-op, not an error
+     * or a duplicate row (see the assignments table's unique index).
+     */
+    public function attachLabel(Request $request, string $device, string $jid): JsonResponse
+    {
+        $company = $this->ownedCompanyOrFail($request);
+
+        $validated = $request->validate([
+            'wa_chat_label_id' => ['required', 'uuid'],
+        ]);
+
+        $label = WaChatLabel::where('company_id', $company->id)
+            ->where('id', $validated['wa_chat_label_id'])
+            ->firstOrFail();
+
+        WaChatLabelAssignment::firstOrCreate([
+            'wa_chat_label_id' => $label->id,
+            'company_id' => $company->id,
+            'device_id' => $device,
+            'chat_jid' => $jid,
+        ]);
+
+        return response()->json(['status' => 'ok']);
+    }
+
+    /**
+     * AJAX: remove one label from this chat.
+     */
+    public function detachLabel(Request $request, string $device, string $jid, string $labelId): JsonResponse
+    {
+        $company = $this->ownedCompanyOrFail($request);
+
+        WaChatLabelAssignment::where('company_id', $company->id)
+            ->where('device_id', $device)
+            ->where('chat_jid', $jid)
+            ->where('wa_chat_label_id', $labelId)
+            ->delete();
+
+        return response()->json(['status' => 'ok']);
     }
 
     /**

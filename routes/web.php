@@ -87,6 +87,7 @@ use App\Http\Controllers\User\Profile\BranchOfficeUnitController as UserBranchOf
 use App\Http\Controllers\User\History\HistoryUserController;
 use App\Http\Controllers\Chat\ConnectDeviceController;
 use App\Http\Controllers\Chat\WaApiKeyController;
+use App\Http\Controllers\Chat\ChatLabelController;
 use App\Http\Controllers\Chat\InboxController;
 use App\Http\Controllers\Chat\MessageScheduleController;
 use App\Http\Controllers\Chat\MessageTemplateController;
@@ -149,6 +150,9 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::post('/chats/{jid}/media', 'sendMedia')->name('inbox.send-media');
                 Route::get('/media/{messageId}', 'media')->name('inbox.media');
                 Route::get('/chats/{jid}/presence', 'presence')->name('inbox.presence');
+                Route::get('/chats/{jid}/labels', 'labels')->name('inbox.labels');
+                Route::post('/chats/{jid}/labels', 'attachLabel')->name('inbox.labels.attach');
+                Route::delete('/chats/{jid}/labels/{labelId}', 'detachLabel')->name('inbox.labels.detach');
             });
 
         Route::prefix('connect-device')
@@ -202,6 +206,15 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::get('/{id}/edit', 'edit')->name('chat.message-templates.edit');
                 Route::put('/{id}', 'update')->name('chat.message-templates.update');
                 Route::delete('/{id}', 'destroy')->name('chat.message-templates.destroy');
+            });
+
+        Route::prefix('chat-labels')
+            ->controller(ChatLabelController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('chat.labels.index');
+                Route::post('/', 'store')->name('chat.labels.store');
+                Route::put('/{id}', 'update')->name('chat.labels.update');
+                Route::delete('/{id}', 'destroy')->name('chat.labels.destroy');
             });
 
         Route::prefix('message-auto-replies')
