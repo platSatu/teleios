@@ -95,13 +95,6 @@
                                                 </a>
                                             </li>
                                             @endif
-                                            @if ($canSeeChatMenu('chat.message-reminders.index'))
-                                            <li class="pe-slide-item">
-                                                <a href="{{ route('chat.message-reminders.index') }}" class="pe-nav-link">
-                                                    Pengingat
-                                                </a>
-                                            </li>
-                                            @endif
                                             @if ($canSeeChatMenu('chat.message-quick-replies.index'))
                                             <li class="pe-slide-item">
                                                 <a href="{{ route('chat.message-quick-replies.index') }}" class="pe-nav-link">

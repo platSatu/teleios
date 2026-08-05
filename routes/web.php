@@ -90,7 +90,6 @@ use App\Http\Controllers\Chat\WaApiKeyController;
 use App\Http\Controllers\Chat\InboxController;
 use App\Http\Controllers\Chat\MessageScheduleController;
 use App\Http\Controllers\Chat\MessageTemplateController;
-use App\Http\Controllers\Chat\MessageReminderController;
 use App\Http\Controllers\Chat\MessageAutoReplyController;
 use App\Http\Controllers\Chat\MessageQuickReplyController;
 use App\Http\Controllers\Chat\AiBotController;
@@ -203,15 +202,6 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::get('/{id}/edit', 'edit')->name('chat.message-templates.edit');
                 Route::put('/{id}', 'update')->name('chat.message-templates.update');
                 Route::delete('/{id}', 'destroy')->name('chat.message-templates.destroy');
-            });
-
-        Route::prefix('message-reminders')
-            ->controller(MessageReminderController::class)
-            ->group(function () {
-                Route::get('/', 'index')->name('chat.message-reminders.index');
-                Route::post('/', 'store')->name('chat.message-reminders.store');
-                Route::put('/{id}', 'update')->name('chat.message-reminders.update');
-                Route::delete('/{id}', 'destroy')->name('chat.message-reminders.destroy');
             });
 
         Route::prefix('message-auto-replies')
