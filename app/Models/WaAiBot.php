@@ -28,6 +28,7 @@ class WaAiBot extends Model
         'wa_ai_bot_model_id',
         'attach_file_path',
         'attach_file_original_name',
+        'knowledge_base_text',
         'api_configuration',
         'ai_behaviour_prompt',
         'active_bot_immediately',

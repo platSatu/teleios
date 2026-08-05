@@ -64,9 +64,17 @@
 
 <div class="mb-3">
     <label class="form-label">Lampiran Knowledge Base (opsional)</label>
-    <input type="file" name="attach_file" class="form-control @error('attach_file', $errorBag) is-invalid @enderror">
+    <input type="file" name="attach_file" accept=".pdf,.txt,.docx" class="form-control @error('attach_file', $errorBag) is-invalid @enderror">
+    <div class="form-text">Format: PDF, TXT, atau DOCX (maks. 10MB). Isinya otomatis dibaca AI sebagai referensi tambahan saat menjawab.</div>
     @if(($bot->attach_file_original_name ?? null))
-        <div class="form-text">File saat ini: {{ $bot->attach_file_original_name }} — upload file baru untuk mengganti.</div>
+        <div class="form-text">
+            File saat ini: {{ $bot->attach_file_original_name }} — upload file baru untuk mengganti.
+            @if($bot->knowledge_base_text ?? null)
+                <span class="text-success">Berhasil diproses ({{ number_format(mb_strlen($bot->knowledge_base_text)) }} karakter terbaca).</span>
+            @else
+                <span class="text-danger">Belum bisa dibaca isinya (mis. PDF hasil scan) — AI tidak memakai file ini sebagai referensi.</span>
+            @endif
+        </div>
     @endif
     @error('attach_file', $errorBag)<div class="invalid-feedback">{{ $message }}</div>@enderror
 </div>

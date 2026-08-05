@@ -8,6 +8,7 @@ use App\Models\BranchOffice;
 use App\Models\WaAiBot;
 use App\Models\WaAiBotModel;
 use App\Models\WaAiBotProvider;
+use App\Services\AiBot\KnowledgeBaseExtractor;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -29,6 +30,10 @@ use Illuminate\View\View;
 class AiBotController extends Controller
 {
     use ResolvesCompanyContext;
+
+    public function __construct(private readonly KnowledgeBaseExtractor $knowledgeBaseExtractor)
+    {
+    }
 
     public function index(Request $request): View
     {
@@ -179,7 +184,13 @@ class AiBotController extends Controller
      * Handles the optional attach_file upload — stored privately (not on
      * the `public` disk) since this may carry a company's internal
      * FAQ/knowledge-base document. Replaces (and deletes) any file the
-     * record already had, if a new one was uploaded.
+     * record already had, if a new one was uploaded. Also runs the file
+     * through KnowledgeBaseExtractor right away and caches the resulting
+     * plain text on knowledge_base_text, so App\Services\AiBot\
+     * AiReplyGenerator never has to re-parse the source file per message
+     * — see that class for how it's actually used. Extraction failing
+     * (unsupported quirk, scanned/image-only PDF, etc.) never blocks
+     * saving the bot config; it just leaves knowledge_base_text null.
      */
     private function attachFile(Request $request, array &$validated, ?WaAiBot $existing = null): void
     {
@@ -192,8 +203,12 @@ class AiBotController extends Controller
         }
 
         $file = $request->file('attach_file');
-        $validated['attach_file_path'] = $file->store('ai-bot-attachments', 'local');
-        $validated['attach_file_original_name'] = $file->getClientOriginalName();
+        $originalName = $file->getClientOriginalName();
+        $storagePath = $file->store('ai-bot-attachments', 'local');
+
+        $validated['attach_file_path'] = $storagePath;
+        $validated['attach_file_original_name'] = $originalName;
+        $validated['knowledge_base_text'] = $this->knowledgeBaseExtractor->extract($storagePath, $originalName);
         unset($validated['attach_file']); // not a fillable column — only *_path/*_original_name are
     }
 
@@ -212,7 +227,7 @@ class AiBotController extends Controller
                     ->where('status', 'active')
                     ->where('wa_ai_bot_provider_id', $request->input('wa_ai_bot_provider_id')),
             ],
-            'attach_file' => ['nullable', 'file', 'max:10240'],
+            'attach_file' => ['nullable', 'file', 'mimes:pdf,txt,docx', 'max:10240'],
             'api_configuration' => ['nullable', 'string'],
             'ai_behaviour_prompt' => ['nullable', 'string'],
             'active_bot_immediately' => ['nullable', 'boolean'],
