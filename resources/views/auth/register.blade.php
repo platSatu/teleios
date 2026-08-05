@@ -160,10 +160,6 @@
                         <img src="{{ asset('be') }}/assets/images/auth/google-icon.svg" alt="Google"
                             class="w-16px">Sign up via Google
                     </a>
-                    <button type="button" class="btn btn-outline-light text-black d-flex align-items-center justify-content-center gap-2 w-100">
-                        <img src="{{ asset('be') }}/assets/images/auth/apple-black.svg" alt="Apple"
-                            class="w-16px">Sign up via Apple
-                    </button>
                 </div>
             </div>
         </div>

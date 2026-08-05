@@ -19,6 +19,17 @@
         value="{{ old('name', $provider->name ?? '') }}" required>
 </div>
 
+<div class="mb-3">
+    <label for="driver" class="form-label">Driver Mesin AI <span class="text-danger">*</span></label>
+    <select name="driver" id="driver" class="form-select" required>
+        <option value="" disabled @selected(old('driver', $provider->driver ?? '') === '')>Pilih driver</option>
+        @foreach (\App\Models\WaAiBotProvider::DRIVERS as $value => $label)
+            <option value="{{ $value }}" @selected(old('driver', $provider->driver ?? '') === $value)>{{ $label }}</option>
+        @endforeach
+    </select>
+    <div class="form-text">Menentukan mesin AI mana yang benar-benar dipanggil (Gemini / OpenAI / Anthropic) — terpisah dari "Nama Provider" di atas, yang cuma label tampilan.</div>
+</div>
+
 <div class="mb-4">
     <label for="status" class="form-label">Status <span class="text-danger">*</span></label>
     <select name="status" id="status" class="form-select" required>

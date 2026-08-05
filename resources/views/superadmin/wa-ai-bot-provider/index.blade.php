@@ -29,6 +29,7 @@
                     <thead class="table-light">
                         <tr>
                             <th>Nama Provider</th>
+                            <th>Driver</th>
                             <th>Jumlah Model</th>
                             <th>Status</th>
                             <th class="text-end">Action</th>
@@ -38,6 +39,7 @@
                         @forelse ($providers as $item)
                             <tr>
                                 <td class="fw-semibold">{{ $item->name }}</td>
+                                <td>{{ \App\Models\WaAiBotProvider::DRIVERS[$item->driver] ?? ($item->driver ?: '-') }}</td>
                                 <td>{{ $item->models->count() }}</td>
                                 <td>
                                     <span class="badge {{ $item->status === 'active' ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger' }}">
@@ -61,7 +63,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="4" class="text-center text-muted py-4">Belum ada provider AI.</td>
+                                <td colspan="5" class="text-center text-muted py-4">Belum ada provider AI.</td>
                             </tr>
                         @endforelse
                     </tbody>

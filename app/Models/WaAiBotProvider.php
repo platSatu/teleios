@@ -23,7 +23,19 @@ class WaAiBotProvider extends Model
 
     protected $fillable = [
         'name',
+        'driver',
         'status',
+    ];
+
+    /**
+     * Drivers App\Services\AiBot\AiReplyGenerator knows how to call —
+     * kept here (not a DB enum) so the dropdown in the superadmin form
+     * and the engine's switch statement can never drift apart silently.
+     */
+    public const DRIVERS = [
+        'gemini' => 'Google Gemini',
+        'openai' => 'OpenAI (ChatGPT)',
+        'anthropic' => 'Anthropic (Claude)',
     ];
 
     protected static function boot()

@@ -37,6 +37,7 @@
                                 @endif
                                 <th>Aktivasi</th>
                                 <th>Status</th>
+                                <th>Riwayat Balas</th>
                                 <th class="text-end">Aksi</th>
                             </tr>
                         </thead>
@@ -62,6 +63,20 @@
                                     </td>
                                     <td>
                                         <span class="badge {{ $bot->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $bot->status }}</span>
+                                    </td>
+                                    <td>
+                                        @if($bot->last_triggered_at)
+                                            <span class="badge bg-success-subtle text-success">
+                                                <i class="ri-check-double-line"></i> {{ $bot->trigger_count }}x terpicu
+                                            </span>
+                                            <div class="fs-11 text-muted mt-1">Terakhir {{ $bot->last_triggered_at->diffForHumans() }}</div>
+                                        @elseif($bot->last_error)
+                                            <span class="badge bg-danger-subtle text-danger" title="{{ $bot->last_error }}">
+                                                <i class="ri-error-warning-line"></i> Gagal kirim
+                                            </span>
+                                        @else
+                                            <span class="text-muted fs-12">Belum pernah</span>
+                                        @endif
                                     </td>
                                     <td class="text-end">
                                         <button type="button" class="btn btn-sm btn-light" data-bs-toggle="modal" data-bs-target="#editBotModal{{ $bot->id }}">
@@ -98,7 +113,7 @@
                                 </div>
                             @empty
                                 <tr>
-                                    <td colspan="{{ $isOwner ? 6 : 5 }}" class="text-center text-muted py-4">Belum ada konfigurasi AI Bot.</td>
+                                    <td colspan="{{ $isOwner ? 7 : 6 }}" class="text-center text-muted py-4">Belum ada konfigurasi AI Bot.</td>
                                 </tr>
                             @endforelse
                         </tbody>

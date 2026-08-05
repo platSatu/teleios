@@ -82,6 +82,7 @@ class WaAiBotProviderController extends Controller
     {
         return $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'driver' => ['required', 'in:'.implode(',', array_keys(WaAiBotProvider::DRIVERS))],
             'status' => ['required', 'in:active,inactive'],
         ]);
     }
