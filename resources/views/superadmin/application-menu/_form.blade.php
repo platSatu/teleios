@@ -31,6 +31,36 @@
 </div>
 
 <div class="mb-3">
+    <label for="route_name" class="form-label">Route Name</label>
+    <input type="text" name="route_name" id="route_name" class="form-control" value="{{ old('route_name', $applicationMenu->route_name ?? '') }}" placeholder="mis. chat.connect-device.index atau profile.branch-offices.index">
+    <div class="form-text">
+        Dipakai untuk gating akses per role (sidebar &amp; middleware <code>menu.access</code>) — harus cocok dengan nama route Laravel yang sebenarnya, atau setidaknya berbagi dua segmen pertama dengannya (mis. <code>profile.branch-offices</code>). Kosongkan kalau menu ini murni label/grouping tanpa halaman sendiri.
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4 mb-3">
+        <label for="icon" class="form-label">Icon</label>
+        <input type="text" name="icon" id="icon" class="form-control" value="{{ old('icon', $applicationMenu->icon ?? '') }}" placeholder="mis. ri-smartphone-line">
+    </div>
+    <div class="col-md-4 mb-3">
+        <label for="sort_order" class="form-label">Urutan Tampil</label>
+        <input type="number" name="sort_order" id="sort_order" class="form-control" value="{{ old('sort_order', $applicationMenu->sort_order ?? 0) }}">
+    </div>
+    <div class="col-md-4 mb-3">
+        <label for="parent_id" class="form-label">Parent Menu (opsional)</label>
+        <select name="parent_id" id="parent_id" class="form-select">
+            <option value="">— Tidak ada (menu utama) —</option>
+            @foreach ($parentCandidates as $parent)
+                <option value="{{ $parent->id }}" @selected(old('parent_id', $applicationMenu->parent_id ?? '') == $parent->id)>
+                    {{ $parent->name }}
+                </option>
+            @endforeach
+        </select>
+    </div>
+</div>
+
+<div class="mb-3">
     <label for="description" class="form-label">Deskripsi</label>
     <textarea name="description" id="description" class="form-control" rows="3">{{ old('description', $applicationMenu->description ?? '') }}</textarea>
 </div>

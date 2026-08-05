@@ -31,6 +31,9 @@
 
     <!-- App Css-->
     <link href="{{ asset('be') }}/assets/css/app.min.css" id="app-style" rel="stylesheet" type="text/css">
+
+    <!-- Cloudflare Turnstile (captcha) -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 
 <body>
@@ -113,6 +116,14 @@
                         </div>
                     </div>
 
+                    <!-- Captcha -->
+                    <div class="mb-4">
+                        <div class="cf-turnstile" data-sitekey="{{ config('services.turnstile.site_key') }}"></div>
+                        @error('cf-turnstile-response')
+                            <div class="text-danger fs-13 mt-1">{{ $message }}</div>
+                        @enderror
+                    </div>
+
                     <!-- Login Button -->
                     <div class="text-center">
                         <button type="submit" class="btn btn-primary w-100">
@@ -122,13 +133,13 @@
                 </form>
                 <p class="text-center text-muted fs-14 my-6">Not a Member yet? <a href="{{ route('register') }}"
                         class="link link-primary">Sign up</a></p>
-                <div class="d-flex flex-wrap flex-md-nowrap align-items-center justify-content-center gap-2">
-                    <button type="button" class="btn btn-outline-light text-black d-flex align-items-center gap-2">
+                <div class="d-flex flex-wrap align-items-center justify-content-center gap-2">
+                    <a href="{{ route('auth.google') }}" class="btn btn-outline-light text-black d-flex align-items-center justify-content-center gap-2 w-100">
                         <img src="{{ asset('be') }}/assets/images/auth/google-icon.svg" alt="Google"
                             class="w-16px">Sign in via Google
-                    </button>
-                    <button type="button" class="btn btn-outline-light text-black d-flex align-items-center gap-2">
-                        <img src="{{ asset('be') }}/assets/images/auth/apple-black.svg" alt="Google"
+                    </a>
+                    <button type="button" class="btn btn-outline-light text-black d-flex align-items-center justify-content-center gap-2 w-100">
+                        <img src="{{ asset('be') }}/assets/images/auth/apple-black.svg" alt="Apple"
                             class="w-16px">Sign in via Apple
                     </button>
                 </div>

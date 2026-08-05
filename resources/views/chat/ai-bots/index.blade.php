@@ -15,14 +15,16 @@
                         <h4 class="mb-1">AI Bot</h4>
                         <p class="text-muted mb-0">Aktifkan asisten AI otomatis pada device WhatsApp yang sedang terhubung.</p>
                     </div>
-                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addBotModal">
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addBotModal" @disabled($providers->isEmpty())>
                         <i class="ri-add-line"></i> Tambah AI Bot
                     </button>
                 </div>
 
-                <div class="alert alert-info">
-                    Daftar provider &amp; model AI saat ini masih placeholder. Katalog provider/model yang dikelola superadmin akan menyusul.
-                </div>
+                @if ($providers->isEmpty())
+                    <div class="alert alert-warning">
+                        Belum ada provider AI yang Active. Hubungi superadmin untuk menambahkan provider &amp; model di menu "AI Bot" terlebih dahulu.
+                    </div>
+                @endif
 
                 <div class="table-responsive">
                     <table class="table table-centered table-hover align-middle mb-0">
@@ -30,6 +32,9 @@
                             <tr>
                                 <th>Provider</th>
                                 <th>Model</th>
+                                @if ($isOwner)
+                                    <th>Cabang</th>
+                                @endif
                                 <th>Aktivasi</th>
                                 <th>Status</th>
                                 <th class="text-end">Aksi</th>
@@ -38,11 +43,17 @@
                         <tbody>
                             @forelse($bots as $bot)
                                 <tr>
-                                    <td>{{ $bot->ai_provider }}</td>
-                                    <td>{{ $bot->ai_model ?: '-' }}</td>
+                                    <td>{{ $bot->provider->name ?? $bot->ai_provider }}</td>
+                                    <td>{{ $bot->model->name ?? ($bot->ai_model ?: '-') }}</td>
+                                    @if ($isOwner)
+                                        <td>{{ $bot->branchOffice->name ?? '-' }}</td>
+                                    @endif
                                     <td>
                                         @if($bot->custom_activation_time && $bot->activation_start_at)
                                             Terjadwal: {{ $bot->activation_start_at->translatedFormat('d M Y H:i') }}
+                                            @if($bot->activation_end_at)
+                                                &ndash; {{ $bot->activation_end_at->translatedFormat('d M Y H:i') }}
+                                            @endif
                                         @elseif($bot->active_bot_immediately)
                                             Langsung aktif
                                         @else
@@ -75,7 +86,7 @@
                                                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                                 </div>
                                                 <div class="modal-body">
-                                                    @include('chat.ai-bots._form', ['bot' => $bot, 'errorBag' => 'editBot'.$bot->id, 'providers' => $providers])
+                                                    @include('chat.ai-bots._form', ['bot' => $bot, 'errorBag' => 'editBot'.$bot->id, 'providers' => $providers, 'branchOffices' => $branchOffices, 'isOwner' => $isOwner, 'lockedBranchOffice' => $lockedBranchOffice])
                                                 </div>
                                                 <div class="modal-footer">
                                                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
@@ -87,7 +98,7 @@
                                 </div>
                             @empty
                                 <tr>
-                                    <td colspan="5" class="text-center text-muted py-4">Belum ada konfigurasi AI Bot.</td>
+                                    <td colspan="{{ $isOwner ? 6 : 5 }}" class="text-center text-muted py-4">Belum ada konfigurasi AI Bot.</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -110,7 +121,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    @include('chat.ai-bots._form', ['bot' => null, 'errorBag' => 'newBot', 'providers' => $providers])
+                    @include('chat.ai-bots._form', ['bot' => null, 'errorBag' => 'newBot', 'providers' => $providers, 'branchOffices' => $branchOffices, 'isOwner' => $isOwner, 'lockedBranchOffice' => $lockedBranchOffice])
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>

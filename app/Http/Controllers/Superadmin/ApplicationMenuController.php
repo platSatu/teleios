@@ -36,8 +36,9 @@ class ApplicationMenuController extends Controller
     {
         $users = User::orderBy('name')->get(['id', 'name', 'email']);
         $categoryApplications = CategoryApplication::orderBy('name')->get(['id', 'name']);
+        $parentCandidates = ApplicationMenu::orderBy('name')->get(['id', 'name']);
 
-        return view('superadmin.application-menu.create', compact('users', 'categoryApplications'));
+        return view('superadmin.application-menu.create', compact('users', 'categoryApplications', 'parentCandidates'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -61,8 +62,10 @@ class ApplicationMenuController extends Controller
         $applicationMenu = CrudAdmin::find(ApplicationMenu::class, $id);
         $users = User::orderBy('name')->get(['id', 'name', 'email']);
         $categoryApplications = CategoryApplication::orderBy('name')->get(['id', 'name']);
+        // Excludes itself — a menu can't be its own parent.
+        $parentCandidates = ApplicationMenu::where('id', '!=', $applicationMenu->id)->orderBy('name')->get(['id', 'name']);
 
-        return view('superadmin.application-menu.edit', compact('applicationMenu', 'users', 'categoryApplications'));
+        return view('superadmin.application-menu.edit', compact('applicationMenu', 'users', 'categoryApplications', 'parentCandidates'));
     }
 
     public function update(Request $request, string $id): RedirectResponse
@@ -92,6 +95,19 @@ class ApplicationMenuController extends Controller
             'user_id' => ['nullable', 'uuid', 'exists:users,id'],
             'category_application_id' => ['required', 'uuid', 'exists:category_applications,id'],
             'name' => ['required', 'string', 'max:255'],
+            // Nullable — a menu can be a pure grouping label with no page
+            // of its own (see App\Models\ApplicationMenu's docblock).
+            // Not validated against Laravel's actual registered routes
+            // (route names here don't have to correspond to a real GET
+            // "index" route — the "Setting Users"/"Branch Office"/etc.
+            // tabs are all panes on the single profile.edit page, not
+            // separate routes — see EnsureMenuAccess's route_name LIKE
+            // '<group>.%' matching, which only needs the first two
+            // segments to agree with a real route group).
+            'route_name' => ['nullable', 'string', 'max:255'],
+            'icon' => ['nullable', 'string', 'max:100'],
+            'sort_order' => ['nullable', 'integer', 'min:0'],
+            'parent_id' => ['nullable', 'uuid', 'exists:application_menus,id'],
             'description' => ['nullable', 'string'],
             'status' => ['required', 'in:active,inactive'],
         ]);

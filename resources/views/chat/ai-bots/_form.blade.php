@@ -1,4 +1,6 @@
 @php($suffix = $bot->id ?? 'new')
+@php($selectedProviderId = old('wa_ai_bot_provider_id', $bot->wa_ai_bot_provider_id ?? ''))
+@php($selectedModelId = old('wa_ai_bot_model_id', $bot->wa_ai_bot_model_id ?? ''))
 
 <div class="mb-3">
     <label class="form-label">Device (hanya yang sedang terhubung)</label>
@@ -9,23 +11,56 @@
     @error('device_id', $errorBag)<div class="invalid-feedback">{{ $message }}</div>@enderror
 </div>
 
+@if ($isOwner)
+    <div class="mb-3">
+        <label class="form-label">Cabang</label>
+        <select name="branch_office_id" class="form-select @error('branch_office_id', $errorBag) is-invalid @enderror">
+            <option value="">-- Semua / Belum ditentukan --</option>
+            @foreach($branchOffices as $branch)
+                <option value="{{ $branch->id }}" @selected(old('branch_office_id', $bot->branch_office_id ?? '') == $branch->id)>{{ $branch->name }}</option>
+            @endforeach
+        </select>
+        @error('branch_office_id', $errorBag)<div class="invalid-feedback">{{ $message }}</div>@enderror
+    </div>
+@else
+    <input type="hidden" name="branch_office_id" value="{{ $lockedBranchOffice?->id }}">
+    <div class="mb-3">
+        <label class="form-label">Cabang</label>
+        <input type="text" class="form-control" value="{{ $lockedBranchOffice->name ?? '-' }}" disabled>
+    </div>
+@endif
+
 <div class="row">
     <div class="col-6 mb-3">
         <label class="form-label">AI Provider</label>
-        <select name="ai_provider" class="form-select @error('ai_provider', $errorBag) is-invalid @enderror" required>
+        <select name="wa_ai_bot_provider_id" class="ai-bot-provider-select form-select @error('wa_ai_bot_provider_id', $errorBag) is-invalid @enderror"
+            data-target="#aiBotModel{{ $suffix }}" data-selected-model="{{ $selectedModelId }}" required>
+            <option value="">-- Pilih Provider --</option>
             @foreach($providers as $provider)
-                <option value="{{ $provider }}" @selected(old('ai_provider', $bot->ai_provider ?? '') == $provider)>{{ $provider }}</option>
+                <option value="{{ $provider->id }}" @selected($selectedProviderId == $provider->id)>{{ $provider->name }}</option>
             @endforeach
         </select>
-        @error('ai_provider', $errorBag)<div class="invalid-feedback">{{ $message }}</div>@enderror
+        @error('wa_ai_bot_provider_id', $errorBag)<div class="invalid-feedback">{{ $message }}</div>@enderror
     </div>
     <div class="col-6 mb-3">
         <label class="form-label">AI Model</label>
-        <input type="text" name="ai_model" value="{{ old('ai_model', $bot->ai_model ?? '') }}"
-            class="form-control @error('ai_model', $errorBag) is-invalid @enderror" placeholder="mis. gpt-4o-mini">
-        @error('ai_model', $errorBag)<div class="invalid-feedback">{{ $message }}</div>@enderror
+        <select name="wa_ai_bot_model_id" id="aiBotModel{{ $suffix }}" class="form-select @error('wa_ai_bot_model_id', $errorBag) is-invalid @enderror" required>
+            <option value="">-- Pilih Provider dulu --</option>
+            @if ($bot && $bot->model)
+                <option value="{{ $bot->model->id }}" selected>{{ $bot->model->name }}</option>
+            @endif
+        </select>
+        @error('wa_ai_bot_model_id', $errorBag)<div class="invalid-feedback">{{ $message }}</div>@enderror
     </div>
 </div>
+
+<script id="aiBotCatalog{{ $suffix }}" type="application/json">
+    {!! $providers->map(fn ($provider) => [
+        'id' => $provider->id,
+        'name' => $provider->name,
+        'models' => $provider->models->map(fn ($model) => ['id' => $model->id, 'name' => $model->name])->values(),
+    ])->values()->toJson() !!}
+</script>
 
 <div class="mb-3">
     <label class="form-label">Lampiran Knowledge Base (opsional)</label>
@@ -62,11 +97,19 @@
     <label class="form-check-label" for="customActivation{{ $suffix }}">Jadwalkan waktu aktivasi custom</label>
 </div>
 
-<div class="mb-3" id="activationTimeField{{ $suffix }}" style="{{ old('custom_activation_time', $bot->custom_activation_time ?? false) ? '' : 'display:none;' }}">
-    <label class="form-label">Aktif Mulai</label>
-    <input type="datetime-local" name="activation_start_at" value="{{ old('activation_start_at', isset($bot->activation_start_at) && $bot->activation_start_at ? $bot->activation_start_at->format('Y-m-d\TH:i') : '') }}"
-        class="form-control @error('activation_start_at', $errorBag) is-invalid @enderror">
-    @error('activation_start_at', $errorBag)<div class="invalid-feedback">{{ $message }}</div>@enderror
+<div class="row" id="activationTimeField{{ $suffix }}" style="{{ old('custom_activation_time', $bot->custom_activation_time ?? false) ? '' : 'display:none;' }}">
+    <div class="col-6 mb-3">
+        <label class="form-label">Aktif Mulai</label>
+        <input type="datetime-local" name="activation_start_at" value="{{ old('activation_start_at', isset($bot->activation_start_at) && $bot->activation_start_at ? $bot->activation_start_at->format('Y-m-d\TH:i') : '') }}"
+            class="form-control @error('activation_start_at', $errorBag) is-invalid @enderror">
+        @error('activation_start_at', $errorBag)<div class="invalid-feedback">{{ $message }}</div>@enderror
+    </div>
+    <div class="col-6 mb-3">
+        <label class="form-label">Aktif Sampai</label>
+        <input type="datetime-local" name="activation_end_at" value="{{ old('activation_end_at', isset($bot->activation_end_at) && $bot->activation_end_at ? $bot->activation_end_at->format('Y-m-d\TH:i') : '') }}"
+            class="form-control @error('activation_end_at', $errorBag) is-invalid @enderror">
+        @error('activation_end_at', $errorBag)<div class="invalid-feedback">{{ $message }}</div>@enderror
+    </div>
 </div>
 
 <div class="mb-3">
@@ -86,5 +129,45 @@
             var field = document.querySelector(toggle.getAttribute('data-target'));
             if (field) field.style.display = toggle.checked ? '' : 'none';
         });
+    })();
+
+    (function () {
+        var providerSelect = document.querySelector('select[name="wa_ai_bot_provider_id"][data-target="#aiBotModel{{ $suffix }}"]');
+        var catalogScript = document.getElementById('aiBotCatalog{{ $suffix }}');
+        if (!providerSelect || !catalogScript) return;
+
+        var catalog = JSON.parse(catalogScript.textContent || '[]');
+
+        function renderModels(providerId, preselectModelId) {
+            var modelSelect = document.querySelector(providerSelect.getAttribute('data-target'));
+            if (!modelSelect) return;
+
+            var provider = catalog.find(function (p) { return p.id === providerId; });
+            modelSelect.innerHTML = '';
+
+            if (!provider) {
+                modelSelect.innerHTML = '<option value="">-- Pilih Provider dulu --</option>';
+                return;
+            }
+
+            modelSelect.innerHTML = '<option value="">-- Pilih Model --</option>';
+            provider.models.forEach(function (model) {
+                var option = document.createElement('option');
+                option.value = model.id;
+                option.textContent = model.name;
+                if (preselectModelId && model.id === preselectModelId) {
+                    option.selected = true;
+                }
+                modelSelect.appendChild(option);
+            });
+        }
+
+        providerSelect.addEventListener('change', function () {
+            renderModels(providerSelect.value, null);
+        });
+
+        if (providerSelect.value) {
+            renderModels(providerSelect.value, providerSelect.getAttribute('data-selected-model'));
+        }
     })();
 </script>

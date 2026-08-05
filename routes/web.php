@@ -56,6 +56,8 @@ use App\Http\Controllers\Superadmin\CompanyRoleMenuController;
 use App\Http\Controllers\Superadmin\BranchOfficeController;
 
 use App\Http\Controllers\Superadmin\BranchOfficeUnitController;
+use App\Http\Controllers\Superadmin\WaAiBotProviderController;
+use App\Http\Controllers\Superadmin\WaAiBotModelController;
 
 use App\Http\Controllers\Superadmin\HelpCenters\CategoryHelpCenterController;
 
@@ -296,8 +298,19 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
     // "Roles" tab — CRUD scoped to the company owned by the logged in
     // user (see CompanyRoleController::ownedCompanyOrFail()). No {company}
     // route param anywhere: which company is never client-supplied.
+    //
+    // 'menu.access' on this whole group (and the four below it): same
+    // backstop as the `chat` route group (see App\Http\Middleware\
+    // EnsureMenuAccess) — a non-owner member can only reach these routes
+    // if their CompanyRole has been granted a matching App\Models\
+    // ApplicationMenu entry (route_name LIKE 'profile.company-roles.%',
+    // etc). Fails OPEN when no such catalog entry exists yet, so this is
+    // a no-op (unrestricted, same as before) until a superadmin actually
+    // creates one — existing companies aren't locked out by this change.
+    // The company owner is always unrestricted regardless.
     Route::prefix('user/profile/company-roles')
         ->controller(UserCompanyRoleController::class)
+        ->middleware('menu.access')
         ->group(function () {
             Route::post('/', 'store')->name('profile.company-roles.store');
             Route::put('/{id}', 'update')->name('profile.company-roles.update');
@@ -310,6 +323,7 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
     // company must exist before a branch office can be created.
     Route::prefix('user/profile/branch-offices')
         ->controller(UserBranchOfficeController::class)
+        ->middleware('menu.access')
         ->group(function () {
             Route::post('/', 'store')->name('profile.branch-offices.store');
             Route::put('/{id}', 'update')->name('profile.branch-offices.update');
@@ -322,6 +336,7 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
     // the flow: a branch office must exist before a unit can be created.
     Route::prefix('user/profile/branch-office-units')
         ->controller(UserBranchOfficeUnitController::class)
+        ->middleware('menu.access')
         ->group(function () {
             Route::post('/', 'store')->name('profile.branch-office-units.store');
             Route::put('/{id}', 'update')->name('profile.branch-office-units.update');
@@ -337,6 +352,7 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
     // docblock for the rest of that endpoint's security posture.
     Route::prefix('user/profile/company-users')
         ->controller(CompanyUserController::class)
+        ->middleware('menu.access')
         ->group(function () {
             Route::get('/create', 'create')->name('profile.company-users.create');
             Route::post('/', 'store')->name('profile.company-users.store');
@@ -356,6 +372,7 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
     // ownedCompanyOrFail()).
     Route::prefix('user/profile/company-role-menus')
         ->controller(UserCompanyRoleMenuController::class)
+        ->middleware('menu.access')
         ->group(function () {
             Route::post('/', 'store')->name('profile.company-role-menus.store');
             Route::put('/{id}', 'update')->name('profile.company-role-menus.update');
@@ -733,6 +750,32 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
                 Route::get('/{id}/edit', 'edit')->name('application-menu.edit');
                 Route::put('/{id}', 'update')->name('application-menu.update');
                 Route::delete('/{id}', 'destroy')->name('application-menu.destroy');
+            });
+
+        // "Provider AI" & "Model AI" in the sidebar — superadmin CRUD for
+        // the AI Bot catalog (App\Models\WaAiBotProvider / WaAiBotModel).
+        // This is the "menentukan apa yang bisa diajak kerja sama" catalog
+        // that Chat\AiBotController's provider/model dropdowns read from.
+        Route::prefix('wa-ai-bot-provider')
+            ->controller(WaAiBotProviderController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('wa-ai-bot-provider.index');
+                Route::get('/create', 'create')->name('wa-ai-bot-provider.create');
+                Route::post('/create', 'store')->name('wa-ai-bot-provider.store');
+                Route::get('/{id}/edit', 'edit')->name('wa-ai-bot-provider.edit');
+                Route::put('/{id}', 'update')->name('wa-ai-bot-provider.update');
+                Route::delete('/{id}', 'destroy')->name('wa-ai-bot-provider.destroy');
+            });
+
+        Route::prefix('wa-ai-bot-model')
+            ->controller(WaAiBotModelController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('wa-ai-bot-model.index');
+                Route::get('/create', 'create')->name('wa-ai-bot-model.create');
+                Route::post('/create', 'store')->name('wa-ai-bot-model.store');
+                Route::get('/{id}/edit', 'edit')->name('wa-ai-bot-model.edit');
+                Route::put('/{id}', 'update')->name('wa-ai-bot-model.update');
+                Route::delete('/{id}', 'destroy')->name('wa-ai-bot-model.destroy');
             });
 
         // Public WhatsApp API documentation (GET /dokumentasi, no login —

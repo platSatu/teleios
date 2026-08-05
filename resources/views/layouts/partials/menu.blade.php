@@ -291,6 +291,27 @@
                     </li>
 
                     <li class="pe-slide pe-has-sub">
+                        <a href="#collapseAiBotCatalog" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="collapseDashboards" onclick="toggleCollapse('collapseAuth', this)">
+                            <i class="uil uil-robot pe-nav-icon"></i>
+                            <span class="pe-nav-content">AI Bot</span>
+                            <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
+                            <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
+                        </a>
+                        <ul class="pe-slide-menu collapse" id="collapseAiBotCatalog">
+                            <li class="pe-slide-item">
+                                <a href="{{ route('wa-ai-bot-provider.index') }}" class="pe-nav-link">
+                                    Provider AI
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('wa-ai-bot-model.index') }}" class="pe-nav-link">
+                                    Model AI
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+
+                    <li class="pe-slide pe-has-sub">
                         <a href="#collapseCompany" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="collapseDashboards" onclick="toggleCollapse('collapseAuth', this)">
                             <i class="uil uil-apps pe-nav-icon"></i>
                             <span class="pe-nav-content">Company</span>

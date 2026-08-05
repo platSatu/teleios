@@ -21,8 +21,11 @@ class WaAiBot extends Model
     protected $fillable = [
         'company_id',
         'device_id',
+        'branch_office_id',
         'ai_provider',
         'ai_model',
+        'wa_ai_bot_provider_id',
+        'wa_ai_bot_model_id',
         'attach_file_path',
         'attach_file_original_name',
         'api_configuration',
@@ -30,6 +33,7 @@ class WaAiBot extends Model
         'active_bot_immediately',
         'custom_activation_time',
         'activation_start_at',
+        'activation_end_at',
         'status',
     ];
 
@@ -37,6 +41,7 @@ class WaAiBot extends Model
         'active_bot_immediately' => 'boolean',
         'custom_activation_time' => 'boolean',
         'activation_start_at' => 'datetime',
+        'activation_end_at' => 'datetime',
         'api_configuration' => 'encrypted',
     ];
 
@@ -54,5 +59,20 @@ class WaAiBot extends Model
     public function company()
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function branchOffice()
+    {
+        return $this->belongsTo(BranchOffice::class);
+    }
+
+    public function provider()
+    {
+        return $this->belongsTo(WaAiBotProvider::class, 'wa_ai_bot_provider_id');
+    }
+
+    public function model()
+    {
+        return $this->belongsTo(WaAiBotModel::class, 'wa_ai_bot_model_id');
     }
 }

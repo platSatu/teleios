@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\HistoryUserLogin;
 use App\Models\User;
+use App\Rules\Turnstile;
 use App\Services\GolangAuthService;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Auth\Events\PasswordReset;
@@ -18,6 +19,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rules;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Laravel\Socialite\Facades\Socialite;
 
 /**
  * Consolidated replacement for the split Auth\AuthenticatedSessionController
@@ -55,9 +57,28 @@ use Illuminate\View\View;
  *   - Both email notifications (VerifyEmailNotification,
  *     ResetPasswordNotification) implement ShouldQueue, so sending mail
  *     never blocks the request — see `php artisan queue:work`.
+ *   - redirectToGoogle()/handleGoogleCallback(): "Sign in/up with
+ *     Google" via laravel/socialite. A Google-verified email skips the
+ *     status='inactive'/verification-email step entirely — see
+ *     handleGoogleCallback()'s own docblock for the account-matching
+ *     rules and why the Go-backend JWT sync is skipped for this path.
  */
 class AuthController extends Controller
 {
+    /**
+     * Cap for login() — see ensureIsNotRateLimited()/throttleKey().
+     */
+    private const LOGIN_MAX_ATTEMPTS = 3;
+
+    private const LOGIN_DECAY_SECONDS = 3600; // 60 minutes
+
+    /**
+     * Cap for register()/forgotPassword() — see ensureActionIsNotRateLimited().
+     */
+    private const EMAIL_ACTION_MAX_ATTEMPTS = 2;
+
+    private const EMAIL_ACTION_DECAY_SECONDS = 900; // 15 minutes
+
     public function __construct(
         protected GolangAuthService $golangAuth,
     ) {}
@@ -76,6 +97,7 @@ class AuthController extends Controller
         $validated = $request->validate([
             'email' => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
+            'cf-turnstile-response' => $this->turnstileRules(),
         ]);
 
         $this->ensureIsNotRateLimited($request);
@@ -88,7 +110,7 @@ class AuthController extends Controller
         $user = User::where('email', $validated['email'])->first();
 
         if (! $user || ! Hash::check($validated['password'], $user->password)) {
-            RateLimiter::hit($this->throttleKey($request));
+            RateLimiter::hit($this->throttleKey($request), self::LOGIN_DECAY_SECONDS);
 
             throw ValidationException::withMessages([
                 'email' => trans('auth.failed'),
@@ -99,7 +121,7 @@ class AuthController extends Controller
         // different message from "invalid credentials" above, since the
         // person typing them already proved they know the password.
         if ($user->status !== 'active') {
-            RateLimiter::hit($this->throttleKey($request));
+            RateLimiter::hit($this->throttleKey($request), self::LOGIN_DECAY_SECONDS);
 
             throw ValidationException::withMessages([
                 'email' => 'Akun Anda belum aktif. Silakan verifikasi email Anda terlebih dahulu sebelum login.',
@@ -108,19 +130,119 @@ class AuthController extends Controller
 
         RateLimiter::clear($this->throttleKey($request));
 
+        return $this->finishLogin($request, $user, $validated['password']);
+    }
+
+    // =========================================================
+    // GOOGLE OAUTH
+    // =========================================================
+
+    /**
+     * GET /auth/google — kicks off the OAuth dance by bouncing the
+     * browser to Google's own consent screen. stateless() since this app
+     * has no long-lived "linked account" management UI yet — each click
+     * is a fresh, independent login/register attempt, so there's nothing
+     * gained from Socialite's default session-based state persistence
+     * (and it avoids state-mismatch errors if the guest session doesn't
+     * carry a cookie yet on a first-ever visit).
+     */
+    public function redirectToGoogle()
+    {
+        return Socialite::driver('google')->stateless()->redirect();
+    }
+
+    /**
+     * GET /auth/google/callback — Google redirects here with the user's
+     * profile after they approve the consent screen. Three cases:
+     *
+     *   1. google_id already on file -> that's our user, log them in.
+     *   2. No google_id, but the email matches an existing account ->
+     *      link this Google identity to it (someone who originally
+     *      registered with a password is now also using "Sign in with
+     *      Google") and log them in.
+     *   3. Neither -> brand new account. Google already verified this
+     *      email address by letting the user complete its own consent
+     *      screen, so — unlike register() — this account is created
+     *      status=active/email_verified_at=now() immediately, no
+     *      separate verification email needed. The password column is
+     *      NOT nullable (see 0001_01_01_000000_create_users_table.php),
+     *      so a random one is stored — it's unusable for a normal
+     *      password login until the user sets a real one via "forgot
+     *      password".
+     *
+     * The Go-backend JWT sync (see login()/finishLogin()) is skipped
+     * here: it needs the account's plaintext password, which only ever
+     * exists for case 3's randomly-generated one for the instant it's
+     * generated below, and is never known to the browser Google just
+     * redirected back. WhatsApp-device features simply stay unavailable
+     * until this user logs in normally at least once with a real
+     * password (same non-fatal degradation as when the Go backend is
+     * unreachable).
+     */
+    public function handleGoogleCallback(Request $request): RedirectResponse
+    {
+        try {
+            $googleUser = Socialite::driver('google')->stateless()->user();
+        } catch (\Throwable $e) {
+            report($e);
+
+            return redirect()->route('login')
+                ->withErrors(['email' => 'Login dengan Google gagal atau dibatalkan. Silakan coba lagi.']);
+        }
+
+        $user = User::where('google_id', $googleUser->getId())->first()
+            ?? User::where('email', $googleUser->getEmail())->first();
+
+        if ($user) {
+            if (! $user->google_id) {
+                $user->forceFill(['google_id' => $googleUser->getId()])->save();
+            }
+
+            if ($user->status !== 'active') {
+                return redirect()->route('login')
+                    ->withErrors(['email' => 'Akun Anda belum aktif. Silakan verifikasi email Anda terlebih dahulu sebelum login.']);
+            }
+        } else {
+            $user = User::create([
+                'name' => $googleUser->getName() ?: $googleUser->getNickname() ?: 'Google User',
+                'email' => $googleUser->getEmail(),
+                'password' => Hash::make(Str::random(40)),
+                'status' => 'active',
+            ]);
+
+            $user->forceFill([
+                'google_id' => $googleUser->getId(),
+                'email_verified_at' => now(),
+            ])->save();
+        }
+
+        return $this->finishLogin($request, $user);
+    }
+
+    /**
+     * Shared tail end of a successful authentication, regardless of
+     * whether it came from login() (email+password, $plainPassword
+     * known) or handleGoogleCallback() ($plainPassword null — see that
+     * method's docblock for why the Go-backend sync is skipped in that
+     * case).
+     */
+    private function finishLogin(Request $request, User $user, ?string $plainPassword = null): RedirectResponse
+    {
         Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
 
-        // Sync with the Go backend so the user also gets a JWT for
-        // WhatsApp-related API calls (see ConnectDeviceService). Treated
-        // as non-fatal: if the Go backend is unreachable, the web app
-        // keeps working and only WhatsApp features are unavailable
-        // until the next successful login.
-        try {
-            $token = $this->golangAuth->login($validated['email'], $validated['password']);
-            session(['golang_jwt_token' => $token]);
-         } catch (\Throwable $e) {
-            report($e);
+        if ($plainPassword !== null) {
+            // Sync with the Go backend so the user also gets a JWT for
+            // WhatsApp-related API calls (see ConnectDeviceService).
+            // Treated as non-fatal: if the Go backend is unreachable,
+            // the web app keeps working and only WhatsApp features are
+            // unavailable until the next successful login.
+            try {
+                $token = $this->golangAuth->login($user->email, $plainPassword);
+                session(['golang_jwt_token' => $token]);
+            } catch (\Throwable $e) {
+                report($e);
+            }
         }
 
         HistoryUserLogin::create([
@@ -163,7 +285,16 @@ class AuthController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            'cf-turnstile-response' => $this->turnstileRules(),
         ]);
+
+        // Max 2 registrations per email+IP per 15 minutes — an active
+        // user not receiving the verification email is almost always a
+        // deliverability issue, not something retrying a 3rd/4th time
+        // fixes, so this is really an anti-spam cap rather than a UX
+        // limitation. See ensureActionIsNotRateLimited().
+        $this->ensureActionIsNotRateLimited($request, 'register');
+        RateLimiter::hit($this->actionThrottleKey($request, 'register'), self::EMAIL_ACTION_DECAY_SECONDS);
 
         $user = User::create([
             'name' => $validated['name'],
@@ -261,9 +392,24 @@ class AuthController extends Controller
 
     public function forgotPassword(Request $request): RedirectResponse
     {
-        $validated = $request->validate([
+        $request->validate([
             'email' => ['required', 'email'],
+            'cf-turnstile-response' => $this->turnstileRules(),
         ]);
+
+        // Only 'email' — deliberately NOT the full validated array, since
+        // it also contains cf-turnstile-response and Password::
+        // sendResetLink() below uses whatever's passed in here as a raw
+        // WHERE clause against the users table (there's no
+        // `cf-turnstile-response` column, so that would blow up).
+        $validated = $request->only('email');
+
+        // Max 2 reset-link requests per email+IP per 15 minutes — same
+        // reasoning as register(): a legitimate user not getting the
+        // email after 2 tries has a deliverability problem, not one more
+        // click will fix, so further requests are almost certainly spam.
+        $this->ensureActionIsNotRateLimited($request, 'forgot-password');
+        RateLimiter::hit($this->actionThrottleKey($request, 'forgot-password'), self::EMAIL_ACTION_DECAY_SECONDS);
 
         // Explicitly checked up front, rather than only relying on
         // Password::sendResetLink()'s own generic INVALID_USER status —
@@ -346,24 +492,66 @@ class AuthController extends Controller
 
     private function ensureIsNotRateLimited(Request $request): void
     {
-        if (! RateLimiter::tooManyAttempts($this->throttleKey($request), 5)) {
+        if (! RateLimiter::tooManyAttempts($this->throttleKey($request), self::LOGIN_MAX_ATTEMPTS)) {
             return;
         }
 
         event(new Lockout($request));
 
-        $seconds = RateLimiter::availableIn($this->throttleKey($request));
+        $minutes = (int) ceil(RateLimiter::availableIn($this->throttleKey($request)) / 60);
 
         throw ValidationException::withMessages([
-            'email' => trans('auth.throttle', [
-                'seconds' => $seconds,
-                'minutes' => ceil($seconds / 60),
-            ]),
+            'email' => "Terlalu banyak percobaan login yang salah. Silakan coba kembali dalam {$minutes} menit ke depan.",
         ]);
     }
 
     private function throttleKey(Request $request): string
     {
         return Str::transliterate(Str::lower($request->string('email')).'|'.$request->ip());
+    }
+
+    /**
+     * Same email+IP-keyed pattern as ensureIsNotRateLimited()/throttleKey()
+     * above (login), reused for register()/forgotPassword() — capped at
+     * EMAIL_ACTION_MAX_ATTEMPTS per EMAIL_ACTION_DECAY_SECONDS. $action
+     * namespaces the key so a register() lockout and a forgotPassword()
+     * lockout for the same email+IP don't share (or reset) each other's
+     * counter.
+     */
+    private function ensureActionIsNotRateLimited(Request $request, string $action): void
+    {
+        $key = $this->actionThrottleKey($request, $action);
+
+        if (! RateLimiter::tooManyAttempts($key, self::EMAIL_ACTION_MAX_ATTEMPTS)) {
+            return;
+        }
+
+        event(new Lockout($request));
+
+        $minutes = (int) ceil(RateLimiter::availableIn($key) / 60);
+
+        throw ValidationException::withMessages([
+            'email' => "Terlalu banyak percobaan. Silakan coba kembali dalam {$minutes} menit ke depan.",
+        ]);
+    }
+
+    private function actionThrottleKey(Request $request, string $action): string
+    {
+        return $action.'|'.$this->throttleKey($request);
+    }
+
+    /**
+     * Validation rules for the `cf-turnstile-response` field on login/
+     * register/forgotPassword. Only actually required (and verified,
+     * see App\Rules\Turnstile) when this deployment has a Turnstile site
+     * key configured — otherwise 'nullable' so a fresh clone / the test
+     * suite (neither of which sends a real widget token) isn't
+     * permanently locked out of every auth form.
+     */
+    private function turnstileRules(): array
+    {
+        return config('services.turnstile.site_key')
+            ? ['required', new Turnstile()]
+            : ['nullable'];
     }
 }

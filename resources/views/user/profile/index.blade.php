@@ -112,7 +112,15 @@
                             </button>
                         </li>
                     @endif
-                    @if ($hasActivePackage && $isOwner)
+                    {{-- Each tab below now gates on its own canAccess*Tab
+                         flag (see User\Profile\ProfileController::index())
+                         instead of a flat $isOwner check — the owner is
+                         always unrestricted; a non-owner sees it if their
+                         CompanyRole was granted that route group's menu,
+                         or if no superadmin has catalogued it yet
+                         (fail-open, same rule as the 'menu.access'
+                         middleware actually guarding these routes). --}}
+                    @if ($hasActivePackage && $canAccessBranchOfficeTab)
                         <li class="nav-item" role="presentation">
                             <button class="nav-link {{ $activeTab === 'branch-office' ? 'active' : '' }}"
                                 id="tab-branch-office-btn" data-bs-toggle="tab" data-bs-target="#tab-branch-office"
@@ -120,6 +128,8 @@
                                 <i class="ri-community-line me-1"></i> Branch Office
                             </button>
                         </li>
+                    @endif
+                    @if ($hasActivePackage && $canAccessUnitDivisiTab)
                         <li class="nav-item" role="presentation">
                             <button class="nav-link {{ $activeTab === 'unit-divisi' ? 'active' : '' }}"
                                 id="tab-unit-divisi-btn" data-bs-toggle="tab" data-bs-target="#tab-unit-divisi"
@@ -127,12 +137,16 @@
                                 <i class="ri-organization-chart me-1"></i> Unit/Divisi
                             </button>
                         </li>
+                    @endif
+                    @if ($hasActivePackage && $canAccessRolesTab)
                         <li class="nav-item" role="presentation">
                             <button class="nav-link {{ $activeTab === 'roles' ? 'active' : '' }}" id="tab-roles-btn"
                                 data-bs-toggle="tab" data-bs-target="#tab-roles" type="button">
                                 <i class="ri-shield-user-line me-1"></i> Roles
                             </button>
                         </li>
+                    @endif
+                    @if ($hasActivePackage && $canAccessApplicationsTab)
                         <li class="nav-item" role="presentation">
                             <button class="nav-link {{ $activeTab === 'applications' ? 'active' : '' }}"
                                 id="tab-applications-btn" data-bs-toggle="tab" data-bs-target="#tab-applications"
@@ -141,7 +155,7 @@
                             </button>
                         </li>
                     @endif
-                    @if ($hasActivePackage)
+                    @if ($hasActivePackage && $canAccessUsersTab)
                         <li class="nav-item" role="presentation">
                             <button class="nav-link {{ $activeTab === 'users' ? 'active' : '' }}" id="tab-users-btn"
                                 data-bs-toggle="tab" data-bs-target="#tab-users" type="button">
@@ -382,9 +396,9 @@
                     </div>
 
                     {{-- ============================= --}}
-                    {{-- TAB: BRANCH OFFICE (requires an active package) --}}
+                    {{-- TAB: BRANCH OFFICE (requires an active package + canAccessBranchOfficeTab) --}}
                     {{-- ============================= --}}
-                    @if ($hasActivePackage)
+                    @if ($hasActivePackage && $canAccessBranchOfficeTab)
                     <div class="tab-pane fade {{ $activeTab === 'branch-office' ? 'show active' : '' }}"
                         id="tab-branch-office" role="tabpanel">
 
@@ -458,9 +472,9 @@
                     @endif
 
                     {{-- ============================= --}}
-                    {{-- TAB: UNIT/DIVISI (requires an active package) --}}
+                    {{-- TAB: UNIT/DIVISI (requires an active package + canAccessUnitDivisiTab) --}}
                     {{-- ============================= --}}
-                    @if ($hasActivePackage)
+                    @if ($hasActivePackage && $canAccessUnitDivisiTab)
                     <div class="tab-pane fade {{ $activeTab === 'unit-divisi' ? 'show active' : '' }}"
                         id="tab-unit-divisi" role="tabpanel">
 
@@ -539,7 +553,7 @@
                     {{-- TAB: SETTING USERS (requires an active package — --}}
                     {{-- see $hasActivePackage in ProfileController) --}}
                     {{-- ============================= --}}
-                    @if ($hasActivePackage)
+                    @if ($hasActivePackage && $canAccessUsersTab)
                     <div class="tab-pane fade {{ $activeTab === 'users' ? 'show active' : '' }}" id="tab-users"
                         role="tabpanel">
 
@@ -726,9 +740,9 @@
                     @endif
 
                     {{-- ============================= --}}
-                    {{-- TAB: ROLES (requires an active package) --}}
+                    {{-- TAB: ROLES (requires an active package + canAccessRolesTab) --}}
                     {{-- ============================= --}}
-                    @if ($hasActivePackage)
+                    @if ($hasActivePackage && $canAccessRolesTab)
                     <div class="tab-pane fade {{ $activeTab === 'roles' ? 'show active' : '' }}" id="tab-roles"
                         role="tabpanel">
 
@@ -801,9 +815,9 @@
                     @endif
 
                     {{-- ============================= --}}
-                    {{-- TAB: APPLICATIONS (requires an active package, owner-only) --}}
+                    {{-- TAB: APPLICATIONS (requires an active package + canAccessApplicationsTab) --}}
                     {{-- ============================= --}}
-                    @if ($hasActivePackage && $isOwner)
+                    @if ($hasActivePackage && $canAccessApplicationsTab)
                     <div class="tab-pane fade {{ $activeTab === 'applications' ? 'show active' : '' }}"
                         id="tab-applications" role="tabpanel">
 

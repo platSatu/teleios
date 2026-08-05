@@ -23,17 +23,27 @@
                     </a>
                 </div>
 
+                {{-- min-width per column (not just on the table) is what
+                     actually keeps this readable: without it, a narrow
+                     viewport doesn't scroll — it squeezes every <td>
+                     instead, which is what was forcing badges/buttons to
+                     wrap into a cramped stack. table-responsive still
+                     scrolls horizontally past the sum of these widths on
+                     small screens (intentional — the user explicitly
+                     prefers a horizontal scrollbar over misaligned/
+                     stacked columns), it just no longer also shrinks
+                     individual columns below a usable width first. --}}
                 <div class="table-responsive">
-                    <table class="table table-centered table-hover align-middle mb-0">
+                    <table class="table table-centered table-hover align-middle mb-0" style="min-width: 1100px;">
                         <thead class="table-light">
                             <tr>
-                                <th style="width:1%">No</th>
-                                <th>Name</th>
-                                <th>Kategori</th>
-                                <th>Tujuan</th>
-                                <th>Tanggal Mulai - Berakhir</th>
-                                <th>Status Kirim</th>
-                                <th class="text-end">Aksi</th>
+                                <th style="width:1%; white-space: nowrap;">No</th>
+                                <th style="min-width: 160px;">Name</th>
+                                <th style="min-width: 150px;">Kategori</th>
+                                <th style="min-width: 160px;">Tujuan</th>
+                                <th style="min-width: 170px;">Tanggal Mulai - Berakhir</th>
+                                <th style="min-width: 150px;">Status Kirim</th>
+                                <th class="text-end" style="min-width: 130px;">Aksi</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -75,13 +85,15 @@
                                             @if(!$phoneCount && !$groupCount && !$userCount) <span class="text-muted">-</span> @endif
                                         </div>
                                     </td>
-                                    <td>
+                                    <td style="white-space: nowrap;">
                                         {{ $schedule->date_start->translatedFormat('d M Y') }}
                                         @if(!$schedule->date_start->equalTo($schedule->date_end))
                                             &ndash; {{ $schedule->date_end->translatedFormat('d M Y') }}
-                                            <span class="badge bg-warning-subtle text-warning">Berulang</span>
                                         @endif
                                         <div class="text-muted small">Jam {{ \Illuminate\Support\Carbon::parse($schedule->schedule_time)->format('H:i') }}</div>
+                                        @if(!$schedule->date_start->equalTo($schedule->date_end))
+                                            <span class="badge bg-warning-subtle text-warning mt-1">Berulang</span>
+                                        @endif
                                     </td>
                                     <td>
                                         <div class="d-flex flex-wrap gap-1">
@@ -93,18 +105,24 @@
                                             @endif
                                         </div>
                                     </td>
-                                    <td class="text-end">
-                                        <a href="{{ route('chat.message-schedules.history', $schedule->id) }}" class="btn btn-sm btn-light" title="History">
-                                            <i class="ri-history-line"></i>
-                                        </a>
-                                        <a href="{{ route('chat.message-schedules.edit', $schedule->id) }}" class="btn btn-sm btn-light" title="Edit">
-                                            <i class="ri-edit-line"></i>
-                                        </a>
-                                        <form action="{{ route('chat.message-schedules.destroy', $schedule->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Hapus jadwal ini?');">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="btn btn-sm btn-light text-danger" title="Hapus"><i class="ri-delete-bin-line"></i></button>
-                                        </form>
+                                    <td class="text-end" style="white-space: nowrap;">
+                                        {{-- flex + nowrap so the 3 buttons stay in one row instead
+                                             of wrapping into a cramped 2x2-looking cluster once the
+                                             column's min-width above gives them room to sit
+                                             side-by-side. --}}
+                                        <div class="d-flex flex-nowrap justify-content-end gap-1">
+                                            <a href="{{ route('chat.message-schedules.history', $schedule->id) }}" class="btn btn-sm btn-light" title="History">
+                                                <i class="ri-history-line"></i>
+                                            </a>
+                                            <a href="{{ route('chat.message-schedules.edit', $schedule->id) }}" class="btn btn-sm btn-light" title="Edit">
+                                                <i class="ri-edit-line"></i>
+                                            </a>
+                                            <form action="{{ route('chat.message-schedules.destroy', $schedule->id) }}" method="POST" onsubmit="return confirm('Hapus jadwal ini?');">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="btn btn-sm btn-light text-danger" title="Hapus"><i class="ri-delete-bin-line"></i></button>
+                                            </form>
+                                        </div>
                                     </td>
                                 </tr>
                             @empty

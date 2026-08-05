@@ -37,6 +37,15 @@ Route::prefix('auth')->middleware('guest')->group(function () {
 
     Route::post('login', [AuthController::class, 'login']);
 
+    // "Sign in/up with Google" — see AuthController::redirectToGoogle()/
+    // handleGoogleCallback(). Same guest-only group as login/register
+    // since this is another way to reach the exact same outcome.
+    Route::get('google', [AuthController::class, 'redirectToGoogle'])
+        ->name('auth.google');
+
+    Route::get('google/callback', [AuthController::class, 'handleGoogleCallback'])
+        ->name('auth.google.callback');
+
     Route::get('forgot-password', [AuthController::class, 'showForgotPassword'])
         ->name('password.request');
 

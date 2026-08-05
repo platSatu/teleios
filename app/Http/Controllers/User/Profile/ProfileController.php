@@ -173,16 +173,56 @@ class ProfileController extends Controller
             ->orderBy('name')
             ->get();
 
+        // Which `profile.*` route groups (Branch Office / Unit-Divisi /
+        // Roles / Applications / Setting Users tabs) a non-owner member's
+        // CompanyRole is allowed into — same source of truth as the
+        // 'menu.access' middleware now guarding those routes (see
+        // routes/web.php) and the Chat sidebar's $allowedChatRouteNames
+        // (App\Providers\AppServiceProvider). Computed once here and
+        // reused for both the nav buttons and the tab-panes themselves,
+        // so a non-owner can't reach a management tab's content just by
+        // navigating to ?tab=roles directly when its nav button is
+        // hidden — see canAccessProfileRouteGroup() below for the
+        // fail-open rule (unrestricted until a superadmin actually
+        // catalogs that route group).
+        $allowedProfileRouteNames = null;
+
+        if (! $isOwner && $context?->role) {
+            $allowedProfileRouteNames = CompanyRoleMenu::where('company_role_id', $context->role->id)
+                ->where('status', 'active')
+                ->with('applicationMenu:id,route_name')
+                ->get()
+                ->pluck('applicationMenu.route_name')
+                ->filter()
+                ->values();
+        } elseif (! $isOwner) {
+            // Resolved to a company but with no CompanyRole at all (data
+            // inconsistency, or a role that got deleted out from under an
+            // existing membership) — restrictive empty set, not
+            // unrestricted null, since there's no role to have been
+            // granted anything.
+            $allowedProfileRouteNames = collect();
+        }
+
+        $canAccessBranchOfficeTab = $this->canAccessProfileRouteGroup($isOwner, $allowedProfileRouteNames, 'profile.branch-offices');
+        $canAccessUnitDivisiTab = $this->canAccessProfileRouteGroup($isOwner, $allowedProfileRouteNames, 'profile.branch-office-units');
+        $canAccessRolesTab = $this->canAccessProfileRouteGroup($isOwner, $allowedProfileRouteNames, 'profile.company-roles');
+        $canAccessApplicationsTab = $this->canAccessProfileRouteGroup($isOwner, $allowedProfileRouteNames, 'profile.company-role-menus');
+        $canAccessUsersTab = $this->canAccessProfileRouteGroup($isOwner, $allowedProfileRouteNames, 'profile.company-users');
+
         return view('user.profile.index', [
             'user' => $user,
             'company' => $company,
-            // Company / Branch Office / Unit-Divisi / Roles / Applications
-            // are owner-only management tabs — "pusat" configures the
-            // company, branches/units, roles, and which menus each role
-            // can see. A non-owner member only gets the Setting Users tab
-            // (scoped to their own branch), or Profile if they're not
-            // part of any company at all. See resources/views/user/
-            // profile/index.blade.php's tab-gating.
+            // Company is still always owner-only (a non-owner never has
+            // one to edit). Branch Office / Unit-Divisi / Roles /
+            // Applications / Setting Users now go through the
+            // canAccess*Tab flags above instead of a flat $isOwner check
+            // — the owner is always unrestricted (see
+            // canAccessProfileRouteGroup()), a non-owner only if their
+            // CompanyRole has been explicitly granted that route group's
+            // App\Models\ApplicationMenu entry, OR unrestricted-by-default
+            // if no superadmin has catalogued that route group yet (fail
+            // open, same as 'menu.access' middleware / Chat sidebar).
             'isOwner' => $isOwner,
             'companyContext' => $context,
             'companyRoles' => $companyRoles,
@@ -193,7 +233,41 @@ class ProfileController extends Controller
             'categoryApplications' => $categoryApplications,
             'applicationMenus' => $applicationMenus,
             'hasActivePackage' => $hasActivePackage,
+            'canAccessBranchOfficeTab' => $canAccessBranchOfficeTab,
+            'canAccessUnitDivisiTab' => $canAccessUnitDivisiTab,
+            'canAccessRolesTab' => $canAccessRolesTab,
+            'canAccessApplicationsTab' => $canAccessApplicationsTab,
+            'canAccessUsersTab' => $canAccessUsersTab,
         ]);
+    }
+
+    /**
+     * Same fail-open backstop as App\Http\Middleware\EnsureMenuAccess,
+     * reused here so the Profile page's tab visibility (nav buttons AND
+     * tab-panes) always agrees with what that middleware would actually
+     * let a non-owner member through to. The owner is always
+     * unrestricted. A route group with no App\Models\ApplicationMenu
+     * catalog entry at all (route_name LIKE '<group>.%') is unrestricted
+     * too — nothing about it has been put behind the per-role permission
+     * system yet, so existing companies aren't retroactively locked out
+     * of tabs they already relied on the moment this feature ships.
+     * Once a superadmin catalogs that group AND a company assigns it to
+     * specific roles, it becomes a real allow-list for non-owners.
+     */
+    private function canAccessProfileRouteGroup(bool $isOwner, ?\Illuminate\Support\Collection $allowedRouteNames, string $group): bool
+    {
+        if ($isOwner) {
+            return true;
+        }
+
+        $catalogued = ApplicationMenu::where('route_name', 'like', $group.'.%')->exists();
+
+        if (! $catalogued) {
+            return true;
+        }
+
+        return $allowedRouteNames !== null
+            && $allowedRouteNames->contains(fn ($routeName) => str_starts_with((string) $routeName, $group.'.'));
     }
 
     public function update(Request $request): RedirectResponse

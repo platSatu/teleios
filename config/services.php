@@ -53,6 +53,42 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Google OAuth (Sign in / Sign up with Google)
+    |--------------------------------------------------------------------------
+    |
+    | Powers App\Http\Controllers\Auth\AuthController::redirectToGoogle()/
+    | handleGoogleCallback() via laravel/socialite. redirect must match,
+    | character for character, an Authorized redirect URI configured on
+    | the OAuth Client in Google Cloud Console.
+    |
+    */
+
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_REDIRECT_URI'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cloudflare Turnstile (captcha)
+    |--------------------------------------------------------------------------
+    |
+    | Bot-spam protection on login/register/forgot-password — see
+    | App\Rules\Turnstile (server-side verification against Cloudflare's
+    | siteverify API) and the `cf-turnstile-response` field rendered by
+    | the Turnstile JS widget in those three Blade forms. site_key is
+    | public (goes in the HTML), secret_key must stay server-side only.
+    |
+    */
+
+    'turnstile' => [
+        'site_key' => env('TURNSTILE_SITE_KEY'),
+        'secret_key' => env('TURNSTILE_SECRET_KEY'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Duitku (Payment Gateway Indonesia)
     |--------------------------------------------------------------------------
     |

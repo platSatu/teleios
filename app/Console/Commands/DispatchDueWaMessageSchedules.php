@@ -43,6 +43,30 @@ class DispatchDueWaMessageSchedules extends Command
 
     protected $description = 'Enqueue due WhatsApp schedules (once/recurring/drip, per recipient) for sending';
 
+    /**
+     * Randomized gap (in seconds) between one recipient's send and the
+     * next WITHIN the same schedule (i.e. the same device) — this is an
+     * anti-ban measure. Before this, every recipient of a schedule was
+     * dispatched to the queue in the same instant with zero spacing, so
+     * a queue worker would fire them at whatever the Go backend/WhatsApp
+     * round-trip allows, back-to-back — a classic pattern WhatsApp's own
+     * anti-spam detection flags and bans numbers for (a real human never
+     * sends a burst of near-identical messages to unrelated numbers with
+     * ~0ms between them). A random range instead of a fixed interval on
+     * purpose: a perfectly uniform gap is itself a detectable automation
+     * signature, so this deliberately jitters like an inconsistent human
+     * sending pace would.
+     *
+     * Different schedules (which each send through their own
+     * device_id — see WaMessageSchedule) are NOT staggered against each
+     * other, only recipients within the same schedule — the risk this
+     * guards against is one device blasting messages too fast, not the
+     * system's aggregate throughput across many devices.
+     */
+    private const MIN_SEND_GAP_SECONDS = 5;
+
+    private const MAX_SEND_GAP_SECONDS = 15;
+
     public function handle(): int
     {
         $today = now()->toDateString();
@@ -70,8 +94,23 @@ class DispatchDueWaMessageSchedules extends Command
         $count = 0;
 
         foreach ($due as $schedule) {
+            // Reset per schedule — each schedule sends through its own
+            // device, so the stagger only needs to space out THIS
+            // schedule's own recipient list, not run continuously across
+            // every schedule this tick happens to find due.
+            $delaySeconds = 0;
+
             foreach ($schedule->recipientKeys() as $recipientKey) {
-                $count += $this->claimAndDispatch($schedule->id, $recipientKey, $today, 0);
+                $dispatched = $this->claimAndDispatch($schedule->id, $recipientKey, $today, 0, $delaySeconds);
+                $count += $dispatched;
+
+                // Only advance the clock for recipients that actually got
+                // a fresh job queued — a recipient claimAndDispatch skips
+                // (already claimed by an earlier tick) shouldn't eat into
+                // the pacing of the ones still left to send.
+                if ($dispatched) {
+                    $delaySeconds += random_int(self::MIN_SEND_GAP_SECONDS, self::MAX_SEND_GAP_SECONDS);
+                }
             }
         }
 
@@ -101,8 +140,18 @@ class DispatchDueWaMessageSchedules extends Command
                     continue;
                 }
 
+                // Reset per (schedule, step) — same reasoning as above:
+                // this step's own recipient batch is one send run on one
+                // device, staggered independently of every other step.
+                $delaySeconds = 0;
+
                 foreach ($schedule->recipientKeys() as $recipientKey) {
-                    $count += $this->claimAndDispatch($schedule->id, $recipientKey, $today, $step->sequence_order);
+                    $dispatched = $this->claimAndDispatch($schedule->id, $recipientKey, $today, $step->sequence_order, $delaySeconds);
+                    $count += $dispatched;
+
+                    if ($dispatched) {
+                        $delaySeconds += random_int(self::MIN_SEND_GAP_SECONDS, self::MAX_SEND_GAP_SECONDS);
+                    }
                 }
             }
         }
@@ -110,7 +159,7 @@ class DispatchDueWaMessageSchedules extends Command
         return $count;
     }
 
-    private function claimAndDispatch(string $scheduleId, string $recipientKey, string $today, int $stepOrder): int
+    private function claimAndDispatch(string $scheduleId, string $recipientKey, string $today, int $stepOrder, int $delaySeconds): int
     {
         $log = WaMessageScheduleLog::firstOrCreate(
             [
@@ -126,7 +175,15 @@ class DispatchDueWaMessageSchedules extends Command
             return 0;
         }
 
-        SendScheduledWaMessage::dispatch($scheduleId, $recipientKey, $today, $stepOrder);
+        $pending = SendScheduledWaMessage::dispatch($scheduleId, $recipientKey, $today, $stepOrder);
+
+        // First recipient (delaySeconds === 0) goes out on the queue's
+        // normal schedule — no ->delay() call at all, rather than
+        // ->delay(now()), so it isn't held back waiting on a delayed-job
+        // mechanism for no reason.
+        if ($delaySeconds > 0) {
+            $pending->delay(now()->addSeconds($delaySeconds));
+        }
 
         return 1;
     }

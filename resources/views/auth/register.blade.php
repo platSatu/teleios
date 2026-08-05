@@ -10,7 +10,7 @@
     <meta content="SRBThemes" name="author" />
 
     <!-- layout setup -->
-    <script type="module" src="assets/js/layout-setup.js"></script>
+    <script type="module" src="{{ asset('be') }}/assets/js/layout-setup.js"></script>
 
     <!-- App favicon -->
     <link rel="shortcut icon" href="{{ asset('be') }}/assets/images/favicon.png">
@@ -31,6 +31,9 @@
 
     <!-- App Css-->
     <link href="{{ asset('be') }}/assets/css/app.min.css" id="app-style" rel="stylesheet" type="text/css">
+
+    <!-- Cloudflare Turnstile (captcha) -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 
 <body>
@@ -128,6 +131,14 @@
                         </div>
                     </div>
 
+                    <!-- Captcha -->
+                    <div class="mb-4">
+                        <div class="cf-turnstile" data-sitekey="{{ config('services.turnstile.site_key') }}"></div>
+                        @error('cf-turnstile-response')
+                            <div class="text-danger fs-13 mt-1">{{ $message }}</div>
+                        @enderror
+                    </div>
+
                     <!-- Register Button -->
                     <div class="text-center mb-4">
                         <button type="submit" class="btn btn-primary w-100">
@@ -144,14 +155,14 @@
                 </form>
                 <p class="text-center text-muted fs-14 my-6">Already have an account? <a href="{{ route('login') }}"
                         class="link link-primary">Sign In</a></p>
-                <div class="d-flex flex-wrap flex-md-nowrap align-items-center justify-content-center gap-2">
-                    <button type="button" class="btn btn-outline-light text-black d-flex align-items-center gap-2">
+                <div class="d-flex flex-wrap align-items-center justify-content-center gap-2">
+                    <a href="{{ route('auth.google') }}" class="btn btn-outline-light text-black d-flex align-items-center justify-content-center gap-2 w-100">
                         <img src="{{ asset('be') }}/assets/images/auth/google-icon.svg" alt="Google"
-                            class="w-16px">Sign in via Google
-                    </button>
-                    <button type="button" class="btn btn-outline-light text-black d-flex align-items-center gap-2">
-                        <img src="{{ asset('be') }}/assets/images/auth/apple-black.svg" alt="Google"
-                            class="w-16px">Sign in via Apple
+                            class="w-16px">Sign up via Google
+                    </a>
+                    <button type="button" class="btn btn-outline-light text-black d-flex align-items-center justify-content-center gap-2 w-100">
+                        <img src="{{ asset('be') }}/assets/images/auth/apple-black.svg" alt="Apple"
+                            class="w-16px">Sign up via Apple
                     </button>
                 </div>
             </div>

@@ -101,6 +101,31 @@
                         <p class="text-danger fs-12 mt-2 mb-0">
                             Regenerate langsung mematikan token/secret lama — perbarui juga di pihak ketiga yang memakainya.
                         </p>
+
+                        <hr class="my-3">
+
+                        <p class="fw-semibold mb-1">Feedback dari Google Form ke WhatsApp</p>
+                        <p class="text-muted fs-12 mb-2">
+                            Tempel script di bawah ke Google Form kamu (Extensions &gt; Apps Script), lalu pasang trigger
+                            "On form submit" — setiap jawaban baru otomatis dikirim ke nomor WhatsApp di bawah lewat device ini.
+                        </p>
+
+                        <div class="mb-2">
+                            <label class="form-label fw-semibold mb-1">Nomor WhatsApp Tujuan Feedback</label>
+                            <input type="text" class="form-control form-control-sm" id="wa-api-key-feedback-target"
+                                placeholder="628xxxxxxxxxx">
+                        </div>
+
+                        <div class="mb-1">
+                            <label class="form-label fw-semibold mb-1">Script Google Apps Script</label>
+                            <textarea class="form-control form-control-sm" id="wa-api-key-feedback-script" rows="10"
+                                readonly style="font-family: monospace; font-size: 11px;"></textarea>
+                        </div>
+                        <div class="text-end">
+                            <button type="button" class="btn btn-outline-secondary btn-sm wa-copy-btn" data-target="wa-api-key-feedback-script">
+                                <i class="ri-file-copy-line"></i> Salin Script
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -497,13 +522,68 @@
             const apiKeyTokenInput = document.getElementById('wa-api-key-token');
             const apiKeySecretInput = document.getElementById('wa-api-key-secret');
             const apiKeyLastUsedEl = document.getElementById('wa-api-key-last-used');
+            const apiKeyFeedbackTargetInput = document.getElementById('wa-api-key-feedback-target');
+            const apiKeyFeedbackScriptTextarea = document.getElementById('wa-api-key-feedback-script');
 
             let currentApiKeyDeviceId = null;
+            let currentApiKeyDevicePhone = '';
 
             function apiKeyShowState(state) {
                 apiKeyLoading.classList.toggle('d-none', state !== 'loading');
                 apiKeyEmpty.classList.toggle('d-none', state !== 'empty');
                 apiKeyDetails.classList.toggle('d-none', state !== 'details');
+            }
+
+            // Builds the ready-to-paste Google Apps Script for "Feedback dari
+            // Google Form ke WhatsApp" (see the modal section right below the
+            // token/secret fields) — POSTs to the SAME public endpoint any
+            // third party uses (App\Http\Controllers\Api\
+            // WaApiSendMessageController, X-WA-Token/X-WA-Secret headers),
+            // just from Apps Script's onFormSubmit trigger instead of another
+            // backend. Regenerated live whenever the token/secret/target
+            // number change so it's always copy-paste ready.
+            function buildFeedbackScript() {
+                const apiUrl = (apiKeyHostInput.value || '').replace(/\/+$/, '') + '/api/wa-api/v1/send-message';
+                const target = apiKeyFeedbackTargetInput.value.trim() || '628xxxxxxxxxx';
+
+                return [
+                    'function onFormSubmit(e) {',
+                    '  var CONFIG = {',
+                    '    apiUrl: ' + JSON.stringify(apiUrl) + ',',
+                    '    waToken: ' + JSON.stringify(apiKeyTokenInput.value || '') + ',',
+                    '    waSecret: ' + JSON.stringify(apiKeySecretInput.value || '') + ',',
+                    '    targetNumber: ' + JSON.stringify(target),
+                    '  };',
+                    '',
+                    '  var lines = ["Feedback Baru:", ""];',
+                    '  e.response.getItemResponses().forEach(function (item) {',
+                    '    lines.push(item.getItem().getTitle() + ": " + item.getResponse());',
+                    '  });',
+                    '',
+                    '  var options = {',
+                    '    method: "post",',
+                    '    contentType: "application/json",',
+                    '    headers: {',
+                    '      "X-WA-Token": CONFIG.waToken,',
+                    '      "X-WA-Secret": CONFIG.waSecret',
+                    '    },',
+                    '    payload: JSON.stringify({ to: CONFIG.targetNumber, message: lines.join("\\n") }),',
+                    '    muteHttpExceptions: true',
+                    '  };',
+                    '',
+                    '  UrlFetchApp.fetch(CONFIG.apiUrl, options);',
+                    '}',
+                ].join('\n');
+            }
+
+            function refreshFeedbackScript() {
+                if (apiKeyFeedbackScriptTextarea) {
+                    apiKeyFeedbackScriptTextarea.value = buildFeedbackScript();
+                }
+            }
+
+            if (apiKeyFeedbackTargetInput) {
+                apiKeyFeedbackTargetInput.addEventListener('input', refreshFeedbackScript);
             }
 
             function renderApiKey(apiKey) {
@@ -516,6 +596,12 @@
                 apiKeyTokenInput.value = apiKey.token || '';
                 apiKeySecretInput.value = apiKey.secret_key || '';
                 apiKeyLastUsedEl.textContent = apiKey.last_used_at || 'Belum pernah dipakai';
+
+                if (apiKeyFeedbackTargetInput && !apiKeyFeedbackTargetInput.value) {
+                    apiKeyFeedbackTargetInput.value = currentApiKeyDevicePhone || '';
+                }
+                refreshFeedbackScript();
+
                 apiKeyShowState('details');
             }
 
@@ -528,6 +614,10 @@
 
             function openApiKeyModal(deviceId, phoneNumber) {
                 currentApiKeyDeviceId = deviceId;
+                currentApiKeyDevicePhone = phoneNumber || '';
+                if (apiKeyFeedbackTargetInput) {
+                    apiKeyFeedbackTargetInput.value = '';
+                }
                 apiKeyModal.show();
                 loadApiKey(deviceId);
 

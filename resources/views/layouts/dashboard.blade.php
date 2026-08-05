@@ -101,6 +101,33 @@
 <!-- App js -->
 <script src="{{asset('be')}}/assets/js/app.js"></script>
 
+<script>
+    // Second, client-side layer against Back/Forward showing a stale
+    // authenticated page after logout — App\Http\Middleware\
+    // PreventBackHistoryCache (Cache-Control: no-store on every
+    // response) is the first layer and is normally enough on its own,
+    // but current Chrome's bfcache (back/forward cache) can restore a
+    // page's exact in-memory JS/DOM state on Back WITHOUT re-requesting
+    // it from the server at all in some cases — meaning the no-store
+    // header is never even re-evaluated, since no network request
+    // happens. That's what let Back resurrect the Duitku checkout
+    // widget (resources/views/user/deposit/pay.blade.php) with its
+    // already-initialized state still "live", re-triggering the
+    // payment call with no server round-trip for 'auth' to catch.
+    //
+    // 'pageshow' with event.persisted === true fires specifically when
+    // a page is being restored from bfcache (never fires on a normal
+    // fresh load). Forcing a hard reload here makes that restoration
+    // behave like a real fresh request — hitting the server, going
+    // through 'auth' again, and correctly bouncing to /login if the
+    // session is gone — instead of silently reusing the frozen page.
+    window.addEventListener('pageshow', function (event) {
+        if (event.persisted) {
+            window.location.reload();
+        }
+    });
+</script>
+
 </body>
 
 </html>

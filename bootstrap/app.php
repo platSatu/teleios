@@ -68,5 +68,42 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Confirmed via curl against production (2026-08-05): the
+        // redirect-to-/login response a logged-out session gets bounced
+        // to was going out with the WRONG cache header —
+        // "Cache-Control: no-cache, private" (Symfony's default) instead
+        // of the no-store header App\Http\Middleware\
+        // PreventBackHistoryCache sets everywhere else. Root cause:
+        // AuthenticationException is thrown by 'auth' middleware, which
+        // sits INSIDE the 'web' group's pipeline relative to
+        // PreventBackHistoryCache (appended to that same group). A
+        // thrown exception unwinds past `$response = $next($request);`
+        // in every enclosing middleware as a PHP exception, not a normal
+        // return — so PreventBackHistoryCache's header-setting code
+        // after that line never runs for this specific response. The
+        // exception is instead caught by the framework here, entirely
+        // outside the middleware pipeline's normal return path, which is
+        // why only this one response class needs its own explicit
+        // handling rather than being fixable inside the middleware
+        // itself.
         //
+        // This was the actual gap behind "logout, press Back, still see
+        // the dashboard": PreventBackHistoryCache DOES correctly mark
+        // the original authenticated page no-store (so the browser
+        // shouldn't repaint it from cache and is forced to re-request),
+        // but that fresh re-request's own response — this redirect —
+        // was cacheable, so a SECOND Back-press (or the browser's own
+        // heuristics) could still resurrect a stale screen instead of
+        // reliably landing back on /login every time.
+        $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, \Illuminate\Http\Request $request) {
+            $response = $request->expectsJson()
+                ? response()->json(['message' => $e->getMessage()], 401)
+                : redirect()->guest(route('login'));
+
+            $response->headers->set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, private');
+            $response->headers->set('Pragma', 'no-cache');
+            $response->headers->set('Expires', '0');
+
+            return $response;
+        });
     })->create();

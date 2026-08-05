@@ -5,11 +5,11 @@
         <div class="card-body">
             <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
                 <div>
-                    <h4 class="mb-1">Application Menus</h4>
-                    <p class="text-muted mb-0">Penamaan menu per Category Application.</p>
+                    <h4 class="mb-1">Model AI</h4>
+                    <p class="text-muted mb-0">Daftar model per provider (mis. gpt-4o di bawah OpenAI) yang muncul di dropdown Model saat company mengatur AI Bot.</p>
                 </div>
-                <a href="{{ route('application-menu.create') }}" class="btn btn-primary">
-                    <i class="ri-add-line"></i> Tambah Application Menu
+                <a href="{{ route('wa-ai-bot-model.create') }}" class="btn btn-primary">
+                    <i class="ri-add-line"></i> Tambah Model
                 </a>
             </div>
 
@@ -19,7 +19,7 @@
 
             <form method="GET" class="mb-3">
                 <div class="input-group" style="max-width: 320px;">
-                    <input type="text" name="search" class="form-control" placeholder="Cari nama/deskripsi..." value="{{ request('search') }}">
+                    <input type="text" name="search" class="form-control" placeholder="Cari nama model..." value="{{ request('search') }}">
                     <button type="submit" class="btn btn-outline-secondary"><i class="ri-search-line"></i></button>
                 </div>
             </form>
@@ -28,29 +28,17 @@
                 <table class="table table-centered table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th>Nama Menu</th>
-                            <th>Category Application</th>
-                            <th>Route Name</th>
-                            <th>Deskripsi</th>
-                            <th>User</th>
+                            <th>Nama Model</th>
+                            <th>Provider</th>
                             <th>Status</th>
                             <th class="text-end">Action</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse ($applicationMenus as $item)
+                        @forelse ($models as $item)
                             <tr>
                                 <td class="fw-semibold">{{ $item->name }}</td>
-                                <td>{{ $item->categoryApplication->name ?? '-' }}</td>
-                                <td>
-                                    @if ($item->route_name)
-                                        <code class="fs-12">{{ $item->route_name }}</code>
-                                    @else
-                                        <span class="text-muted fst-italic">— label saja —</span>
-                                    @endif
-                                </td>
-                                <td class="text-muted">{{ \Illuminate\Support\Str::limit($item->description, 60) ?: '-' }}</td>
-                                <td>{{ $item->user->name ?? '-' }}</td>
+                                <td>{{ $item->provider->name ?? '-' }}</td>
                                 <td>
                                     <span class="badge {{ $item->status === 'active' ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger' }}">
                                         {{ ucfirst($item->status) }}
@@ -58,17 +46,14 @@
                                 </td>
                                 <td class="text-end">
                                     <div class="btn-group btn-group-sm">
-                                        <a href="{{ route('application-menu.show', $item->id) }}" class="btn btn-outline-primary">
-                                            <i class="ri-eye-line"></i> Show
-                                        </a>
-                                        <a href="{{ route('application-menu.edit', $item->id) }}" class="btn btn-outline-secondary">
+                                        <a href="{{ route('wa-ai-bot-model.edit', $item->id) }}" class="btn btn-outline-secondary">
                                             <i class="ri-edit-line"></i> Edit
                                         </a>
-                                        <button type="submit" form="delete-application-menu-{{ $item->id }}" class="btn btn-outline-danger" onclick="return confirm('Hapus application menu ini?');">
+                                        <button type="submit" form="delete-wa-ai-bot-model-{{ $item->id }}" class="btn btn-outline-danger" onclick="return confirm('Hapus model ini?');">
                                             <i class="ri-delete-bin-line"></i> Hapus
                                         </button>
                                     </div>
-                                    <form id="delete-application-menu-{{ $item->id }}" action="{{ route('application-menu.destroy', $item->id) }}" method="POST" class="d-none">
+                                    <form id="delete-wa-ai-bot-model-{{ $item->id }}" action="{{ route('wa-ai-bot-model.destroy', $item->id) }}" method="POST" class="d-none">
                                         @csrf
                                         @method('DELETE')
                                     </form>
@@ -76,7 +61,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="text-center text-muted py-4">Belum ada application menu.</td>
+                                <td colspan="4" class="text-center text-muted py-4">Belum ada model AI.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -84,7 +69,7 @@
             </div>
 
             <div class="mt-3">
-                {{ $applicationMenus->links() }}
+                {{ $models->links('pagination::bootstrap-5') }}
             </div>
         </div>
     </div>
