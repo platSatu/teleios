@@ -151,13 +151,17 @@ class DuitkuService
     }
 
     /**
-     * Same signature algorithm Duitku's callback notification has used
-     * for years (unlike createInvoice's, this one has NOT changed to
-     * HMAC — confirmed against the current Duitku documentation):
-     * md5(merchantCode + amount + merchantOrderId + apiKey). Verified
-     * against a plain array (e.g. $request->all()) rather than reading
-     * $_POST directly, so it's usable/testable from a normal Laravel
-     * request lifecycle.
+     * Confirmed by reproducing a real callback's signature byte-for-byte
+     * (2026-08-05, merchant DS23835): the "md5(merchantCode + amount +
+     * merchantOrderId + apiKey)" formula from Duitku's older docs is
+     * NOT what this account's callbacks are signed with — every real
+     * callback has a 64-char (SHA256-length) signature, not MD5's 32.
+     * The actual formula is HMAC-SHA256, keyed by the API key, over
+     * merchantCode + amount + merchantOrderId (no apiKey appended to
+     * the message — it's the HMAC key instead). Mirrors createInvoice's
+     * signing scheme above. Verified against a plain array (e.g.
+     * $request->all()) rather than reading $_POST directly, so it's
+     * usable/testable from a normal Laravel request lifecycle.
      */
     public function verifyCallbackSignature(array $notification): bool
     {
@@ -165,24 +169,19 @@ class DuitkuService
             return false;
         }
 
-        $expected = md5(
+        $expected = hash_hmac(
+            'sha256',
             $notification['merchantCode']
             . $notification['amount']
-            . $notification['merchantOrderId']
-            . $this->apiKey
+            . $notification['merchantOrderId'],
+            $this->apiKey
         );
 
         $valid = hash_equals($expected, (string) $notification['signature']);
 
-        // TEMPORARY diagnostic — every real production callback is
-        // currently failing this check even though the formula matches
-        // Duitku's own SDK byte-for-byte, so the mismatch has to be in
-        // the actual values (most likely $this->apiKey / merchantCode
-        // not matching what's on the Duitku dashboard, or a stale
-        // cached config on the server). Logs the received signature and
-        // our computed one side by side so the exact mismatch is
-        // visible in storage/logs/laravel.log on the next callback —
-        // remove once the root cause is confirmed and fixed.
+        // Diagnostic kept temporarily post-fix to confirm the new
+        // formula matches on the next real callback — safe to remove
+        // once a live transaction logs $valid === true.
         if (! $valid) {
             \Illuminate\Support\Facades\Log::warning('duitku-callback: signature mismatch detail', [
                 'received_signature' => $notification['signature'],
