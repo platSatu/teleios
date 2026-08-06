@@ -108,6 +108,7 @@ use App\Http\Controllers\Chat\WaGroupController;
 use App\Http\Controllers\Chat\GoogleContactController;
 use App\Http\Controllers\Chat\GoogleFormIntegrationController;
 use App\Http\Controllers\Chat\InboxController;
+use App\Http\Controllers\Chat\NotificationController;
 use App\Http\Controllers\Chat\MessageScheduleController;
 use App\Http\Controllers\Chat\MessageTemplateController;
 use App\Http\Controllers\Chat\CategoryTemplateController;
@@ -196,6 +197,16 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::post('/{device}/disconnect', 'disconnect')->name('chat.connect-device.disconnect');
                 Route::get('/{device}/history', 'history')->name('chat.connect-device.history');
             });
+
+        // Powers the header bell's real "pesan baru masuk" dropdown (see
+        // App\Http\Controllers\Chat\NotificationController) — polled from
+        // resources/views/layouts/partials/header.blade.php on every
+        // dashboard page, not just while actually viewing Chat, so it
+        // lives at the 'chat' prefix's top level rather than nested under
+        // inbox/{device} like everything else that's scoped to one
+        // device at a time.
+        Route::get('/notifications/unread', [NotificationController::class, 'unread'])
+            ->name('chat.notifications.unread');
 
         // Per-device third-party API credentials (token + secret_key) —
         // see App\Http\Controllers\Chat\WaApiKeyController and

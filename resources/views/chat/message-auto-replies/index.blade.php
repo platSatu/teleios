@@ -63,15 +63,21 @@
                                             </span>
                                         @endif
                                     </td>
-                                    <td class="text-end">
-                                        <button type="button" class="btn btn-sm btn-light" data-bs-toggle="modal" data-bs-target="#editAutoReplyModal{{ $autoReply->id }}">
-                                            <i class="ri-edit-line"></i>
-                                        </button>
-                                        <form action="{{ route('chat.message-auto-replies.destroy', $autoReply->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Hapus auto reply ini?');">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="btn btn-sm btn-light text-danger"><i class="ri-delete-bin-line"></i></button>
-                                        </form>
+                                    <td class="text-end" style="white-space: nowrap;">
+                                        {{-- Aktivitas above is often 2 lines (badge + "terakhir ...
+                                             yang lalu"), which makes this row taller than the rest —
+                                             without this flex wrapper the two action buttons drift to
+                                             the top of the cell instead of staying centered. --}}
+                                        <div class="d-flex flex-nowrap align-items-center justify-content-end gap-1">
+                                            <button type="button" class="btn btn-sm btn-light" data-bs-toggle="modal" data-bs-target="#editAutoReplyModal{{ $autoReply->id }}" title="Edit">
+                                                <i class="ri-edit-line"></i>
+                                            </button>
+                                            <form action="{{ route('chat.message-auto-replies.destroy', $autoReply->id) }}" method="POST" onsubmit="return confirm('Hapus auto reply ini?');">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="btn btn-sm btn-light text-danger" title="Hapus"><i class="ri-delete-bin-line"></i></button>
+                                            </form>
+                                        </div>
                                     </td>
                                 </tr>
 
@@ -105,7 +111,9 @@
                     </table>
                 </div>
 
-                <div class="mt-3">{{ $autoReplies->links() }}</div>
+                <div class="mt-3">
+                    {{ $autoReplies->links('pagination::bootstrap-5') }}
+                </div>
             </div>
         </div>
     </div>

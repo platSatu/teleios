@@ -98,6 +98,39 @@ class InboxService
     }
 
     /**
+     * Same as sendMedia(), but for a file that's already sitting on local
+     * disk (a WaMessageTemplate's attachment_path) rather than a fresh
+     * browser UploadedFile — used by send paths that have no live HTTP
+     * upload to read from: GoogleFormWebhookController and
+     * App\Jobs\SendScheduledWaMessage. Go's media endpoint doesn't care
+     * where the multipart bytes originally came from, so this reuses the
+     * exact same request shape as sendMedia().
+     *
+     * @return array<string, mixed>
+     */
+    public function sendStoredMedia(string $jwt, string $deviceId, string $chatJid, string $absolutePath, string $filename, ?string $mimeType, ?string $caption): array
+    {
+        $response = Http::withHeaders([
+            'X-API-KEY' => $this->apiKey,
+            'Authorization' => 'Bearer '.trim($jwt),
+            'Accept' => 'application/json',
+        ])
+            ->attach('file', file_get_contents($absolutePath), $filename, [
+                'Content-Type' => $mimeType ?: 'application/octet-stream',
+            ])
+            ->post(
+                "{$this->baseUrl}/api/wa/devices/{$deviceId}/chats/".rawurlencode($chatJid).'/media',
+                array_filter(['caption' => $caption], fn ($value) => $value !== null)
+            );
+
+        if ($response->failed()) {
+            throw new RuntimeException("Golang media send to {$chatJid} failed: ".$response->body());
+        }
+
+        return $response->json()['message'] ?? [];
+    }
+
+    /**
      * Fetches one message's stored media bytes from the Go backend, to be
      * streamed back to the browser by InboxController::media(). Buffered
      * in memory rather than proxied byte-by-byte — acceptable since
@@ -146,6 +179,47 @@ class InboxService
      * @throws RuntimeException if the Go backend rejects the request or is
      *                          unreachable.
      */
+    /**
+     * Turns a RuntimeException thrown by send()/request() into a message
+     * a company can actually act on, instead of the raw "Golang inbox
+     * request to /api/wa/devices/.../chats/...%40s... failed: {"error":
+     * "..."}" string that used to leak straight into user-facing UI
+     * (the Google Form integration's submission log, and Pesan
+     * Terjadwal's History Pengiriman "Keterangan" column) — both call
+     * this now instead of each hand-rolling their own copy.
+     *
+     * The Go backend's own JSON error body is embedded verbatim at the
+     * end of that message (see request()'s throw above) — this pulls the
+     * `error` key back out when present and maps the couple of causes a
+     * company can actually self-serve on (device missing / device
+     * disconnected) to a clear Indonesian sentence.
+     */
+    public static function describeSendFailure(\Throwable $e): string
+    {
+        $reason = null;
+
+        if (preg_match('/\{.*\}\s*$/s', $e->getMessage(), $matches)) {
+            $decoded = json_decode($matches[0], true);
+            if (is_array($decoded) && ! empty($decoded['error'])) {
+                $reason = (string) $decoded['error'];
+            }
+        }
+
+        if ($reason === null) {
+            return 'Gagal mengirim pesan. Pastikan device masih terhubung.';
+        }
+
+        if (str_contains($reason, 'device not found')) {
+            return 'Device pengirim untuk jadwal ini tidak ditemukan (mungkin sudah dihapus atau dipindah ke company lain). Buka Edit Jadwal dan pilih ulang device pengirimnya.';
+        }
+
+        if (str_contains($reason, 'not connected')) {
+            return 'Device pengirim sedang tidak terhubung ke WhatsApp. Sambungkan ulang di menu Connect Device, lalu tunggu jadwal berikutnya atau kirim ulang.';
+        }
+
+        return "Gagal mengirim pesan: {$reason}.";
+    }
+
     protected function request(string $method, string $path, string $jwt, array $payload = []): array
     {
         $response = Http::withHeaders([

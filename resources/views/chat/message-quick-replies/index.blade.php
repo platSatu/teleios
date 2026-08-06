@@ -42,15 +42,17 @@
                                     <td>
                                         <span class="badge {{ $quickReply->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $quickReply->status }}</span>
                                     </td>
-                                    <td class="text-end">
-                                        <button type="button" class="btn btn-sm btn-light" data-bs-toggle="modal" data-bs-target="#editQuickReplyModal{{ $quickReply->id }}">
-                                            <i class="ri-edit-line"></i>
-                                        </button>
-                                        <form action="{{ route('chat.message-quick-replies.destroy', $quickReply->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Hapus balasan cepat ini?');">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="btn btn-sm btn-light text-danger"><i class="ri-delete-bin-line"></i></button>
-                                        </form>
+                                    <td class="text-end" style="white-space: nowrap;">
+                                        <div class="d-flex flex-nowrap align-items-center justify-content-end gap-1">
+                                            <button type="button" class="btn btn-sm btn-light" data-bs-toggle="modal" data-bs-target="#editQuickReplyModal{{ $quickReply->id }}" title="Edit">
+                                                <i class="ri-edit-line"></i>
+                                            </button>
+                                            <form action="{{ route('chat.message-quick-replies.destroy', $quickReply->id) }}" method="POST" onsubmit="return confirm('Hapus balasan cepat ini?');">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="btn btn-sm btn-light text-danger" title="Hapus"><i class="ri-delete-bin-line"></i></button>
+                                            </form>
+                                        </div>
                                     </td>
                                 </tr>
 
@@ -84,7 +86,9 @@
                     </table>
                 </div>
 
-                <div class="mt-3">{{ $quickReplies->links() }}</div>
+                <div class="mt-3">
+                    {{ $quickReplies->links('pagination::bootstrap-5') }}
+                </div>
             </div>
         </div>
     </div>

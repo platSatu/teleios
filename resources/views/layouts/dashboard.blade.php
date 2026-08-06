@@ -2,8 +2,42 @@
 <html lang="en">
 <head>
 
+    @php
+        // Auto-derives the page title/breadcrumb from the current URL
+        // instead of the theme's hardcoded "Blank" — every one of this
+        // app's 172 views extends this one layout and none of them ever
+        // set a per-page title, so deriving it once here from the route
+        // itself is what actually makes every page correct with zero
+        // per-view changes needed, rather than a 172-file migration.
+        //
+        // A child view CAN still override this by defining
+        // @section('title', '...') and/or @section('page-section', '...')
+        // before @endsection — Blade captures a child's @section blocks
+        // before the parent layout runs, so $__env->yieldContent() below
+        // already sees them even though this code sits above @yield('content').
+        $__segments = collect(request()->segments())
+            ->reject(fn ($s) => $s === 'dashboard')
+            ->reject(fn ($s) => is_numeric($s) || preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $s))
+            ->map(fn ($s) => \Illuminate\Support\Str::of($s)->replace(['-', '_'], ' ')->title()->toString())
+            ->values();
+
+        // A bare action word ("Edit", "Create", "History"...) means
+        // nothing on its own once the id segment it followed has been
+        // filtered out above — pair it with whatever came before it
+        // ("Message Schedules — Edit") instead of just showing "Edit".
+        $__genericActions = ['Edit', 'Create', 'Show', 'History', 'Add', 'Detail'];
+        if ($__segments->count() > 1 && in_array($__segments->last(), $__genericActions, true)) {
+            $__autoTitle = $__segments->slice(-2)->implode(' — ');
+        } else {
+            $__autoTitle = $__segments->last() ?: 'Dashboard';
+        }
+
+        $pageTitle = trim($__env->yieldContent('title')) ?: $__autoTitle;
+        $pageSection = trim($__env->yieldContent('page-section')) ?: ($__segments->count() > 1 ? $__segments->first() : 'Dashboard');
+    @endphp
+
     <meta charset="utf-8" />
-    <title>Blank | Mirbal - Bootstrap Admin & Dashboard Template</title>
+    <title>{{ $pageTitle }} | Konexa | Dashboard </title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta content="Bootstrap Admin & Dashboard Template" name="description" />
     <meta content="SRBThemes" name="author" />
@@ -53,19 +87,21 @@
         <div class="container-fluid">
 
             <div class="main-breadcrumb d-flex flex-wrap align-items-center my-4 position-relative gap-3">
-                <h2 class="breadcrumb-title mb-0 flex-grow-1 fs-16">Blank</h2>
+                <h2 class="breadcrumb-title mb-0 flex-grow-1 fs-16">{{ $pageTitle }}</h2>
                 <div class="flex-shrink-0">
                     <nav aria-label="breadcrumb">
                         <ol class="breadcrumb justify-content-end mb-0">
-                            <li><i class="ri-home-4-line fs-16 me-2 lh-sm text-primary"></i></li>
-                            <li class="breadcrumb-item"><a href="javascript:void(0)">Pages</a></li>
-                            <li class="breadcrumb-item active" aria-current="page">Blank</li>
+                            <li><a href="{{ route('dashboard') }}"><i class="ri-home-4-line fs-16 me-2 lh-sm text-primary"></i></a></li>
+                            @if($pageSection !== $pageTitle)
+                                <li class="breadcrumb-item"><a href="javascript:void(0)">{{ $pageSection }}</a></li>
+                            @endif
+                            <li class="breadcrumb-item active" aria-current="page">{{ $pageTitle }}</li>
                         </ol>
                     </nav>
                 </div>
                 <div class="gap-4 content-title d-none">
                     <div class="text-end">
-                        <h5 class="mb-2 text-white fs-16">Blank</h5>
+                        <h5 class="mb-2 text-white fs-16">{{ $pageTitle }}</h5>
                         <h6 class="text-opacity-50 text-white fs-14 fw-medium mb-0">Page Overview</h6>
                     </div>
                     <div class="avatar-item avatar-lg rounded avatar-title text-white bg-white bg-opacity-10 border-0">

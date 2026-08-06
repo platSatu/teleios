@@ -529,6 +529,12 @@
             let activeChatJid = null;
             let activeChat = null;
             let allChats = [];
+            // Set when the page was opened from the header notification
+            // bell (?chat=<jid>) — see renderChatList() below, which
+            // auto-opens this chat the moment it shows up in the chat
+            // list, then clears it so it only ever fires once per page
+            // load (not on every subsequent poll).
+            let pendingDeepLinkJid = new URLSearchParams(window.location.search).get('chat');
             let searchTerm = '';
             let activeTab = 'chat'; // 'chat' | 'group' — Channel was removed, see classifyChat()
             let renderedChatsSignature = '';
@@ -810,6 +816,18 @@
                     return classifyChat(c.chat_jid) !== 'channel';
                 });
                 allChats = chats;
+
+                if (pendingDeepLinkJid) {
+                    const deepLinkTarget = chats.find(function (c) { return c.chat_jid === pendingDeepLinkJid; });
+                    // Open immediately even if this device's chat list
+                    // hasn't synced this jid yet (e.g. a brand new
+                    // conversation) — a minimal placeholder still lets the
+                    // notification click feel instant, and openChat's own
+                    // loadMessages()/loadChats() polling fills in the real
+                    // name/avatar/history right after.
+                    openChat(deepLinkTarget || { chat_jid: pendingDeepLinkJid, name: pendingDeepLinkJid, avatar_url: '', last_message_at: null });
+                    pendingDeepLinkJid = null; // only ever auto-open once per page load
+                }
 
                 const filtered = applyFilter(chats);
 
@@ -1296,7 +1314,16 @@
                     btn.appendChild(title);
                     btn.appendChild(preview);
                     btn.addEventListener('click', function () {
-                        insertAtCursor(opts.body(item));
+                        // Quick replies just paste their text (opts.onSelect
+                        // unset) — a WA Template needs more than that (its
+                        // composed header/link/buttons text, plus possibly
+                        // an attachment), so it supplies its own handler
+                        // instead of relying on this default.
+                        if (opts.onSelect) {
+                            opts.onSelect(item);
+                        } else {
+                            insertAtCursor(opts.body(item));
+                        }
                         closePicker();
                     });
 
@@ -1320,6 +1347,30 @@
                 });
             }
 
+            // Fetches a template's already-uploaded attachment and drops it
+            // into the exact same "pending attachment" state the manual
+            // paperclip button uses (pendingFile / showAttachPreview) —
+            // reusing that flow end-to-end (including the existing 32MB
+            // guard, preview UI, and the real InboxController::sendMedia()
+            // send path) instead of building a second, parallel way to
+            // send media just for templates.
+            function attachTemplateFile(item) {
+                return fetch(item.attachment_url, { credentials: 'same-origin' })
+                    .then(function (res) { return res.ok ? res.blob() : null; })
+                    .then(function (blob) {
+                        if (!blob) return;
+                        var filename = item.attachment_original_name || 'attachment';
+                        var file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
+                        showAttachPreview(file);
+                    })
+                    .catch(function () {
+                        // Attachment fetch failed — the composed text was
+                        // already inserted by the caller, so the send
+                        // still goes out (just without the file) rather
+                        // than silently doing nothing.
+                    });
+            }
+
             function openTemplatePicker() {
                 pickerPopoverTitleEl.textContent = 'Template Pesan';
                 pickerPopoverBodyEl.innerHTML = '<div class="wa-picker-empty">Memuat...</div>';
@@ -1330,7 +1381,17 @@
                     renderPickerList(data.templates || [], {
                         emptyText: 'Belum ada template. Kelola di Chat > Pengaturan > WA Template.',
                         title: function (item) { return item.name; },
-                        body: function (item) { return item.template; },
+                        // Full composed text (header + body + link +
+                        // buttons-as-text + footer) in the preview too, so
+                        // what's shown in the picker matches what actually
+                        // gets sent — not just the bare body.
+                        body: function (item) { return item.composed || item.template; },
+                        onSelect: function (item) {
+                            insertAtCursor(item.composed || item.template);
+                            if (item.attachment_url) {
+                                attachTemplateFile(item);
+                            }
+                        },
                     });
                 });
             }

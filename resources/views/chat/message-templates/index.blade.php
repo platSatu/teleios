@@ -42,7 +42,7 @@
                                     <td>{{ $loop->iteration + ($templates->currentPage() - 1) * $templates->perPage() }}</td>
                                     <td>{{ $template->name }}</td>
                                     <td class="text-muted">{{ $template->category->name ?? '—' }}</td>
-                                    <td class="text-muted">{{ \Illuminate\Support\Str::limit($template->template, 80) }}</td>
+                                    <td class="text-muted text-truncate" style="max-width: 320px;">{{ $template->template }}</td>
                                     <td>
                                         <span class="badge {{ $template->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $template->status }}</span>
                                     </td>
@@ -57,15 +57,23 @@
                                             <span class="badge bg-secondary-subtle text-secondary">Draft</span>
                                         @endif
                                     </td>
-                                    <td class="text-end">
-                                        <a href="{{ route('chat.message-templates.edit', $template->id) }}" class="btn btn-sm btn-light">
-                                            <i class="ri-edit-line"></i>
-                                        </a>
-                                        <form action="{{ route('chat.message-templates.destroy', $template->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Hapus template ini?');">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="btn btn-sm btn-light text-danger"><i class="ri-delete-bin-line"></i></button>
-                                        </form>
+                                    <td class="text-end" style="white-space: nowrap;">
+                                        {{-- Isi Pesan above can wrap the row taller than the other
+                                             columns; without this flex wrapper the two action buttons
+                                             (block-level by default) stack on top of each other and
+                                             drift to the top of the cell instead of staying side by
+                                             side and centered — same fix already used on Pesan
+                                             Terjadwal's own index for the identical reason. --}}
+                                        <div class="d-flex flex-nowrap align-items-center justify-content-end gap-1">
+                                            <a href="{{ route('chat.message-templates.edit', $template->id) }}" class="btn btn-sm btn-light" title="Edit">
+                                                <i class="ri-edit-line"></i>
+                                            </a>
+                                            <form action="{{ route('chat.message-templates.destroy', $template->id) }}" method="POST" onsubmit="return confirm('Hapus template ini?');">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="btn btn-sm btn-light text-danger" title="Hapus"><i class="ri-delete-bin-line"></i></button>
+                                            </form>
+                                        </div>
                                     </td>
                                 </tr>
                             @empty
@@ -77,7 +85,9 @@
                     </table>
                 </div>
 
-                <div class="mt-3">{{ $templates->links() }}</div>
+                <div class="mt-3">
+                    {{ $templates->links('pagination::bootstrap-5') }}
+                </div>
             </div>
         </div>
     </div>

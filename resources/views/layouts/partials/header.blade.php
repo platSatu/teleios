@@ -29,28 +29,15 @@
                         class="dropdown-menu dropdown-menu-clickable dropdown-menu-end dropdown-mega-xs header-dropdown-menu pe-noti-dropdown-menu shadow-none border p-0">
                         <div class="card mb-0 border-0">
                             <div class="card-header p-4">
-                                <h5 class="card-title">Languages</h5>
+                                <h5 class="card-title">Bahasa</h5>
                             </div>
                             <div class="noti-item d-flex align-items-center gap-2 py-2">
                                 <img src="{{ asset('be') }}/assets/images/circle-flag/gb.svg" alt="English"
                                     width="26" height="26" class="rounded-circle"> English
                             </div>
                             <div class="noti-item d-flex align-items-center gap-2 py-2">
-                                <img src="{{ asset('be') }}/assets/images/circle-flag/fr.svg" alt="French"
-                                    width="26" height="26" class="rounded-circle"> French
-                            </div>
-                            <div class="noti-item d-flex align-items-center gap-2 py-2">
-                                <img src="{{ asset('be') }}/assets/images/circle-flag/us.svg" alt="Spanish"
-                                    width="26" height="26" class="rounded-circle"> Spanish
-                            </div>
-                            <div class="noti-item d-flex align-items-center gap-2 py-2">
-                                <img src="{{ asset('be') }}/assets/images/circle-flag/de.svg" alt="German"
-                                    width="26" height="26" class="rounded-circle"> German
-                            </div>
-                            <div class="noti-item d-flex align-items-center gap-2 py-2">
-                                <img src="{{ asset('be') }}/assets/images/circle-flag/it.svg" alt="Italian"
-                                    width="26" height="26" class="rounded-circle"> Italian
-                            </div>
+                                <img src="{{ asset('be') }}/assets/images/circle-flag/id.svg" alt="Indonesia"
+                                 width="26" height="26" class="rounded-circle"> Indonesia
                         </div>
                     </ul>
                 </div>
@@ -58,7 +45,11 @@
                     <button class="btn text-muted rounded-circle icon-btn fs-5 header-menu-btn position-relative"
                         type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Notifications">
                         <i class="ri-notification-4-line"></i>
-                        <div class="icon-dot bg-danger"><span class="ping bg-danger"></span></div>
+                        {{-- Hidden by default — resources/views/layouts/partials/header.blade.php's
+                             own script at the bottom only reveals this once the
+                             real unread-chat poll (App\Http\Controllers\Chat\
+                             NotificationController) actually reports unread_count > 0. --}}
+                        <div class="icon-dot bg-danger d-none" id="notifBellDot"><span class="ping bg-danger"></span></div>
                     </button>
                     <div
                         class="dropdown-menu dropdown-menu-clickable dropdown-mega-md dropdown-menu-end header-dropdown-menu shadow-sm border p-0">
@@ -73,16 +64,16 @@
                                         <a class="nav-link px-2 active" data-bs-toggle="tab" href="#all"
                                             role="tab" aria-selected="false" tabindex="-1">
                                             <span>All</span>
-                                            <span
-                                                class="h-20px w-20px ms-1 d-inline-flex align-items-center justify-content-center border fs-12 text-muted rounded-1">3</span>
+                                            <span id="notifAllBadge"
+                                                class="h-20px w-20px ms-1 d-inline-flex align-items-center justify-content-center border fs-12 text-muted rounded-1">0</span>
                                         </a>
                                     </li>
                                     <li class="nav-item" role="presentation">
                                         <a class="nav-link px-2" data-bs-toggle="tab" href="#messages" role="tab"
                                             aria-selected="true">
                                             <span>Messages</span>
-                                            <span
-                                                class="h-20px w-20px ms-1 d-inline-flex align-items-center justify-content-center border fs-12 text-muted rounded-1">2</span>
+                                            <span id="notifMessagesBadge"
+                                                class="h-20px w-20px ms-1 d-inline-flex align-items-center justify-content-center border fs-12 text-muted rounded-1">0</span>
                                         </a>
                                     </li>
                                     <li class="nav-item" role="presentation">
@@ -104,66 +95,19 @@
                                 </ul>
                                 <div class="tab-content norification-tab" id="notificationTabContent">
                                     <div class="tab-pane fade show active" id="all" role="tabpanel">
-                                        <div class="notification-panel" data-simplebar style="max-height: 324px;">
-                                            <div class="notification">
-                                                <h6 class="message mb-2">You have a new task</h6>
-                                                <p class="fs-14 text-muted mb-0">Just now</p>
-                                            </div>
-                                            <div class="notification unread">
-                                                <h6 class="message mb-2">New message from Naomi</h6>
-                                                <p class="fs-14 text-muted mb-0">1 hour ago</p>
-                                            </div>
-                                            <div class="notification">
-                                                <h6 class="message mb-2">Your role has been set to Admin</h6>
-                                                <p class="fs-14 text-muted mb-0">3 days ago</p>
-                                            </div>
-                                            <div class="notification">
-                                                <h6 class="message mb-2">New message from Robert</h6>
-                                                <p class="fs-14 text-muted mb-0">2 weeks ago</p>
-                                            </div>
-                                            <div class="notification unread">
-                                                <h6 class="message mb-2">Payment received from Jonathan</h6>
-                                                <p class="fs-14 text-muted mb-0">3 days ago</p>
-                                            </div>
-                                            <div class="notification unread">
-                                                <h6 class="message mb-2">New comment on your post</h6>
-                                                <p class="fs-14 text-muted mb-0">5 hours ago</p>
-                                            </div>
-                                        </div>
-                                        <div class="p-4 text-end">
-                                            <a href="#!" class="text-body"><i
-                                                    class="ri-check-double-line fs-5 text-primary"></i> Mark all as
-                                                read</a>
-                                        </div>
+                                        {{-- Populated by the script at the bottom of this file from
+                                             App\Http\Controllers\Chat\NotificationController — real
+                                             "pesan baru masuk" per chat with unread messages, not the
+                                             theme's demo content. A chat drops off this list on its
+                                             own next time it's polled, once opening it in Inbox marks
+                                             it read (unread_count back to 0) — nothing here needs to
+                                             manually remove it. --}}
+                                        <div class="notification-panel" data-simplebar style="max-height: 324px;" id="notifAllList"></div>
+                                        <div class="notif-empty text-center text-muted p-4 d-none" id="notifAllEmpty">Tidak ada pesan baru.</div>
                                     </div>
                                     <div class="tab-pane fade" id="messages" role="tabpanel">
-                                        <div class="notification-panel" data-simplebar style="max-height: 324px;">
-                                            <div class="notification unread">
-                                                <h6 class="message mb-2">New message from Emma</h6>
-                                                <p class="fs-14 text-muted mb-0">5 minutes ago</p>
-                                            </div>
-                                            <div class="notification">
-                                                <h6 class="message mb-2">Reminder: Meeting at 3 PM</h6>
-                                                <p class="fs-14 text-muted mb-0">30 minutes ago</p>
-                                            </div>
-                                            <div class="notification unread">
-                                                <h6 class="message mb-2">Newsletter from Marketing</h6>
-                                                <p class="fs-14 text-muted mb-0">1 day ago</p>
-                                            </div>
-                                            <div class="notification">
-                                                <h6 class="message mb-2">System message: Update complete</h6>
-                                                <p class="fs-14 text-muted mb-0">4 days ago</p>
-                                            </div>
-                                            <div class="notification">
-                                                <h6 class="message mb-2">Message archived from Clara</h6>
-                                                <p class="fs-14 text-muted mb-0">1 week ago</p>
-                                            </div>
-                                        </div>
-                                        <div class="p-4 text-end">
-                                            <a href="#!" class="text-body"><i
-                                                    class="ri-check-double-line fs-5 text-primary"></i> Mark all as
-                                                read</a>
-                                        </div>
+                                        <div class="notification-panel" data-simplebar style="max-height: 324px;" id="notifMessagesList"></div>
+                                        <div class="notif-empty text-center text-muted p-4 d-none" id="notifMessagesEmpty">Tidak ada pesan baru.</div>
                                     </div>
                                     <div class="tab-pane fade" id="tasks" role="tabpanel">
                                         <div class="notification-panel" data-simplebar style="max-height: 324px;">
@@ -205,131 +149,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="dropdown pe-dropdown-mega">
-                    <button class="btn text-muted rounded-circle icon-btn fs-5 header-menu-btn position-relative"
-                        type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Messages">
-                        <i class="ri-shopping-cart-line"></i>
-                        <div class="icon-dot bg-success"><span class="ping bg-success"></span></div>
-                    </button>
-                    <ul
-                        class="dropdown-menu dropdown-menu-clickable dropdown-menu-end dropdown-mega-md header-dropdown-menu shadow-sm border p-0">
-                        <div class="card mb-0 border-0">
-                            <div class="card-header pb-2">
-                                <h5 class="card-title">Cart Items</h5>
-                                <a href="#!" class="fw-medium">See All</a>
-                            </div>
-                            <div class="card-body p-0">
-                                <div data-simplebar style="max-height: 355px;">
-                                    <div class="px-5 py-4 border-bottom">
-                                        <div class="row align-items-center">
-                                            <div class="col-7">
-                                                <a href="#!" class="mb-2 text-body fw-medium d-block">Margherita
-                                                    Pizza</a>
-                                                <p class="text-muted mb-0">Classic cheese & tomato</p>
-                                            </div>
-                                            <div class="col-3">
-                                                <input type="number"
-                                                    class="form-control form-control-sm text-center w-56px"
-                                                    value="2" min="1">
-                                            </div>
-                                            <div class="col-2 text-end">
-                                                <h6 class="mb-0">₹299</h6>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="px-5 py-4 border-bottom">
-                                        <div class="row align-items-center">
-                                            <div class="col-7">
-                                                <a href="#!" class="mb-2 text-body fw-medium d-block">Veg
-                                                    Burger</a>
-                                                <p class="text-muted mb-0">With crispy fries</p>
-                                            </div>
-                                            <div class="col-3">
-                                                <input type="number"
-                                                    class="form-control form-control-sm text-center w-56px"
-                                                    value="1" min="1">
-                                            </div>
-                                            <div class="col-2 text-end">
-                                                <h6 class="mb-0">₹149</h6>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="px-5 py-4 border-bottom">
-                                        <div class="row align-items-center">
-                                            <div class="col-7">
-                                                <a href="#!" class="mb-2 text-body fw-medium d-block">Paneer
-                                                    Tikka</a>
-                                                <p class="text-muted mb-0">Grilled cottage cheese</p>
-                                            </div>
-                                            <div class="col-3">
-                                                <input type="number"
-                                                    class="form-control form-control-sm text-center w-56px"
-                                                    value="3" min="1">
-                                            </div>
-                                            <div class="col-2 text-end">
-                                                <h6 class="mb-0">₹220</h6>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="px-5 py-4 border-bottom">
-                                        <div class="row align-items-center">
-                                            <div class="col-7">
-                                                <a href="#!" class="mb-2 text-body fw-medium d-block">Butter
-                                                    Naan</a>
-                                                <p class="text-muted mb-0">Soft & buttery flatbread</p>
-                                            </div>
-                                            <div class="col-3">
-                                                <input type="number"
-                                                    class="form-control form-control-sm text-center w-56px"
-                                                    value="4" min="1">
-                                            </div>
-                                            <div class="col-2 text-end">
-                                                <h6 class="mb-0">₹40</h6>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="px-5 py-4 border-bottom">
-                                        <div class="row align-items-center">
-                                            <div class="col-7">
-                                                <a href="#!" class="mb-2 text-body fw-medium d-block">Cold
-                                                    Coffee</a>
-                                                <p class="text-muted mb-0">Chilled & refreshing</p>
-                                            </div>
-                                            <div class="col-3">
-                                                <input type="number"
-                                                    class="form-control form-control-sm text-center w-56px"
-                                                    value="2" min="1">
-                                            </div>
-                                            <div class="col-2 text-end">
-                                                <h6 class="mb-0">₹99</h6>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="px-5 py-4 border-bottom">
-                                        <div class="row align-items-center">
-                                            <div class="col-7">
-                                                <a href="#!" class="mb-2 text-body fw-medium d-block">Chocolate
-                                                    Lava Cake</a>
-                                                <p class="text-muted mb-0">Molten chocolate dessert</p>
-                                            </div>
-                                            <div class="col-3">
-                                                <input type="number"
-                                                    class="form-control form-control-sm text-center w-56px"
-                                                    value="1" min="1">
-                                            </div>
-                                            <div class="col-2 text-end">
-                                                <h6 class="mb-0">₹129</h6>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="py-4 px-5 text-end">
-                                <h6 class="mb-0">Total: ₹1495.00</h6>
-                            </div>
-                        </div>
-                    </ul>
-                </div>
+                
                 <button class="btn text-muted rounded-circle icon-btn fs-5 header-menu-btn d-none d-md-inline-flex"
                     type="button" id="toggleFullscreen" aria-label="Toggle fullscreen">
                     <i class="ri-fullscreen-line"></i>
@@ -482,3 +302,111 @@
         </div>
     </div>
 </header>
+
+@auth
+<script>
+    // Polls App\Http\Controllers\Chat\NotificationController for real
+    // "pesan baru masuk" (new incoming chat message) notifications and
+    // renders them into the bell dropdown above — replacing the admin
+    // theme's static demo content (fake "Naomi"/"Robert" messages).
+    // Included on every dashboard page (this is the shared header), not
+    // just while viewing Chat, so a new message shows up no matter where
+    // in the app someone currently is.
+    //
+    // A chat needs no explicit "dismiss" here: it simply won't be in the
+    // next poll's response once its unread_count drops back to 0 (which
+    // already happens today the moment that chat is actually opened in
+    // Inbox — see markIncomingAsRead on the Go side), so it disappears
+    // from this list on its own within one poll interval.
+    (function () {
+        var bellDot = document.getElementById('notifBellDot');
+        var allBadge = document.getElementById('notifAllBadge');
+        var messagesBadge = document.getElementById('notifMessagesBadge');
+        var allList = document.getElementById('notifAllList');
+        var allEmpty = document.getElementById('notifAllEmpty');
+        var messagesList = document.getElementById('notifMessagesList');
+        var messagesEmpty = document.getElementById('notifMessagesEmpty');
+
+        if (!bellDot || !allList || !messagesList) return;
+
+        var notificationsUrl = @json(route('chat.notifications.unread'));
+        // '__DEVICE__' is swapped for the real device id per-notification
+        // below — same placeholder-token trick resources/views/chat/inbox/
+        // inbox.blade.php already uses for chat JIDs, since route()
+        // doesn't enforce a device's {device} pattern when just
+        // generating a URL (only when matching an incoming request).
+        var inboxUrlTemplate = @json(route('inbox.index', ['device' => '__DEVICE__']));
+
+        function escapeHtml(str) {
+            var div = document.createElement('div');
+            div.textContent = str == null ? '' : String(str);
+            return div.innerHTML;
+        }
+
+        // Small Indonesian relative-time formatter — no dependency on a
+        // date library just for the couple of words this dropdown needs.
+        function timeAgo(isoString) {
+            if (!isoString) return '';
+            var then = new Date(isoString).getTime();
+            if (isNaN(then)) return '';
+            var seconds = Math.max(0, Math.floor((Date.now() - then) / 1000));
+            if (seconds < 60) return 'Baru saja';
+            var minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return minutes + ' menit lalu';
+            var hours = Math.floor(minutes / 60);
+            if (hours < 24) return hours + ' jam lalu';
+            var days = Math.floor(hours / 24);
+            if (days < 7) return days + ' hari lalu';
+            return Math.floor(days / 7) + ' minggu lalu';
+        }
+
+        function notificationHref(n) {
+            return inboxUrlTemplate.replace('__DEVICE__', encodeURIComponent(n.device_id))
+                + '?chat=' + encodeURIComponent(n.chat_jid);
+        }
+
+        function renderList(container, emptyEl, notifications) {
+            if (!notifications.length) {
+                container.innerHTML = '';
+                if (emptyEl) emptyEl.classList.remove('d-none');
+                return;
+            }
+            if (emptyEl) emptyEl.classList.add('d-none');
+
+            container.innerHTML = notifications.map(function (n) {
+                var preview = n.last_message ? escapeHtml(n.last_message) : '<span class="fst-italic">(tidak ada teks)</span>';
+                return '<a href="' + notificationHref(n) + '" class="notification unread d-block text-body text-decoration-none">'
+                    + '<h6 class="message mb-1">Pesan baru dari ' + escapeHtml(n.name) + '</h6>'
+                    + '<p class="fs-14 text-muted mb-1">' + preview + '</p>'
+                    + '<p class="fs-12 text-muted mb-0">' + timeAgo(n.last_message_at) + '</p>'
+                    + '</a>';
+            }).join('');
+        }
+
+        function poll() {
+            fetch(notificationsUrl, { headers: { 'Accept': 'application/json' } })
+                .then(function (res) { return res.ok ? res.json() : null; })
+                .then(function (data) {
+                    if (!data) return;
+                    var notifications = data.notifications || [];
+                    var count = data.unread_count || 0;
+
+                    bellDot.classList.toggle('d-none', count === 0);
+                    if (allBadge) allBadge.textContent = count;
+                    if (messagesBadge) messagesBadge.textContent = count;
+
+                    renderList(allList, allEmpty, notifications);
+                    renderList(messagesList, messagesEmpty, notifications);
+                })
+                // Silent on purpose — a logged-out session, an inactive
+                // package, or a company with no Chat menu access all mean
+                // "nothing to show here", not an error worth surfacing on
+                // every single page's header.
+                .catch(function () {});
+        }
+
+        poll();
+        setInterval(poll, 15000);
+    })();
+</script>
+@endauth

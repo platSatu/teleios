@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\HistoryUserLogin;
 use App\Models\User;
 use App\Rules\Turnstile;
+use App\Services\Chat\SystemJwtService;
 use App\Services\GolangAuthService;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Auth\Events\PasswordReset;
@@ -61,7 +62,8 @@ use Laravel\Socialite\Facades\Socialite;
  *     Google" via laravel/socialite. A Google-verified email skips the
  *     status='inactive'/verification-email step entirely — see
  *     handleGoogleCallback()'s own docblock for the account-matching
- *     rules and why the Go-backend JWT sync is skipped for this path.
+ *     rules, and finishLogin()'s docblock for how it still gets a
+ *     working Go-backend JWT despite never having a real password.
  */
 class AuthController extends Controller
 {
@@ -81,6 +83,7 @@ class AuthController extends Controller
 
     public function __construct(
         protected GolangAuthService $golangAuth,
+        protected SystemJwtService $systemJwt,
     ) {}
 
     // =========================================================
@@ -170,14 +173,10 @@ class AuthController extends Controller
      *      password login until the user sets a real one via "forgot
      *      password".
      *
-     * The Go-backend JWT sync (see login()/finishLogin()) is skipped
-     * here: it needs the account's plaintext password, which only ever
-     * exists for case 3's randomly-generated one for the instant it's
-     * generated below, and is never known to the browser Google just
-     * redirected back. WhatsApp-device features simply stay unavailable
-     * until this user logs in normally at least once with a real
-     * password (same non-fatal degradation as when the Go backend is
-     * unreachable).
+     * finishLogin() below still gets a working golang_jwt_token for this
+     * session even though this account's real password is never known
+     * to the browser Google redirected back — see its own docblock for
+     * how (SystemJwtService, not Go's password-checking /api/auth/login).
      */
     public function handleGoogleCallback(Request $request): RedirectResponse
     {
@@ -222,27 +221,48 @@ class AuthController extends Controller
     /**
      * Shared tail end of a successful authentication, regardless of
      * whether it came from login() (email+password, $plainPassword
-     * known) or handleGoogleCallback() ($plainPassword null — see that
-     * method's docblock for why the Go-backend sync is skipped in that
-     * case).
+     * known) or handleGoogleCallback() ($plainPassword null — Google
+     * never gives this app a plaintext password to verify against Go's
+     * own /api/auth/login).
+     *
+     * Either way, session('golang_jwt_token') ends up populated so
+     * WhatsApp-device features (Connect Device, Inbox, the header
+     * notification bell, ...) work identically regardless of which way
+     * someone signed in — this used to be skipped entirely for Google
+     * sessions (see git history), which is exactly why "Add Device"
+     * silently didn't work for anyone who only ever used "Sign in with
+     * Google": every Chat controller hard-requires this session key
+     * (e.g. Chat\ConnectDeviceController::index()).
      */
     private function finishLogin(Request $request, User $user, ?string $plainPassword = null): RedirectResponse
     {
         Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
 
-        if ($plainPassword !== null) {
-            // Sync with the Go backend so the user also gets a JWT for
-            // WhatsApp-related API calls (see ConnectDeviceService).
-            // Treated as non-fatal: if the Go backend is unreachable,
-            // the web app keeps working and only WhatsApp features are
-            // unavailable until the next successful login.
-            try {
+        // Treated as non-fatal either way: if the Go backend is
+        // unreachable, the web app keeps working and only WhatsApp
+        // features are unavailable until the next successful login.
+        try {
+            if ($plainPassword !== null) {
+                // Real credentials known — go through Go's own
+                // /api/auth/login so it's Go itself vouching for the
+                // password, not just Laravel's own DB check.
                 $token = $this->golangAuth->login($user->email, $plainPassword);
-                session(['golang_jwt_token' => $token]);
-            } catch (\Throwable $e) {
-                report($e);
+            } else {
+                // No plaintext password exists for this session (Google
+                // OAuth) — mint a system JWT locally instead. Go can't
+                // tell the difference (see SystemJwtService's docblock);
+                // this is exactly the same trick SendScheduledWaMessage
+                // already uses for a user with nobody logged in at all,
+                // just with a session-length TTL instead of a 5-minute
+                // one since a person is actually going to sit in the
+                // browser using it.
+                $token = $this->systemJwt->mintFor($user, SystemJwtService::TTL_SESSION_SECONDS);
             }
+
+            session(['golang_jwt_token' => $token]);
+        } catch (\Throwable $e) {
+            report($e);
         }
 
         HistoryUserLogin::create([

@@ -16,6 +16,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 /**
@@ -107,7 +108,7 @@ class SendScheduledWaMessage implements ShouldQueue
             return;
         }
 
-        [$category, $body] = $content;
+        [$category, $body, $template] = $content;
 
         if ($category !== 'text') {
             $this->markFailed($log, "Kategori '{$category}' belum didukung pengiriman otomatis (backend baru mendukung pengiriman teks).");
@@ -128,7 +129,21 @@ class SendScheduledWaMessage implements ShouldQueue
         try {
             $token = $jwtService->mintFor($owner);
 
-            $sent = $inbox->send($token, $schedule->device_id, $chatJid, $body);
+            // A template with a stored image/document is sent as media
+            // (with the composed text as caption) instead of a plain text
+            // message — previously the attachment was never forwarded at
+            // all, only the composed text.
+            $sent = ($template && $template->attachment_path && Storage::disk('public')->exists($template->attachment_path))
+                ? $inbox->sendStoredMedia(
+                    $token,
+                    $schedule->device_id,
+                    $chatJid,
+                    Storage::disk('public')->path($template->attachment_path),
+                    $template->attachment_original_name ?: basename($template->attachment_path),
+                    $template->attachment_type,
+                    $body
+                )
+                : $inbox->send($token, $schedule->device_id, $chatJid, $body);
 
             $log->forceFill([
                 'status' => 'sent',
@@ -152,7 +167,11 @@ class SendScheduledWaMessage implements ShouldQueue
 
             $log->forceFill([
                 'attempts' => $log->attempts + 1,
-                'error' => $e->getMessage(),
+                // Human-readable reason, not the raw "Golang inbox
+                // request to ... failed: {...}" exception text — that
+                // used to leak straight into History Pengiriman's
+                // Keterangan column verbatim.
+                'error' => InboxService::describeSendFailure($e),
             ])->save();
 
             // Rethrow so Laravel's queue retry/backoff (tries/backoff
@@ -204,6 +223,11 @@ class SendScheduledWaMessage implements ShouldQueue
      * editing a template afterwards changes every future occurrence that
      * still points at it. Null means there's nothing to send (template
      * deleted/empty, manual message empty, or the step itself is gone).
+     *
+     * @return array{0: string, 1: string, 2: ?\App\Models\WaMessageTemplate}|null
+     *              [category, composed body, template model (null for a
+     *              manual/non-template message) — the template is
+     *              returned too so handle() can check attachment_path].
      */
     protected function resolveContent(WaMessageSchedule $schedule): ?array
     {
@@ -216,16 +240,18 @@ class SendScheduledWaMessage implements ShouldQueue
                 return null;
             }
 
-            $body = $step->use_template ? $step->waMessageTemplate?->composedMessage() : $step->message;
+            $template = $step->use_template ? $step->waMessageTemplate : null;
+            $body = $step->use_template ? $template?->composedMessage() : $step->message;
             $category = $step->use_template ? 'text' : ($step->category_schedule ?: 'text');
 
-            return $body ? [$category, $body] : null;
+            return $body ? [$category, $body, $template] : null;
         }
 
-        $body = $schedule->use_template ? $schedule->waMessageTemplate?->composedMessage() : $schedule->message;
+        $template = $schedule->use_template ? $schedule->waMessageTemplate : null;
+        $body = $schedule->use_template ? $template?->composedMessage() : $schedule->message;
         $category = $schedule->use_template ? 'text' : ($schedule->category_schedule ?: 'text');
 
-        return $body ? [$category, $body] : null;
+        return $body ? [$category, $body, $template] : null;
     }
 
     protected function contentFailureReason(WaMessageSchedule $schedule): string

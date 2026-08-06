@@ -120,7 +120,10 @@
                     </table>
                 </div>
 
-                <div class="mt-3">{{ $bots->links() }}</div>
+                <div class="mt-3">
+                    
+                    {{ $bots->links('pagination::bootstrap-5') }}
+                </div>
             </div>
         </div>
     </div>

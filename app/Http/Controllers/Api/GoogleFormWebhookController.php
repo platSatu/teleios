@@ -11,6 +11,7 @@ use App\Services\Chat\SystemJwtService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 /**
@@ -119,7 +120,26 @@ class GoogleFormWebhookController extends Controller
 
         try {
             $jwt = $jwtService->mintFor($owner);
-            $inbox->send($jwt, $integration->device_id, $this->toIndividualJid($targetNumber), $message);
+            $targetJid = $this->toIndividualJid($targetNumber);
+
+            if ($template->attachment_path && Storage::disk('public')->exists($template->attachment_path)) {
+                // Template has a stored image/document — send it as the
+                // media message's caption instead of a separate text
+                // message, same as the Inbox template picker's behavior,
+                // so the file/image actually goes out instead of being
+                // silently dropped.
+                $inbox->sendStoredMedia(
+                    $jwt,
+                    $integration->device_id,
+                    $targetJid,
+                    Storage::disk('public')->path($template->attachment_path),
+                    $template->attachment_original_name ?: basename($template->attachment_path),
+                    $template->attachment_type,
+                    $message
+                );
+            } else {
+                $inbox->send($jwt, $integration->device_id, $targetJid, $message);
+            }
 
             $submission->status = 'sent';
             $submission->save();
@@ -223,6 +243,11 @@ class GoogleFormWebhookController extends Controller
      * the same case-insensitive/trimmed matching as the target number)
      * is left exactly as written, since silently blanking it would make
      * a broken mapping harder to notice than a visible {{placeholder}}.
+     *
+     * Runs against composedMessage() (header+body+link+buttons-as-text+
+     * footer) rather than the bare `template` body column — previously
+     * this only ever sent the plain body, silently dropping the header,
+     * link, and buttons even when the template had them filled in.
      */
     private function renderTemplate(WaMessageTemplate $template, array $payload): string
     {
@@ -241,7 +266,7 @@ class GoogleFormWebhookController extends Controller
                     ? $normalizedPayload[$variable]
                     : $matches[0];
             },
-            (string) $template->template
+            $template->composedMessage()
         );
     }
 

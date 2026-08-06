@@ -88,7 +88,9 @@
                     </table>
                 </div>
 
-                <div class="mt-3">{{ $integrations->links() }}</div>
+                <div class="mt-3">
+                    {{ $integrations->links('pagination::bootstrap-5') }}
+                </div>
             </div>
         </div>
     </div>

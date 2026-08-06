@@ -250,7 +250,9 @@
                     </table>
                 </div>
 
-                <div class="mt-3">{{ $schedules->links() }}</div>
+                <div class="mt-3">
+                    {{ $schedules->links('pagination::bootstrap-5') }}
+                </div>
             </div>
         </div>
     </div>

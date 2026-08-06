@@ -15,6 +15,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Throwable;
 
@@ -481,10 +482,35 @@ class InboxController extends Controller
     {
         $company = $this->ownedCompanyOrFail($request);
 
+        // ->usable() (not a bare status='active' filter) so a template
+        // whose category has been disabled/archived can't still be picked
+        // and sent from the inbox — see WaMessageTemplate::scopeUsable().
         $templates = WaMessageTemplate::where('company_id', $company->id)
-            ->where('status', 'active')
+            ->usable()
             ->orderBy('name')
-            ->get(['id', 'name', 'template']);
+            ->get([
+                'id', 'name', 'header', 'template', 'footer', 'link', 'buttons',
+                'content_type', 'attachment_path', 'attachment_type', 'attachment_original_name',
+            ])
+            ->map(function (WaMessageTemplate $template) {
+                return [
+                    'id' => $template->id,
+                    'name' => $template->name,
+                    // Raw body text, kept for backward compatibility with
+                    // any caller still reading `template` directly.
+                    'template' => $template->template,
+                    // Full header+body+link+buttons(as text)+footer text —
+                    // this is what should actually be sent/inserted, so the
+                    // picker no longer pastes the bare body only.
+                    'composed' => $template->composedMessage(),
+                    'content_type' => $template->content_type,
+                    'attachment_url' => $template->attachment_path
+                        ? Storage::disk('public')->url($template->attachment_path)
+                        : null,
+                    'attachment_type' => $template->attachment_type,
+                    'attachment_original_name' => $template->attachment_original_name,
+                ];
+            });
 
         return response()->json(['templates' => $templates]);
     }

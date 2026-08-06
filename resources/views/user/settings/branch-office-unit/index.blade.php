@@ -100,7 +100,8 @@
                 <!-- end:: Borderedless Table -->
 
                 <div class="mt-3">
-                    {{ $units->links() }}
+                     {{ $units->links('pagination::bootstrap-5') }}
+                    
                 </div>
             </div>
         </div>

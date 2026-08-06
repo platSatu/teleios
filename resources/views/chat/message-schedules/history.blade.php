@@ -26,29 +26,37 @@
 
     <div class="card border-0 shadow-sm">
         <div class="card-body">
+            {{-- min-width on the table (plus nowrap on Keterangan, the
+                 widest column) is what actually keeps this readable: a
+                 long technical error message wrapping into a cramped
+                 2-line cell looks broken, and squeezing it narrower just
+                 hides more of the sentence. table-responsive still
+                 scrolls horizontally past this width on small screens —
+                 intentional, a horizontal scrollbar reads better here
+                 than wrapped/truncated error text. --}}
             <div class="table-responsive">
-                <table class="table table-centered table-hover align-middle mb-0">
+                <table class="table table-centered table-hover align-middle mb-0" style="min-width: 1100px;">
                     <thead class="table-light">
                         <tr>
-                            <th>Tanggal Kirim</th>
+                            <th style="min-width: 130px;">Tanggal Kirim</th>
                             @if($schedule->type === 'drip')
-                                <th>Langkah</th>
+                                <th style="min-width: 140px;">Langkah</th>
                             @endif
-                            <th>Tujuan</th>
-                            <th>Status</th>
-                            <th>Percobaan</th>
-                            <th>Keterangan</th>
+                            <th style="min-width: 150px;">Tujuan</th>
+                            <th style="min-width: 110px;">Status</th>
+                            <th style="min-width: 100px;">Percobaan</th>
+                            <th style="min-width: 420px;">Keterangan</th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse($logs as $log)
                             <tr>
-                                <td>{{ $log->send_date->translatedFormat('d M Y') }}</td>
+                                <td style="white-space: nowrap;">{{ $log->send_date->translatedFormat('d M Y') }}</td>
                                 @if($schedule->type === 'drip')
-                                    <td class="small">{{ $stepLabels[$log->step_order] ?? ('Langkah '.$log->step_order) }}</td>
+                                    <td class="small" style="white-space: nowrap;">{{ $stepLabels[$log->step_order] ?? ('Langkah '.$log->step_order) }}</td>
                                 @endif
-                                <td>{{ $recipientLabels[$log->recipient_key] ?? $log->recipient_key }}</td>
-                                <td>
+                                <td style="white-space: nowrap;">{{ $recipientLabels[$log->recipient_key] ?? $log->recipient_key }}</td>
+                                <td style="white-space: nowrap;">
                                     @if($log->status === 'sent')
                                         <span class="badge bg-success-subtle text-success"><i class="ri-check-double-line"></i> Terkirim</span>
                                     @elseif($log->status === 'failed')
@@ -57,12 +65,12 @@
                                         <span class="badge bg-warning-subtle text-warning"><i class="ri-time-line"></i> Menunggu</span>
                                     @endif
                                 </td>
-                                <td>{{ $log->attempts }}</td>
-                                <td>
+                                <td style="white-space: nowrap;">{{ $log->attempts }}</td>
+                                <td style="white-space: nowrap;">
                                     @if($log->status === 'sent')
                                         <span class="text-muted small">{{ $log->sent_at?->translatedFormat('d M Y H:i') }}</span>
                                     @elseif($log->error)
-                                        <span class="text-danger small">{{ \Illuminate\Support\Str::limit($log->error, 100) }}</span>
+                                        <span class="text-danger small">{{ $log->error }}</span>
                                     @else
                                         <span class="text-muted small">-</span>
                                     @endif

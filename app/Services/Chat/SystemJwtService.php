@@ -5,9 +5,16 @@ namespace App\Services\Chat;
 use App\Models\User;
 
 /**
- * Mints a short-lived JWT the Go backend will accept exactly like the
- * one it issues on login, for calls that happen with no logged-in user
- * in the loop — right now, only App\Jobs\SendScheduledWaMessage.
+ * Mints a JWT the Go backend will accept exactly like the one it issues
+ * on login, for calls that happen with no *plaintext password* in the
+ * loop — either no logged-in user at all (App\Jobs\SendScheduledWaMessage,
+ * WaApiSendMessageController, GoogleFormWebhookController — all use the
+ * short default TTL below, sized for one brief background call), or a
+ * logged-in user Laravel can't produce a plaintext password for at all
+ * (Google OAuth — see App\Http\Controllers\Auth\AuthController::
+ * finishLogin(), which passes a longer, session-length TTL so "Sign in
+ * with Google" gets full access to WhatsApp-device features too, not
+ * just the password-login path).
  *
  * This works with zero changes to the Go backend because
  * config('services.golang.key') (Laravel's GOLANG_API_KEY) and Go's
@@ -22,23 +29,28 @@ use App\Models\User;
  * still applies exactly as normal, so this can't be used to act as a
  * user who doesn't actually own the target device.
  *
- * Deliberately NOT a general-purpose "impersonate any user" helper:
- * only call this with the user_id that actually owns the device/company
- * being acted on (see SendScheduledWaMessage, which resolves it from
- * the schedule's company owner). Tokens are single-purpose and
- * short-lived (5 minutes) specifically to limit blast radius if one
- * ever ended up somewhere it shouldn't (a queue log, a stack trace).
+ * Deliberately NOT a general-purpose "impersonate any user" helper: only
+ * call this with the user_id that actually owns the device/company being
+ * acted on. Every caller should pick the shortest TTL that still covers
+ * its own use case — the default (5 minutes) is sized for one background
+ * call, so a token that ends up somewhere it shouldn't (a queue log, a
+ * stack trace) has a short blast radius; TTL_SESSION_SECONDS exists only
+ * for the one case above that genuinely needs to survive a whole browser
+ * session.
  *
- * No external JWT library: composer isn't available in every
- * environment this ships to, and HS256 is simple enough (base64url
- * header + payload, HMAC-SHA256 signature) to hand-roll safely rather
- * than add a dependency for one call site.
+ * No external JWT library: composer isn't available in every environment
+ * this ships to, and HS256 is simple enough (base64url header + payload,
+ * HMAC-SHA256 signature) to hand-roll safely rather than add a dependency
+ * for one call site.
  */
 class SystemJwtService
 {
     protected const TTL_SECONDS = 300;
 
-    public function mintFor(User $user): string
+    /** Matches Go's own tokenTTL for a real password login (internal/service/auth-service.go) — see class docblock. */
+    public const TTL_SESSION_SECONDS = 86400;
+
+    public function mintFor(User $user, ?int $ttlSeconds = null): string
     {
         $secret = config('services.golang.key');
 
@@ -56,7 +68,7 @@ class SystemJwtService
             'user_id' => $user->id,
             'email' => $user->email,
             'iat' => $now,
-            'exp' => $now + self::TTL_SECONDS,
+            'exp' => $now + ($ttlSeconds ?? self::TTL_SECONDS),
         ];
 
         $segments = [
