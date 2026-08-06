@@ -97,16 +97,26 @@
 
         <div class="card border-0 shadow-sm">
             <div class="card-body">
-                <ul class="nav nav-tabs mb-4" id="profileTabs" role="tablist">
+                {{-- flex-nowrap + overflow-x-auto turns this into a
+                     horizontal scroller on narrow screens instead of
+                     Bootstrap's default nav-tabs wrapping, which stacked
+                     up to 7 tabs (Profile/Company/Branch Office/Unit-
+                     Divisi/Roles/Applications/Setting Users) into a tall,
+                     uneven pile on mobile. text-nowrap on each button
+                     stops a label from wrapping mid-word once it's inside
+                     a flex item. Same fix as resources/views/user/
+                     history/index.blade.php's tab bar. --}}
+                <div class="mb-4" style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
+                <ul class="nav nav-tabs flex-nowrap mb-0" id="profileTabs" role="tablist" style="width: max-content;">
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link {{ $activeTab === 'profile' ? 'active' : '' }}" id="tab-profile-btn"
+                        <button class="nav-link text-nowrap {{ $activeTab === 'profile' ? 'active' : '' }}" id="tab-profile-btn"
                             data-bs-toggle="tab" data-bs-target="#tab-profile" type="button">
                             <i class="ri-user-line me-1"></i> Profile
                         </button>
                     </li>
                     @if ($isOwner)
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link {{ $activeTab === 'company' ? 'active' : '' }}" id="tab-company-btn"
+                            <button class="nav-link text-nowrap {{ $activeTab === 'company' ? 'active' : '' }}" id="tab-company-btn"
                                 data-bs-toggle="tab" data-bs-target="#tab-company" type="button">
                                 <i class="ri-building-line me-1"></i> Company
                             </button>
@@ -122,7 +132,7 @@
                          middleware actually guarding these routes). --}}
                     @if ($hasActivePackage && $canAccessBranchOfficeTab)
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link {{ $activeTab === 'branch-office' ? 'active' : '' }}"
+                            <button class="nav-link text-nowrap {{ $activeTab === 'branch-office' ? 'active' : '' }}"
                                 id="tab-branch-office-btn" data-bs-toggle="tab" data-bs-target="#tab-branch-office"
                                 type="button">
                                 <i class="ri-community-line me-1"></i> Branch Office
@@ -131,7 +141,7 @@
                     @endif
                     @if ($hasActivePackage && $canAccessUnitDivisiTab)
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link {{ $activeTab === 'unit-divisi' ? 'active' : '' }}"
+                            <button class="nav-link text-nowrap {{ $activeTab === 'unit-divisi' ? 'active' : '' }}"
                                 id="tab-unit-divisi-btn" data-bs-toggle="tab" data-bs-target="#tab-unit-divisi"
                                 type="button">
                                 <i class="ri-organization-chart me-1"></i> Unit/Divisi
@@ -140,7 +150,7 @@
                     @endif
                     @if ($hasActivePackage && $canAccessRolesTab)
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link {{ $activeTab === 'roles' ? 'active' : '' }}" id="tab-roles-btn"
+                            <button class="nav-link text-nowrap {{ $activeTab === 'roles' ? 'active' : '' }}" id="tab-roles-btn"
                                 data-bs-toggle="tab" data-bs-target="#tab-roles" type="button">
                                 <i class="ri-shield-user-line me-1"></i> Roles
                             </button>
@@ -148,7 +158,7 @@
                     @endif
                     @if ($hasActivePackage && $canAccessApplicationsTab)
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link {{ $activeTab === 'applications' ? 'active' : '' }}"
+                            <button class="nav-link text-nowrap {{ $activeTab === 'applications' ? 'active' : '' }}"
                                 id="tab-applications-btn" data-bs-toggle="tab" data-bs-target="#tab-applications"
                                 type="button">
                                 <i class="ri-apps-2-line me-1"></i> Applications
@@ -157,13 +167,14 @@
                     @endif
                     @if ($hasActivePackage && $canAccessUsersTab)
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link {{ $activeTab === 'users' ? 'active' : '' }}" id="tab-users-btn"
+                            <button class="nav-link text-nowrap {{ $activeTab === 'users' ? 'active' : '' }}" id="tab-users-btn"
                                 data-bs-toggle="tab" data-bs-target="#tab-users" type="button">
                                 <i class="ri-group-line me-1"></i> Setting Users
                             </button>
                         </li>
                     @endif
                 </ul>
+                </div>
 
                 <div class="tab-content">
                     {{-- ============================= --}}
@@ -415,14 +426,14 @@
                             </div>
 
                             <div class="table-responsive">
-                                <table class="table table-sm table-hover align-middle mb-0">
+                                <table class="table table-sm table-hover align-middle mb-0" style="min-width: 700px;">
                                     <thead class="table-light">
                                         <tr>
-                                            <th>Nama</th>
-                                            <th>Alamat</th>
-                                            <th>Unit/Divisi</th>
-                                            <th>Status</th>
-                                            <th width="120">Aksi</th>
+                                            <th style="min-width: 150px;">Nama</th>
+                                            <th style="min-width: 180px;">Alamat</th>
+                                            <th style="min-width: 110px;">Unit/Divisi</th>
+                                            <th style="min-width: 110px;">Status</th>
+                                            <th style="min-width: 120px;" width="120">Aksi</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -495,13 +506,13 @@
                             </div>
 
                             <div class="table-responsive">
-                                <table class="table table-sm table-hover align-middle mb-0">
+                                <table class="table table-sm table-hover align-middle mb-0" style="min-width: 600px;">
                                     <thead class="table-light">
                                         <tr>
-                                            <th>Nama</th>
-                                            <th>Branch Office</th>
-                                            <th>Status</th>
-                                            <th width="120">Aksi</th>
+                                            <th style="min-width: 150px;">Nama</th>
+                                            <th style="min-width: 170px;">Branch Office</th>
+                                            <th style="min-width: 110px;">Status</th>
+                                            <th style="min-width: 120px;" width="120">Aksi</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -655,15 +666,15 @@
                             </div>
 
                             <div class="table-responsive">
-                                <table class="table table-sm table-hover align-middle mb-0" id="usersTable">
+                                <table class="table table-sm table-hover align-middle mb-0" id="usersTable" style="min-width: 900px;">
                                     <thead class="table-light">
                                         <tr>
-                                            <th>Nama</th>
-                                            <th>Email</th>
-                                            <th>Role</th>
-                                            <th>Category Aplikasi</th>
-                                            <th>Status</th>
-                                            <th width="150">Aksi</th>
+                                            <th style="min-width: 150px;">Nama</th>
+                                            <th style="min-width: 180px;">Email</th>
+                                            <th style="min-width: 120px;">Role</th>
+                                            <th style="min-width: 180px;">Category Aplikasi</th>
+                                            <th style="min-width: 110px;">Status</th>
+                                            <th style="min-width: 150px;" width="150">Aksi</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -759,13 +770,13 @@
                             </div>
 
                             <div class="table-responsive">
-                                <table class="table table-sm table-hover align-middle mb-0">
+                                <table class="table table-sm table-hover align-middle mb-0" style="min-width: 650px;">
                                     <thead class="table-light">
                                         <tr>
-                                            <th>Nama Role</th>
-                                            <th>Deskripsi</th>
-                                            <th>Status</th>
-                                            <th width="120">Aksi</th>
+                                            <th style="min-width: 150px;">Nama Role</th>
+                                            <th style="min-width: 200px;">Deskripsi</th>
+                                            <th style="min-width: 110px;">Status</th>
+                                            <th style="min-width: 120px;" width="120">Aksi</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -839,14 +850,14 @@
                             </div>
 
                             <div class="table-responsive">
-                                <table class="table table-sm table-hover align-middle mb-0">
+                                <table class="table table-sm table-hover align-middle mb-0" style="min-width: 800px;">
                                     <thead class="table-light">
                                         <tr>
-                                            <th>Role</th>
-                                            <th>Category Application</th>
-                                            <th>Menu</th>
-                                            <th>Status</th>
-                                            <th width="120">Aksi</th>
+                                            <th style="min-width: 130px;">Role</th>
+                                            <th style="min-width: 180px;">Category Application</th>
+                                            <th style="min-width: 170px;">Menu</th>
+                                            <th style="min-width: 110px;">Status</th>
+                                            <th style="min-width: 120px;" width="120">Aksi</th>
                                         </tr>
                                     </thead>
                                     <tbody>

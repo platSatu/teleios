@@ -8,10 +8,12 @@ use App\Models\Company;
 use App\Models\CompanyToUser;
 use App\Models\User;
 use App\Models\WaMessageSchedule;
+use App\Models\WaMessageScheduleLog;
 use App\Models\WaMessageScheduleStep;
 use App\Models\WaMessageTemplate;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -46,12 +48,30 @@ class MessageScheduleController extends Controller
 {
     use ResolvesCompanyContext;
 
+    /**
+     * Extension whitelist + max size (KB) for the manual (non-template)
+     * 'image'/'document' categories — deliberately narrower than
+     * MessageTemplateController's own ATTACHMENT_RULES (no video/txt
+     * here, per the user's explicit spec: image is jpg/jpeg/png only,
+     * document is office/pdf only).
+     */
+    private const SCHEDULE_ATTACHMENT_RULES = [
+        'image' => ['ext' => ['jpg', 'jpeg', 'png'], 'max' => 5120],
+        'document' => ['ext' => ['xlsx', 'xls', 'docx', 'doc', 'pdf'], 'max' => 10240],
+    ];
+
     public function index(Request $request): View
     {
         $company = $this->ownedCompanyOrFail($request);
 
         $schedules = WaMessageSchedule::where('company_id', $company->id)
             ->with('waMessageTemplate:id,name')
+            ->when($request->filled('search'), function ($query) use ($request) {
+                $query->where('title', 'like', '%'.$request->string('search').'%');
+            })
+            ->when($request->filled('status'), function ($query) use ($request) {
+                $query->where('status', $request->string('status'));
+            })
             ->withCount([
                 'logs as sent_count' => fn ($q) => $q->where('status', 'sent'),
                 'logs as failed_count' => fn ($q) => $q->where('status', 'failed'),
@@ -59,9 +79,35 @@ class MessageScheduleController extends Controller
                 'steps',
             ])
             ->latest()
-            ->paginate(15);
+            ->paginate(15)
+            ->withQueryString();
 
-        return view('chat.message-schedules.index', compact('schedules'));
+        // Audiens = distinct recipients declared on the schedule itself
+        // (JSON column, can't be counted in SQL) — this and sent/failed/
+        // pending above are what used to live on the separate "Laporan
+        // Broadcast" page (Chat\BroadcastReportController, now removed);
+        // folded in here so this one index covers both the operational
+        // CRUD list and the send-outcome summary.
+        $schedules->getCollection()->transform(function (WaMessageSchedule $schedule) {
+            $schedule->audience_count = count($schedule->recipients ?? []);
+
+            return $schedule;
+        });
+
+        // Summary cards above the table — deliberately scoped to the
+        // WHOLE company (not $request's search/status filters), so they
+        // read as a fixed "at a glance" dashboard rather than numbers
+        // that confusingly shift while someone's mid-search.
+        $stats = [
+            'total' => WaMessageSchedule::where('company_id', $company->id)->count(),
+            'active' => WaMessageSchedule::where('company_id', $company->id)->where('status', 'active')->count(),
+            'delivered' => WaMessageScheduleLog::whereHas('schedule', fn ($q) => $q->where('company_id', $company->id))
+                ->where('status', 'sent')->count(),
+            'failed' => WaMessageScheduleLog::whereHas('schedule', fn ($q) => $q->where('company_id', $company->id))
+                ->where('status', 'failed')->count(),
+        ];
+
+        return view('chat.message-schedules.index', compact('schedules', 'stats'));
     }
 
     public function create(Request $request): View
@@ -87,10 +133,16 @@ class MessageScheduleController extends Controller
         $validatedRaw = $validator->validated();
         $steps = $validatedRaw['steps'] ?? [];
 
-        $validated = $this->finalize($validatedRaw, $request);
+        $validated = $this->finalize($validatedRaw, $request, $company);
         $validated['company_id'] = $company->id;
 
-        $schedule = WaMessageSchedule::create($validated);
+        $this->applyAttachment($request, $validated, null);
+
+        try {
+            $schedule = WaMessageSchedule::create($validated);
+        } catch (\Throwable $e) {
+            return $this->failedSave($e, 'chat.message-schedules.create');
+        }
 
         if ($schedule->type === 'drip') {
             $this->syncSteps($schedule, $steps);
@@ -133,9 +185,15 @@ class MessageScheduleController extends Controller
         $validatedRaw = $validator->validated();
         $steps = $validatedRaw['steps'] ?? [];
 
-        $validated = $this->finalize($validatedRaw, $request);
+        $validated = $this->finalize($validatedRaw, $request, $company);
 
-        $schedule->update($validated);
+        $this->applyAttachment($request, $validated, $schedule);
+
+        try {
+            $schedule->update($validated);
+        } catch (\Throwable $e) {
+            return $this->failedSave($e, 'chat.message-schedules.edit', $id);
+        }
 
         if ($schedule->type === 'drip') {
             $this->syncSteps($schedule, $steps);
@@ -207,6 +265,8 @@ class MessageScheduleController extends Controller
     private function validator(Request $request, Company $company)
     {
         $type = $request->input('type', 'recurring');
+        $attachmentExtensions = collect(self::SCHEDULE_ATTACHMENT_RULES)->flatMap(fn ($r) => $r['ext'])->implode(',');
+        $attachmentMaxKb = collect(self::SCHEDULE_ATTACHMENT_RULES)->max('max');
 
         $validator = Validator::make($request->all(), [
             'device_id' => ['required', 'string', 'max:36'],
@@ -216,6 +276,9 @@ class MessageScheduleController extends Controller
             'wa_message_template_id' => ['nullable', 'uuid'],
             'category_schedule' => ['nullable', 'in:text,location,image,document,button'],
             'message' => ['nullable', 'string'],
+            'link' => ['nullable', 'string', 'max:2000'],
+            'attachment' => ['nullable', 'file', "mimes:{$attachmentExtensions}", "max:{$attachmentMaxKb}"],
+            'remove_attachment' => ['nullable', 'boolean'],
             'date_start' => ['required', 'date'],
             'date_end' => ['nullable', 'date', 'after_or_equal:date_start'],
             'schedule_time' => ['required', 'date_format:H:i'],
@@ -232,9 +295,14 @@ class MessageScheduleController extends Controller
             'steps.*.category_schedule' => ['nullable', 'in:text,location,image,document,button'],
             'steps.*.message' => ['nullable', 'string'],
             'steps.*.status' => ['nullable', 'in:active,inactive'],
+        ], [
+            'attachment.mimes' => 'Format file tidak didukung. Gunakan: '.$attachmentExtensions.'.',
+            'attachment.max' => 'Ukuran file terlalu besar.',
         ]);
 
         $validator->after(function ($validator) use ($request, $company, $type) {
+            $useTemplate = $type !== 'drip' && $request->boolean('use_template');
+
             if ($type === 'drip') {
                 foreach ((array) $request->input('steps', []) as $i => $step) {
                     $stepUsesTemplate = ! empty($step['use_template']);
@@ -252,28 +320,74 @@ class MessageScheduleController extends Controller
                         $validator->errors()->add("steps.$i.message", 'Isi pesan langkah ini wajib diisi (atau aktifkan template).');
                     }
                 }
-            } else {
-                if ($request->boolean('use_template')) {
-                    $templateId = $request->input('wa_message_template_id');
-                    $valid = $templateId && WaMessageTemplate::where('company_id', $company->id)
-                        ->where('id', $templateId)
-                        ->exists();
+            } elseif ($useTemplate) {
+                $templateId = $request->input('wa_message_template_id');
+                $valid = $templateId && WaMessageTemplate::where('company_id', $company->id)
+                    ->where('id', $templateId)
+                    ->exists();
 
-                    if (! $valid) {
-                        $validator->errors()->add('wa_message_template_id', 'Pilih template WA yang valid.');
-                    }
-                } elseif (! $request->input('message')) {
+                if (! $valid) {
+                    $validator->errors()->add('wa_message_template_id', 'Pilih template WA yang valid.');
+                }
+            } else {
+                // Manual content — which fields are required depends on
+                // category_schedule (see MessageTemplateController's
+                // sibling content_type logic for the WA Template side of
+                // the same idea): text just needs the message body,
+                // location needs a name (reusing `message`) + a link,
+                // image/document need an uploaded file (or one already
+                // saved from a previous edit).
+                $category = $request->input('category_schedule', 'text');
+
+                if ($category === 'text' && ! $request->input('message')) {
                     $validator->errors()->add('message', 'Isi pesan wajib diisi (atau aktifkan template).');
+                }
+
+                if ($category === 'location') {
+                    if (! $request->input('message')) {
+                        $validator->errors()->add('message', 'Nama lokasi wajib diisi.');
+                    }
+                    if (! $request->input('link')) {
+                        $validator->errors()->add('link', 'Link lokasi wajib diisi.');
+                    }
+                }
+
+                if (in_array($category, ['image', 'document'], true)) {
+                    $hasExisting = $request->route('id')
+                        && WaMessageSchedule::where('id', $request->route('id'))->whereNotNull('attachment_path')->exists();
+
+                    if (! $request->hasFile('attachment') && ! $hasExisting) {
+                        $validator->errors()->add('attachment', 'File wajib diupload untuk kategori ini.');
+                    }
+                }
+
+                if ($request->hasFile('attachment')) {
+                    $file = $request->file('attachment');
+                    $extension = strtolower($file->getClientOriginalExtension());
+                    $rule = collect(self::SCHEDULE_ATTACHMENT_RULES)
+                        ->first(fn ($r) => in_array($extension, $r['ext'], true));
+
+                    if ($rule && $file->getSize() > $rule['max'] * 1024) {
+                        $validator->errors()->add('attachment', 'Ukuran file maksimal '.round($rule['max'] / 1024, 1).'MB untuk jenis file ini.');
+                    }
                 }
             }
 
-            // Recipients are shared by all 3 types — always required.
-            $hasPhone = trim((string) $request->input('phone_numbers')) !== '';
-            $hasGroup = ! empty(array_filter((array) $request->input('group_jids', [])));
-            $hasUser = ! empty(array_filter((array) $request->input('user_ids', [])));
+            // Recipients: for 'drip' and manual (non-template) once/
+            // recurring, the tri-tab below is the only source of
+            // recipients, so at least one is required. When a template
+            // is in use, recipients are pulled from the template itself
+            // instead (see finalize()) — the tri-tab isn't even shown on
+            // the form in that case, so requiring it here would block
+            // submission on fields the user can't see.
+            if ($type === 'drip' || ! $useTemplate) {
+                $hasPhone = trim((string) $request->input('phone_numbers')) !== '';
+                $hasGroup = ! empty(array_filter((array) $request->input('group_jids', [])));
+                $hasUser = ! empty(array_filter((array) $request->input('user_ids', [])));
 
-            if (! $hasPhone && ! $hasGroup && ! $hasUser) {
-                $validator->errors()->add('recipients', 'Pilih minimal satu tujuan: nomor WhatsApp, grup, atau user company.');
+                if (! $hasPhone && ! $hasGroup && ! $hasUser) {
+                    $validator->errors()->add('recipients', 'Pilih minimal satu tujuan: nomor WhatsApp, grup, atau user company.');
+                }
             }
 
             // A plain `exists` rule can't scope by company — this makes
@@ -307,7 +421,7 @@ class MessageScheduleController extends Controller
      * from the raw validated array before calling this, then hand it to
      * syncSteps() separately since it's not a column on this table.
      */
-    private function finalize(array $validated, Request $request): array
+    private function finalize(array $validated, Request $request, Company $company): array
     {
         $type = $validated['type'];
         $useTemplate = $type !== 'drip' && $request->boolean('use_template');
@@ -318,17 +432,109 @@ class MessageScheduleController extends Controller
         if ($type === 'drip' || $useTemplate) {
             $validated['category_schedule'] = null;
             $validated['message'] = null;
+            $validated['link'] = null;
+        } else {
+            // Manual content — `link` only applies to 'location', and
+            // (per MessageTemplateController's identical reasoning for
+            // content_type) is dropped rather than left stale if the
+            // company switches back to 'text'/'image'/'document'.
+            $category = $validated['category_schedule'] ?? 'text';
+            if ($category !== 'location') {
+                $validated['link'] = null;
+            }
         }
 
         $validated['date_end'] = $type === 'recurring'
             ? ($validated['date_end'] ?: $validated['date_start'])
             : $validated['date_start'];
 
-        $validated['recipients'] = $this->collectRecipients($request);
+        // Recipients: a template (when in use) now carries its own
+        // recipients — see Chat\MessageTemplateController — so a
+        // schedule that uses one just takes a snapshot of whatever the
+        // template currently has, rather than reading the (hidden, in
+        // this case) tri-tab. `drip` never has a single top-level
+        // template, so it always falls through to the tri-tab like
+        // before.
+        if ($useTemplate) {
+            $template = WaMessageTemplate::where('company_id', $company->id)
+                ->where('id', $validated['wa_message_template_id'])
+                ->first();
+
+            $validated['recipients'] = $template->recipients ?? [];
+        } else {
+            $validated['recipients'] = $this->collectRecipients($request);
+        }
 
         unset($validated['steps']);
 
         return $validated;
+    }
+
+    /**
+     * Handles the `attachment` upload for category_schedule = image/
+     * document on a manual (non-template) message — identical shape to
+     * MessageTemplateController::applyAttachment(), just pointed at
+     * WaMessageSchedule's own attachment_* columns and the narrower
+     * SCHEDULE_ATTACHMENT_RULES whitelist.
+     */
+    private function applyAttachment(Request $request, array &$validated, ?WaMessageSchedule $existing): void
+    {
+        if ($request->boolean('remove_attachment') && ! $request->hasFile('attachment')) {
+            if ($existing) {
+                Storage::disk('public')->delete((string) $existing->attachment_path);
+            }
+            $validated['attachment_path'] = null;
+            $validated['attachment_type'] = null;
+            $validated['attachment_original_name'] = null;
+            $validated['attachment_size'] = null;
+
+            return;
+        }
+
+        if (! $request->hasFile('attachment')) {
+            return;
+        }
+
+        $file = $request->file('attachment');
+        $extension = strtolower($file->getClientOriginalExtension());
+        $category = collect(self::SCHEDULE_ATTACHMENT_RULES)
+            ->filter(fn ($rule) => in_array($extension, $rule['ext'], true))
+            ->keys()
+            ->first();
+
+        if ($existing) {
+            Storage::disk('public')->delete((string) $existing->attachment_path);
+        }
+
+        $path = $file->store('message-schedule-attachments', 'public');
+
+        $validated['attachment_path'] = $path;
+        $validated['attachment_type'] = $category;
+        $validated['attachment_original_name'] = $file->getClientOriginalName();
+        $validated['attachment_size'] = $file->getSize();
+    }
+
+    /**
+     * Same "turn a raw DB exception into an actionable message" pattern
+     * as MessageTemplateController::failedSave() — the likely cause here
+     * is the same class of problem: a migration (this time the one
+     * adding link/attachment_* to wa_message_schedules) not having run
+     * yet.
+     */
+    private function failedSave(\Throwable $e, string $route, ?string $id = null): RedirectResponse
+    {
+        report($e);
+
+        $hint = str_contains($e->getMessage(), 'Base table or view not found')
+            || str_contains($e->getMessage(), "doesn't exist")
+            || str_contains($e->getMessage(), 'Unknown column')
+            ? ' Kemungkinan migrasi database belum dijalankan — coba jalankan "php artisan migrate" lalu ulangi.'
+            : '';
+
+        return redirect()
+            ->route($route, $id ? ['id' => $id] : [])
+            ->withInput()
+            ->with('error', 'Pesan terjadwal gagal disimpan.'.$hint.' (Detail teknis sudah dicatat di log.)');
     }
 
     /**
@@ -408,8 +614,12 @@ class MessageScheduleController extends Controller
     private function formData(Company $company): array
     {
         return [
+            // usable() (not just status=active) — a schedule can only
+            // actually pick a template that's cleared superadmin review
+            // too, otherwise "Gunakan Template" would let a company
+            // select something that can never legally send.
             'templates' => WaMessageTemplate::where('company_id', $company->id)
-                ->where('status', 'active')
+                ->usable()
                 ->orderBy('name')
                 ->get(),
             'branchOffices' => $company->branchOffices()->with('units')->orderBy('name')->get(),

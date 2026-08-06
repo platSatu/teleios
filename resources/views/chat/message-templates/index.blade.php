@@ -29,8 +29,10 @@
                             <tr>
                                 <th style="width:1%">No</th>
                                 <th>Nama Template</th>
+                                <th>Kategori</th>
                                 <th>Isi Pesan</th>
                                 <th>Status</th>
+                                <th>Review</th>
                                 <th class="text-end">Aksi</th>
                             </tr>
                         </thead>
@@ -39,9 +41,21 @@
                                 <tr>
                                     <td>{{ $loop->iteration + ($templates->currentPage() - 1) * $templates->perPage() }}</td>
                                     <td>{{ $template->name }}</td>
+                                    <td class="text-muted">{{ $template->category->name ?? '—' }}</td>
                                     <td class="text-muted">{{ \Illuminate\Support\Str::limit($template->template, 80) }}</td>
                                     <td>
                                         <span class="badge {{ $template->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $template->status }}</span>
+                                    </td>
+                                    <td>
+                                        @if ($template->review_status === 'approved')
+                                            <span class="badge bg-success-subtle text-success">Approved</span>
+                                        @elseif ($template->review_status === 'rejected')
+                                            <span class="badge bg-danger-subtle text-danger" title="{{ $template->rejection_reason }}">Rejected</span>
+                                        @elseif ($template->review_status === 'in_review')
+                                            <span class="badge bg-warning-subtle text-warning">In Review</span>
+                                        @else
+                                            <span class="badge bg-secondary-subtle text-secondary">Draft</span>
+                                        @endif
                                     </td>
                                     <td class="text-end">
                                         <a href="{{ route('chat.message-templates.edit', $template->id) }}" class="btn btn-sm btn-light">
@@ -56,7 +70,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="5" class="text-center text-muted py-4">Belum ada template WA. Klik "Tambah Template" untuk membuat yang pertama.</td>
+                                    <td colspan="7" class="text-center text-muted py-4">Belum ada template WA. Klik "Tambah Template" untuk membuat yang pertama.</td>
                                 </tr>
                             @endforelse
                         </tbody>

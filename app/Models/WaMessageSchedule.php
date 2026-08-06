@@ -39,6 +39,11 @@ class WaMessageSchedule extends Model
         'type',
         'category_schedule',
         'message',
+        'link',
+        'attachment_path',
+        'attachment_type',
+        'attachment_original_name',
+        'attachment_size',
         'use_template',
         'wa_message_template_id',
         'recipients',
@@ -53,6 +58,7 @@ class WaMessageSchedule extends Model
         'recipients' => 'array',
         'date_start' => 'date',
         'date_end' => 'date',
+        'attachment_size' => 'integer',
     ];
 
     /**

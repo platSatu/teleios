@@ -1,0 +1,30 @@
+<svg width="600" height="600" viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="markGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F0897C"/>
+      <stop offset="55%" stop-color="#E2604F"/>
+      <stop offset="100%" stop-color="#C4392E"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="600" height="600" rx="120" fill="#FFFFFF"/>
+
+  <g transform="translate(90,90)">
+    <path d="M220 60
+             C123 60 45 130 45 216
+             C45 260 66 300 101 328
+             L92 388
+             C90 398 100 405 109 400
+             L166 368
+             C183 373 201 376 220 376
+             C317 376 395 306 395 220
+             C395 134 317 60 220 60 Z"
+          fill="url(#markGrad)"/>
+
+    <circle cx="220" cy="220" r="46" fill="#FFFFFF"/>
+    <circle cx="220" cy="220" r="46" fill="none" stroke="url(#markGrad)" stroke-width="10"/>
+
+    <circle cx="360" cy="120" r="16" fill="#C4392E"/>
+    <circle cx="380" cy="330" r="12" fill="#F0897C"/>
+  </g>
+</svg>

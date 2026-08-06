@@ -106,4 +106,26 @@ return Application::configure(basePath: dirname(__DIR__))
 
             return $response;
         });
+
+        // Same problem as AuthenticationException above, different
+        // trigger: session/CSRF token expired (VerifyCsrfToken throws
+        // TokenMismatchException) so the user was shown Laravel's raw
+        // 419 "Page Expired" page instead of being bounced back to
+        // /login like every other "your session is gone" case. Since
+        // VerifyCsrfToken also sits inside the 'web' group ahead of
+        // PreventBackHistoryCache, the same exception-unwind gap applies
+        // here, so the no-store headers are set explicitly rather than
+        // relying on that middleware.
+        $exceptions->render(function (\Illuminate\Session\TokenMismatchException $e, \Illuminate\Http\Request $request) {
+            $response = $request->expectsJson()
+                ? response()->json(['message' => 'Sesi Anda telah berakhir, silakan login kembali.'], 419)
+                : redirect()->guest(route('login'))
+                    ->with('status', 'Sesi Anda telah berakhir, silakan login kembali.');
+
+            $response->headers->set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, private');
+            $response->headers->set('Pragma', 'no-cache');
+            $response->headers->set('Expires', '0');
+
+            return $response;
+        });
     })->create();

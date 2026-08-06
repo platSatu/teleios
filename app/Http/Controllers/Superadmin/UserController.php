@@ -15,6 +15,7 @@ use App\Models\Subscription;
 use App\Models\User;
 use App\Models\Voucher;
 use App\Models\VoucherUserRedemption;
+use App\Models\Wallet;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -44,7 +45,17 @@ class UserController extends Controller
             ->paginate(20)
             ->withQueryString();
 
-        return view('superadmin.user.index', compact('users'));
+        // Summary cards above the table — fixed to the whole dataset,
+        // not affected by the search filter above (same rule as
+        // Chat\MessageScheduleController / Superadmin\DepositController).
+        $stats = [
+            'total' => User::count(),
+            'active' => User::where('status', 'active')->count(),
+            'superadmin' => User::where('user_type', 'SUPERADMIN')->count(),
+            'total_balance' => Wallet::sum('balance'),
+        ];
+
+        return view('superadmin.user.index', compact('users', 'stats'));
     }
 
     public function create(): View

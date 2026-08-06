@@ -1,0 +1,46 @@
+<svg width="1600" height="600" viewBox="0 0 1600 600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="markGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#25D366"/>
+      <stop offset="55%" stop-color="#2FB6A3"/>
+      <stop offset="100%" stop-color="#4F46E5"/>
+    </linearGradient>
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#111827"/>
+      <stop offset="100%" stop-color="#1F2937"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Mark: two chat-node shapes locking together into one continuous link,
+       symbolizing separate chat channels (WhatsApp green -> Instagram/other
+       channels indigo) unified into a single connection. -->
+  <g transform="translate(60,80)">
+    <circle cx="220" cy="220" r="216" fill="none" stroke="url(#markGrad)" stroke-width="26" opacity="0.12"/>
+
+    <!-- left node (chat bubble) -->
+    <path d="M220 60
+             C123 60 45 130 45 216
+             C45 260 66 300 101 328
+             L92 388
+             C90 398 100 405 109 400
+             L166 368
+             C183 373 201 376 220 376
+             C317 376 395 306 395 220
+             C395 134 317 60 220 60 Z"
+          fill="url(#markGrad)"/>
+
+    <!-- connecting node ring, sitting on the seam between the two channels -->
+    <circle cx="220" cy="220" r="46" fill="#FFFFFF"/>
+    <circle cx="220" cy="220" r="46" fill="none" stroke="url(#markGrad)" stroke-width="10"/>
+
+    <!-- small satellite nodes to read as "network / multi-channel" -->
+    <circle cx="360" cy="120" r="16" fill="#4F46E5"/>
+    <circle cx="380" cy="330" r="12" fill="#25D366"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="540" y="360" font-family="Arial, Helvetica, sans-serif" font-size="220" font-weight="700" fill="url(#textGrad)" letter-spacing="-4">Konexa</text>
+
+  <!-- Tagline -->
+  <text x="546" y="430" font-family="Arial, Helvetica, sans-serif" font-size="46" font-weight="400" fill="#6B7280" letter-spacing="2">SATU KONEKSI, SEMUA CHAT</text>
+</svg>

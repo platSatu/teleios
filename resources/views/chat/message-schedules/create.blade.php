@@ -12,6 +12,9 @@
         </a>
     </div>
 
+    @if (session('error'))
+        <div class="alert alert-danger">{{ session('error') }}</div>
+    @endif
     @if ($errors->any())
         <div class="alert alert-danger">
             <ul class="mb-0">
@@ -24,7 +27,7 @@
 
     <div class="card border-0 shadow-sm">
         <div class="card-body">
-            <form action="{{ route('chat.message-schedules.store') }}" method="POST">
+            <form action="{{ route('chat.message-schedules.store') }}" method="POST" enctype="multipart/form-data">
                 @csrf
                 @include('chat.message-schedules._form', ['schedule' => null])
 

@@ -9,44 +9,52 @@
     <div class="card border-0 shadow-sm">
         <div class="card-body">
 
-            <ul class="nav nav-tabs mb-3" id="myHistoryTabs" role="tablist">
+            {{-- flex-nowrap + overflow-x-auto turns the tab bar into a
+                 horizontal scroller on narrow screens instead of letting
+                 Bootstrap's default nav-tabs wrapping stack 6 tabs into a
+                 tall, uneven pile. text-nowrap on each button stops an
+                 individual label (e.g. "Kode Referral Saya") from
+                 wrapping mid-word once it's inside a flex item. --}}
+            <div class="mb-3" style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
+                <ul class="nav nav-tabs flex-nowrap mb-0" id="myHistoryTabs" role="tablist" style="width: max-content;">
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-topup" type="button">
+                            <button class="nav-link active text-nowrap" data-bs-toggle="tab" data-bs-target="#tab-topup" type="button">
                                 <i class="ri-wallet-3-line"></i> Top Up
                                 <span class="badge bg-secondary-subtle text-secondary">{{ $deposits->total() }}</span>
                             </button>
                         </li>
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-voucher" type="button">
+                            <button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#tab-voucher" type="button">
                                 <i class="ri-coupon-3-line"></i> Voucher
                                 <span class="badge bg-secondary-subtle text-secondary">{{ $vouchers->total() }}</span>
                             </button>
                         </li>
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-subscription" type="button">
+                            <button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#tab-subscription" type="button">
                                 <i class="ri-shopping-bag-3-line"></i> Pembelian Package
                                 <span class="badge bg-secondary-subtle text-secondary">{{ $subscriptions->total() }}</span>
                             </button>
                         </li>
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-referral" type="button">
+                            <button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#tab-referral" type="button">
                                 <i class="ri-share-forward-line"></i> Kode Referral Saya
                                 <span class="badge bg-secondary-subtle text-secondary">{{ $referralUsages?->total() ?? 0 }}</span>
                             </button>
                         </li>
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-transfer" type="button">
+                            <button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#tab-transfer" type="button">
                                 <i class="ri-exchange-line"></i> Transfer Saldo
                                 <span class="badge bg-secondary-subtle text-secondary">{{ $transfers->total() }}</span>
                             </button>
                         </li>
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-login" type="button">
+                            <button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#tab-login" type="button">
                                 <i class="ri-login-circle-line"></i> Login
                                 <span class="badge bg-secondary-subtle text-secondary">{{ $loginHistories->total() }}</span>
                             </button>
                         </li>
-                    </ul>
+                </ul>
+            </div>
 
                     <div class="tab-content">
 
@@ -58,13 +66,13 @@
                                 </a>
                             </div>
                             <div class="table-responsive">
-                                <table class="table table-sm table-hover align-middle mb-0">
+                                <table class="table table-sm table-hover align-middle mb-0" style="min-width: 600px;">
                                     <thead class="table-light">
                                         <tr>
-                                            <th>Referensi</th>
-                                            <th>Nominal</th>
-                                            <th>Status</th>
-                                            <th>Tanggal</th>
+                                            <th style="min-width: 150px;">Referensi</th>
+                                            <th style="min-width: 150px;">Nominal</th>
+                                            <th style="min-width: 120px;">Status</th>
+                                            <th style="min-width: 150px;">Tanggal</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -99,13 +107,13 @@
                         {{-- Voucher --}}
                         <div class="tab-pane fade" id="tab-voucher">
                             <div class="table-responsive">
-                                <table class="table table-sm table-hover align-middle mb-0">
+                                <table class="table table-sm table-hover align-middle mb-0" style="min-width: 650px;">
                                     <thead class="table-light">
                                         <tr>
-                                            <th>Kode Voucher</th>
-                                            <th>Berlaku Dari</th>
-                                            <th>Berlaku Sampai</th>
-                                            <th>Status</th>
+                                            <th style="min-width: 170px;">Kode Voucher</th>
+                                            <th style="min-width: 160px;">Berlaku Dari</th>
+                                            <th style="min-width: 160px;">Berlaku Sampai</th>
+                                            <th style="min-width: 120px;">Status</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -136,14 +144,14 @@
                         {{-- Pembelian Package --}}
                         <div class="tab-pane fade" id="tab-subscription">
                             <div class="table-responsive">
-                                <table class="table table-sm table-hover align-middle mb-0">
+                                <table class="table table-sm table-hover align-middle mb-0" style="min-width: 750px;">
                                     <thead class="table-light">
                                         <tr>
-                                            <th>Package</th>
-                                            <th>Total Bayar</th>
-                                            <th>Status</th>
-                                            <th>Tanggal</th>
-                                            <th class="text-end">Invoice</th>
+                                            <th style="min-width: 160px;">Package</th>
+                                            <th style="min-width: 140px;">Total Bayar</th>
+                                            <th style="min-width: 120px;">Status</th>
+                                            <th style="min-width: 150px;">Tanggal</th>
+                                            <th class="text-end" style="min-width: 130px;">Invoice</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -198,13 +206,13 @@
 
                                 <h6 class="mb-2 fs-14">Siapa Saja yang Memakai Kode Anda</h6>
                                 <div class="table-responsive">
-                                    <table class="table table-sm table-hover align-middle mb-0">
+                                    <table class="table table-sm table-hover align-middle mb-0" style="min-width: 700px;">
                                         <thead class="table-light">
                                             <tr>
-                                                <th>Digunakan Oleh</th>
-                                                <th>Package Dibeli</th>
-                                                <th>Komisi Diterima</th>
-                                                <th>Waktu</th>
+                                                <th style="min-width: 160px;">Digunakan Oleh</th>
+                                                <th style="min-width: 170px;">Package Dibeli</th>
+                                                <th style="min-width: 170px;">Komisi Diterima</th>
+                                                <th style="min-width: 150px;">Waktu</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -234,16 +242,16 @@
                         {{-- Transfer Saldo --}}
                         <div class="tab-pane fade" id="tab-transfer">
                             <div class="table-responsive">
-                                <table class="table table-sm table-hover align-middle mb-0">
+                                <table class="table table-sm table-hover align-middle mb-0" style="min-width: 1050px;">
                                     <thead class="table-light">
                                         <tr>
-                                            <th>Arah</th>
-                                            <th>Lawan Transaksi</th>
-                                            <th>Jumlah</th>
-                                            <th>Saldo Sebelum</th>
-                                            <th>Saldo Sesudah</th>
-                                            <th>Catatan</th>
-                                            <th>Waktu</th>
+                                            <th style="min-width: 100px;">Arah</th>
+                                            <th style="min-width: 160px;">Lawan Transaksi</th>
+                                            <th style="min-width: 140px;">Jumlah</th>
+                                            <th style="min-width: 150px;">Saldo Sebelum</th>
+                                            <th style="min-width: 150px;">Saldo Sesudah</th>
+                                            <th style="min-width: 160px;">Catatan</th>
+                                            <th style="min-width: 150px;">Waktu</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -284,12 +292,12 @@
                         {{-- Login --}}
                         <div class="tab-pane fade" id="tab-login">
                             <div class="table-responsive">
-                                <table class="table table-sm table-hover align-middle mb-0">
+                                <table class="table table-sm table-hover align-middle mb-0" style="min-width: 550px;">
                                     <thead class="table-light">
                                         <tr>
-                                            <th>Login</th>
-                                            <th>Logout</th>
-                                            <th>Durasi</th>
+                                            <th style="min-width: 170px;">Login</th>
+                                            <th style="min-width: 170px;">Logout</th>
+                                            <th style="min-width: 130px;">Durasi</th>
                                         </tr>
                                     </thead>
                                     <tbody>

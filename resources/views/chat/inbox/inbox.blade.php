@@ -27,7 +27,6 @@
                 <div class="wa-chat-tabs" id="wa-chat-tabs">
                     <button type="button" class="wa-chat-tab active" data-tab="chat">Chat</button>
                     <button type="button" class="wa-chat-tab" data-tab="group">Grup</button>
-                    <button type="button" class="wa-chat-tab" data-tab="channel">Channel</button>
                 </div>
 
                 <div id="wa-chat-list" class="wa-chat-list">
@@ -50,10 +49,19 @@
                     </div>
                     <div class="wa-thread-header-right">
                         <span id="wa-thread-presence-pill" class="wa-presence-pill wa-pill-offline">Offline</span>
-                        <button type="button" class="wa-icon-btn" title="Cari di percakapan (segera hadir)"><i class="ri-search-line"></i></button>
+                        <button type="button" id="wa-thread-search-btn" class="wa-icon-btn" title="Cari di percakapan"><i class="ri-search-line"></i></button>
                         <button type="button" id="wa-toggle-detail-btn" class="wa-icon-btn" title="Tampilkan/sembunyikan detail"><i class="ri-layout-right-line"></i></button>
                         <button type="button" class="wa-icon-btn" title="Menu lainnya (segera hadir)"><i class="ri-more-2-fill"></i></button>
                     </div>
+                </div>
+
+                <div id="wa-thread-search-bar" class="wa-thread-search-bar d-none">
+                    <i class="ri-search-line"></i>
+                    <input type="text" id="wa-thread-search-input" placeholder="Cari di pesan yang sudah dimuat...">
+                    <span id="wa-thread-search-count" class="wa-thread-search-count"></span>
+                    <button type="button" id="wa-thread-search-prev" class="wa-icon-btn" title="Sebelumnya"><i class="ri-arrow-up-s-line"></i></button>
+                    <button type="button" id="wa-thread-search-next" class="wa-icon-btn" title="Berikutnya"><i class="ri-arrow-down-s-line"></i></button>
+                    <button type="button" id="wa-thread-search-close" class="wa-icon-btn" title="Tutup"><i class="ri-close-line"></i></button>
                 </div>
 
                 <div id="wa-thread-empty" class="wa-thread-empty">
@@ -72,14 +80,22 @@
                 <form id="wa-send-form" class="wa-send-form d-none">
                     <input type="file" id="wa-attach-input" class="d-none" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.txt">
                     <div class="wa-send-icons">
-                        <button type="button" class="wa-icon-btn" title="Emoji (segera hadir)"><i class="ri-emotion-line"></i></button>
-                        <button type="button" class="wa-icon-btn" title="Balasan cepat (segera hadir)"><i class="ri-flashlight-line"></i></button>
-                        <button type="button" class="wa-icon-btn" title="Template pesan (segera hadir)"><i class="ri-apps-2-line"></i></button>
+                        <button type="button" id="wa-emoji-btn" class="wa-icon-btn" title="Emoji"><i class="ri-emotion-line"></i></button>
+                        <button type="button" id="wa-quick-reply-btn" class="wa-icon-btn" title="Balasan cepat"><i class="ri-flashlight-line"></i></button>
+                        <button type="button" id="wa-template-btn" class="wa-icon-btn" title="Template pesan"><i class="ri-apps-2-line"></i></button>
                         <button type="button" id="wa-attach-btn" class="wa-icon-btn" title="Lampirkan file"><i class="ri-attachment-2"></i></button>
                     </div>
-                    <input type="text" id="wa-send-input" class="wa-send-input" placeholder="Type a message... ( / for quick reply)" autocomplete="off">
+                    <textarea id="wa-send-input" class="wa-send-input" placeholder="Type a message... ( / for quick reply)" autocomplete="off" rows="1"></textarea>
                     <button type="submit" class="wa-send-btn" title="Kirim"><i class="ri-send-plane-2-fill"></i></button>
                 </form>
+
+                <div id="wa-picker-popover" class="wa-picker-popover d-none">
+                    <div class="wa-picker-popover-header">
+                        <span id="wa-picker-popover-title"></span>
+                        <button type="button" id="wa-picker-popover-close" class="wa-icon-btn"><i class="ri-close-line"></i></button>
+                    </div>
+                    <div id="wa-picker-popover-body" class="wa-picker-popover-body"></div>
+                </div>
             </div>
 
             {{-- ============ RIGHT: detail panel ============ --}}
@@ -183,7 +199,7 @@
 
         .wa-col { display: flex; flex-direction: column; min-width: 0; }
         .wa-col-contacts { width: 320px; flex: 0 0 320px; border-right: 1px solid var(--bs-border-color, #e9ecef); background: #fff; }
-        .wa-col-thread { flex: 1 1 auto; background: #f2e9de; }
+        .wa-col-thread { flex: 1 1 auto; background: #f2e9de; position: relative; }
         .wa-col-detail { width: 300px; flex: 0 0 300px; border-left: 1px solid var(--bs-border-color, #e9ecef); background: #fff; overflow-y: auto; padding: 18px; }
         .wa-col-detail.wa-hidden { display: none; }
 
@@ -219,14 +235,7 @@
             .wa-thread-body { padding: 12px; }
             .wa-msg-bubble { max-width: 86%; }
             .wa-send-form { padding: 8px 10px; }
-
-            /* The 3 "coming soon" placeholder buttons (emoji/quick
-               reply/template — none of them do anything yet, see their
-               disabled `title`) are the first things worth giving up to
-               keep the actual message input usable at this width. */
-            .wa-send-icons button:nth-child(1),
-            .wa-send-icons button:nth-child(2),
-            .wa-send-icons button:nth-child(3) { display: none; }
+            .wa-send-icons { gap: 2px; }
         }
 
         /* --- left column --- */
@@ -275,7 +284,8 @@
         .wa-chat-item-name { font-weight: 600; font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .wa-chat-item-time { font-size: 0.72rem; color: #9ca3af; flex-shrink: 0; }
         .wa-chat-item-bottom { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 2px; }
-        .wa-chat-item-preview { font-size: 0.8rem; color: #6b7280; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .wa-chat-item-preview { font-size: 0.8rem; color: #6b7280; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+        .wa-chat-item-assignee { font-size: 0.68rem; font-weight: 600; color: #6d28d9; background: #ede9fe; border-radius: 999px; padding: 1px 8px; flex-shrink: 0; white-space: nowrap; }
         .wa-unread-badge { background: #16a34a; color: #fff; border-radius: 999px; min-width: 20px; height: 20px; padding: 0 6px; font-size: 0.72rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
 
         /* --- avatars --- */
@@ -287,6 +297,13 @@
         .wa-thread-header.d-flex-visible { display: flex; }
         .wa-thread-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
         .wa-thread-header-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+        .wa-thread-search-bar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: #fefce8; border-bottom: 1px solid #ece3d8; color: #6b7280; }
+        .wa-thread-search-bar input { flex: 1 1 auto; border: 1px solid #e5e7eb; border-radius: 999px; padding: 6px 14px; font-size: 0.84rem; background: #fff; min-width: 0; }
+        .wa-thread-search-bar input:focus { outline: none; border-color: #16a34a; }
+        .wa-thread-search-count { font-size: 0.78rem; white-space: nowrap; flex-shrink: 0; }
+        .wa-msg-highlight { background: #fef08a; border-radius: 3px; }
+        .wa-msg-highlight-active { background: #fbbf24; }
 
         .wa-icon-btn { border: none; background: transparent; color: #6b7280; width: 32px; height: 32px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; }
         .wa-icon-btn:hover { background: #f1f5f9; color: #374151; }
@@ -332,9 +349,23 @@
         .wa-attach-preview button { border: none; background: transparent; color: #ef4444; font-size: 0.8rem; font-weight: 600; }
 
         .wa-send-form { display: flex; align-items: center; gap: 16px; padding: 12px 20px; background: #fff; border-top: 1px solid #ece3d8; }
+
+        .wa-picker-popover { position: absolute; left: 16px; right: 16px; bottom: 64px; max-width: 360px; max-height: 320px; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); display: flex; flex-direction: column; z-index: 20; }
+        .wa-picker-popover-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid #f0f0f0; font-weight: 600; font-size: 0.86rem; flex-shrink: 0; }
+        .wa-picker-popover-body { overflow-y: auto; padding: 8px; }
+        .wa-emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; }
+        .wa-emoji-grid button { border: none; background: transparent; font-size: 1.3rem; padding: 4px; border-radius: 6px; cursor: pointer; line-height: 1.4; }
+        .wa-emoji-grid button:hover { background: #f3f4f6; }
+        .wa-picker-list-item { display: block; width: 100%; text-align: left; border: none; background: transparent; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+        .wa-picker-list-item:hover { background: #f3f4f6; }
+        .wa-picker-list-item .wa-picker-list-title { font-weight: 600; font-size: 0.84rem; display: flex; align-items: center; gap: 6px; }
+        .wa-picker-list-item .wa-picker-list-preview { font-size: 0.78rem; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+        .wa-picker-shortcut-tag { font-size: 0.68rem; font-weight: 600; color: #6d28d9; background: #ede9fe; border-radius: 999px; padding: 1px 8px; }
+        .wa-picker-empty { padding: 16px; text-align: center; color: #9ca3af; font-size: 0.84rem; }
         .wa-send-icons { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-        .wa-send-input { flex: 1 1 auto; border: 1px solid #e5e7eb; border-radius: 999px; padding: 10px 18px; font-size: 0.88rem; background: #f9fafb; min-width: 0; }
+        .wa-send-input { flex: 1 1 auto; border: 1px solid #e5e7eb; border-radius: 18px; padding: 10px 18px; font-size: 0.88rem; background: #f9fafb; min-width: 0; resize: none; overflow-y: auto; max-height: 120px; line-height: 1.35; font-family: inherit; }
         .wa-send-input:focus { outline: none; border-color: #16a34a; background: #fff; }
+        .wa-msg-row.wa-msg-optimistic .wa-msg-bubble { opacity: 0.7; }
         .wa-send-btn { border: none; background: #16a34a; color: #fff; width: 42px; height: 42px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; margin-left: 2px; }
         .wa-send-btn:hover { background: #128a3e; }
 
@@ -407,6 +438,9 @@
             const mediaListUrlTemplate = @json(route('inbox.media-list', ['device' => $deviceId, 'jid' => '__JID__']));
             const contactUrlTemplate = @json(route('inbox.contact', ['device' => $deviceId, 'jid' => '__JID__']));
             const contactAssignUrlTemplate = @json(route('inbox.contact.assign', ['device' => $deviceId, 'jid' => '__JID__']));
+            const assignmentsUrl = @json(route('inbox.assignments', ['device' => $deviceId]));
+            const quickRepliesUrl = @json(route('inbox.quick-replies', ['device' => $deviceId]));
+            const templatesUrl = @json(route('inbox.templates', ['device' => $deviceId]));
             const csrfToken = @json(csrf_token());
 
             // Detach re-uses the attach URL above instead of its own
@@ -436,6 +470,13 @@
             const threadTitleEl = document.getElementById('wa-thread-title');
             const threadSubEl = document.getElementById('wa-thread-sub');
             const threadPresencePillEl = document.getElementById('wa-thread-presence-pill');
+            const threadSearchBtnEl = document.getElementById('wa-thread-search-btn');
+            const threadSearchBarEl = document.getElementById('wa-thread-search-bar');
+            const threadSearchInputEl = document.getElementById('wa-thread-search-input');
+            const threadSearchCountEl = document.getElementById('wa-thread-search-count');
+            const threadSearchPrevEl = document.getElementById('wa-thread-search-prev');
+            const threadSearchNextEl = document.getElementById('wa-thread-search-next');
+            const threadSearchCloseEl = document.getElementById('wa-thread-search-close');
             const threadEmptyEl = document.getElementById('wa-thread-empty');
             const threadBodyEl = document.getElementById('wa-thread-body');
             const sendFormEl = document.getElementById('wa-send-form');
@@ -446,6 +487,14 @@
             const attachPreviewNameEl = document.getElementById('wa-attach-preview-name');
             const attachPreviewIconEl = document.getElementById('wa-attach-preview-icon');
             const attachPreviewCancelEl = document.getElementById('wa-attach-preview-cancel');
+
+            const emojiBtnEl = document.getElementById('wa-emoji-btn');
+            const quickReplyBtnEl = document.getElementById('wa-quick-reply-btn');
+            const templateBtnEl = document.getElementById('wa-template-btn');
+            const pickerPopoverEl = document.getElementById('wa-picker-popover');
+            const pickerPopoverTitleEl = document.getElementById('wa-picker-popover-title');
+            const pickerPopoverBodyEl = document.getElementById('wa-picker-popover-body');
+            const pickerPopoverCloseEl = document.getElementById('wa-picker-popover-close');
 
             const detailPanelEl = document.getElementById('wa-detail-panel');
             const detailEmptyEl = document.getElementById('wa-detail-empty');
@@ -481,9 +530,10 @@
             let activeChat = null;
             let allChats = [];
             let searchTerm = '';
-            let activeTab = 'chat'; // 'chat' | 'group' | 'channel' — see classifyChat()
+            let activeTab = 'chat'; // 'chat' | 'group' — Channel was removed, see classifyChat()
             let renderedChatsSignature = '';
             let detailVisible = true;
+            let assignmentsByPhone = {}; // phone -> assignee name, see loadAssignments()
 
             // Message loading is a small incremental delta after the first
             // load, not a full re-fetch/re-render every poll (see
@@ -552,6 +602,14 @@
                 if (!jid) return '';
                 if (jid.indexOf('@g.us') !== -1) return 'Grup';
                 if (jid.indexOf('@newsletter') !== -1) return 'Channel';
+                // @lid = WhatsApp's privacy-preserving "linked ID" JID —
+                // the part before @ is an opaque internal id, NOT a phone
+                // number, even though it's all digits and looks like one.
+                // Only the Go backend (with a live whatsmeow session) can
+                // resolve this to a real phone via chat.phone; blindly
+                // treating it as one here is what produced garbage like
+                // "+158939626864809" in the detail panel before.
+                if (jid.indexOf('@lid') !== -1) return null;
                 return '+' + jid.split('@')[0];
             }
 
@@ -659,33 +717,132 @@
                 return Array.from(byJid.values());
             }
 
+            // chat_jid -> element refs, so unchanged rows get their text
+            // content patched in place instead of every row across the
+            // whole list (up to a couple hundred) being torn down and
+            // recreated on every poll tick — see renderChatList() below.
+            const chatItemNodes = new Map();
+
+            function makeChatItemNode() {
+                const item = document.createElement('button');
+                item.type = 'button';
+                item.className = 'wa-chat-item';
+
+                const avatarEl = document.createElement('div');
+                avatarEl.className = 'wa-avatar-circle';
+
+                const body = document.createElement('div');
+                body.className = 'wa-chat-item-body';
+
+                const top = document.createElement('div');
+                top.className = 'wa-chat-item-top';
+                const name = document.createElement('span');
+                name.className = 'wa-chat-item-name';
+                const time = document.createElement('span');
+                time.className = 'wa-chat-item-time';
+                top.appendChild(name);
+                top.appendChild(time);
+
+                const bottom = document.createElement('div');
+                bottom.className = 'wa-chat-item-bottom';
+                const preview = document.createElement('span');
+                preview.className = 'wa-chat-item-preview';
+                const assignee = document.createElement('span');
+                assignee.className = 'wa-chat-item-assignee d-none';
+                const badge = document.createElement('span');
+                badge.className = 'wa-unread-badge d-none';
+                bottom.appendChild(preview);
+                bottom.appendChild(assignee);
+                bottom.appendChild(badge);
+
+                body.appendChild(top);
+                body.appendChild(bottom);
+
+                item.appendChild(avatarEl);
+                item.appendChild(body);
+
+                const refs = { item, avatarEl, name, time, preview, assignee, badge, chat: null, lastAvatarUrl: null, lastAvatarLabel: null };
+                item.addEventListener('click', function () {
+                    openChat(refs.chat);
+                });
+
+                return refs;
+            }
+
+            function updateChatItemNode(refs, chat) {
+                refs.chat = chat; // click handler above always opens whatever's current
+                refs.item.className = 'wa-chat-item' + (chat.chat_jid === activeChatJid ? ' active' : '');
+
+                const avatarLabel = chat.name || chat.chat_jid;
+                if (refs.lastAvatarUrl !== (chat.avatar_url || '') || refs.lastAvatarLabel !== avatarLabel) {
+                    applyAvatar(refs.avatarEl, chat, 42);
+                    refs.lastAvatarUrl = chat.avatar_url || '';
+                    refs.lastAvatarLabel = avatarLabel;
+                }
+
+                refs.name.textContent = avatarLabel;
+                refs.time.textContent = timeLabel(chat.last_message_at);
+                refs.preview.textContent = chat.last_message || '';
+
+                const phone = normalizeDigits(chat.phone) || normalizeDigits(phoneFromJid(chat.chat_jid));
+                const assigneeName = phone ? assignmentsByPhone[phone] : null;
+                if (assigneeName) {
+                    refs.assignee.textContent = assigneeName;
+                    refs.assignee.classList.remove('d-none');
+                } else {
+                    refs.assignee.classList.add('d-none');
+                }
+
+                if (chat.unread_count > 0) {
+                    refs.badge.textContent = chat.unread_count;
+                    refs.badge.classList.remove('d-none');
+                } else {
+                    refs.badge.classList.add('d-none');
+                }
+            }
+
             function renderChatList(rawChats) {
-                const chats = dedupeChats(rawChats);
+                // @newsletter (Channel) conversations are dropped entirely
+                // here, not just hidden from a tab — the Channel tab itself
+                // was removed (not a feature this app needs), so a channel
+                // chat has no tab it could ever show up under anymore.
+                const chats = dedupeChats(rawChats).filter(function (c) {
+                    return classifyChat(c.chat_jid) !== 'channel';
+                });
                 allChats = chats;
 
                 const filtered = applyFilter(chats);
 
-                // Count reflects the current tab (Chat/Grup/Channel), not
-                // the raw total — matches how "Grup 53" style counters
-                // work in the WhatsApp Web reference, rather than always
-                // showing every chat type combined regardless of tab.
+                // Count reflects the current tab (Chat/Grup), not the raw
+                // total — matches how "Grup 53" style counters work in
+                // the WhatsApp Web reference, rather than always showing
+                // every chat type combined regardless of tab.
                 chatCountEl.textContent = '(' + filtered.length + ')';
 
                 const signature = filtered.map(function (c) {
-                    return c.chat_jid + ':' + c.last_message + ':' + c.unread_count + ':' + c.avatar_url + ':' + c.name;
+                    const phone = normalizeDigits(c.phone) || normalizeDigits(phoneFromJid(c.chat_jid));
+                    const assignee = phone ? (assignmentsByPhone[phone] || '') : '';
+                    return c.chat_jid + ':' + c.last_message + ':' + c.unread_count + ':' + c.avatar_url + ':' + c.name + ':' + assignee;
                 }).join('|') + '|active:' + activeChatJid + '|q:' + searchTerm + '|tab:' + activeTab;
 
                 if (signature === renderedChatsSignature) return;
                 renderedChatsSignature = signature;
 
-                chatListEl.innerHTML = '';
-
                 if (filtered.length === 0) {
+                    chatItemNodes.clear();
+                    chatListEl.innerHTML = '';
                     chatListEmptyEl.textContent = searchTerm ? 'Tidak ada percakapan yang cocok.' : 'Belum ada percakapan.';
                     chatListEl.appendChild(chatListEmptyEl);
                     return;
                 }
 
+                // Reused item nodes are moved (not cloned) into this
+                // fragment — appendChild() on a node that already has a
+                // parent detaches it from its old spot first, so this is
+                // a cheap reorder for the (common) case where most rows
+                // didn't actually change, not a rebuild.
+                const fragment = document.createDocumentFragment();
+                const seenJids = new Set();
                 let lastGroup = null;
 
                 filtered.forEach(function (chat) {
@@ -695,52 +852,28 @@
                         const divider = document.createElement('div');
                         divider.className = 'wa-date-divider';
                         divider.textContent = group;
-                        chatListEl.appendChild(divider);
+                        fragment.appendChild(divider);
                     }
 
-                    const item = document.createElement('button');
-                    item.type = 'button';
-                    item.className = 'wa-chat-item' + (chat.chat_jid === activeChatJid ? ' active' : '');
-
-                    const body = document.createElement('div');
-                    body.className = 'wa-chat-item-body';
-
-                    const top = document.createElement('div');
-                    top.className = 'wa-chat-item-top';
-                    const name = document.createElement('span');
-                    name.className = 'wa-chat-item-name';
-                    name.textContent = chat.name || chat.chat_jid;
-                    const time = document.createElement('span');
-                    time.className = 'wa-chat-item-time';
-                    time.textContent = timeLabel(chat.last_message_at);
-                    top.appendChild(name);
-                    top.appendChild(time);
-
-                    const bottom = document.createElement('div');
-                    bottom.className = 'wa-chat-item-bottom';
-                    const preview = document.createElement('span');
-                    preview.className = 'wa-chat-item-preview';
-                    preview.textContent = chat.last_message || '';
-                    bottom.appendChild(preview);
-
-                    if (chat.unread_count > 0) {
-                        const badge = document.createElement('span');
-                        badge.className = 'wa-unread-badge';
-                        badge.textContent = chat.unread_count;
-                        bottom.appendChild(badge);
+                    seenJids.add(chat.chat_jid);
+                    let refs = chatItemNodes.get(chat.chat_jid);
+                    if (!refs) {
+                        refs = makeChatItemNode();
+                        chatItemNodes.set(chat.chat_jid, refs);
                     }
-
-                    body.appendChild(top);
-                    body.appendChild(bottom);
-
-                    item.appendChild(makeAvatarEl(chat, 42));
-                    item.appendChild(body);
-                    item.addEventListener('click', function () {
-                        openChat(chat);
-                    });
-
-                    chatListEl.appendChild(item);
+                    updateChatItemNode(refs, chat);
+                    fragment.appendChild(refs.item);
                 });
+
+                // Drop refs for chats no longer in view (closed on the
+                // Go side, or just filtered out by tab/search) so this
+                // map doesn't grow unbounded across a long session.
+                chatItemNodes.forEach(function (refs, jid) {
+                    if (!seenJids.has(jid)) chatItemNodes.delete(jid);
+                });
+
+                chatListEl.innerHTML = '';
+                chatListEl.appendChild(fragment);
             }
 
             // Normalizes whatever shape the Go backend sends a delivery
@@ -936,6 +1069,315 @@
                 }
             }
 
+            // Renders a sent-by-me bubble the instant Enter is pressed,
+            // before the network round trip to the Go backend even
+            // resolves — messageBubble()'s 'pending' ack state gives it
+            // the clock icon real pending messages already use, so it
+            // reads as "sending..." rather than looking like a normal
+            // sent message that just happens to load fast. Kept out of
+            // appendMessages()/lastMessageId entirely since a temp id
+            // isn't a real server message id and must never be mistaken
+            // for one by the after_id polling cursor.
+            function appendOptimisticMessage(tempId, body) {
+                const wasAtBottom = threadBodyEl.scrollTop + threadBodyEl.clientHeight >= threadBodyEl.scrollHeight - 20;
+                const nowIso = new Date().toISOString();
+
+                const key = dayKey(nowIso);
+                if (key !== lastRenderedDay) {
+                    lastRenderedDay = key;
+                    threadBodyEl.appendChild(dayDivider(nowIso));
+                }
+
+                const row = messageBubble({
+                    from_me: true,
+                    body: body,
+                    sent_at: nowIso,
+                    status: 'pending',
+                });
+                row.classList.add('wa-msg-optimistic');
+                row.dataset.tempId = tempId;
+                threadBodyEl.appendChild(row);
+
+                if (wasAtBottom) threadBodyEl.scrollTop = threadBodyEl.scrollHeight;
+            }
+
+            function removeOptimisticMessage(tempId) {
+                const el = threadBodyEl.querySelector('[data-temp-id="' + tempId + '"]');
+                if (el) el.remove();
+            }
+
+            // Auto-grows the message textarea up to the CSS max-height
+            // (120px, then it scrolls) as the user types multi-line
+            // text — resetting to 'auto' first is what lets it shrink
+            // back down too, not just grow.
+            function autoGrowSendInput() {
+                sendInputEl.style.height = 'auto';
+                sendInputEl.style.height = Math.min(sendInputEl.scrollHeight, 120) + 'px';
+            }
+
+            function resetSendInputHeight() {
+                sendInputEl.style.height = 'auto';
+            }
+
+            // --- search within the currently open conversation ---
+            // Only covers messages already loaded into the DOM (i.e. the
+            // recent-history page loadMessages() pulled, plus anything
+            // appended since) — matching WhatsApp's own history depth
+            // limits without needing a new "search this whole chat's
+            // full history" endpoint on the Go backend. Highlights whole
+            // bubbles rather than sub-string text (no innerHTML
+            // rebuilding of message text needed, so nothing here can
+            // reinterpret a message's own text as HTML).
+            let threadSearchMatches = [];
+            let threadSearchIndex = -1;
+
+            function clearThreadSearchHighlights() {
+                threadSearchMatches.forEach(function (el) {
+                    el.classList.remove('wa-msg-highlight', 'wa-msg-highlight-active');
+                });
+                threadSearchMatches = [];
+                threadSearchIndex = -1;
+            }
+
+            function goToThreadSearchMatch() {
+                if (threadSearchMatches.length === 0) return;
+                threadSearchMatches.forEach(function (el) { el.classList.remove('wa-msg-highlight-active'); });
+                const el = threadSearchMatches[threadSearchIndex];
+                el.classList.add('wa-msg-highlight-active');
+                el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                threadSearchCountEl.textContent = (threadSearchIndex + 1) + ' / ' + threadSearchMatches.length;
+            }
+
+            function performThreadSearch() {
+                clearThreadSearchHighlights();
+                const term = threadSearchInputEl.value.trim().toLowerCase();
+
+                if (!term) {
+                    threadSearchCountEl.textContent = '';
+                    return;
+                }
+
+                threadBodyEl.querySelectorAll('.wa-msg-bubble').forEach(function (bubble) {
+                    if (bubble.textContent.toLowerCase().indexOf(term) !== -1) {
+                        bubble.classList.add('wa-msg-highlight');
+                        threadSearchMatches.push(bubble);
+                    }
+                });
+
+                if (threadSearchMatches.length === 0) {
+                    threadSearchCountEl.textContent = 'Tidak ditemukan';
+                    return;
+                }
+
+                threadSearchIndex = 0;
+                goToThreadSearchMatch();
+            }
+
+            function stepThreadSearch(delta) {
+                if (threadSearchMatches.length === 0) return;
+                threadSearchIndex = (threadSearchIndex + delta + threadSearchMatches.length) % threadSearchMatches.length;
+                goToThreadSearchMatch();
+            }
+
+            function openThreadSearch() {
+                threadSearchBarEl.classList.remove('d-none');
+                threadSearchInputEl.value = '';
+                threadSearchCountEl.textContent = '';
+                clearThreadSearchHighlights();
+                setTimeout(function () { threadSearchInputEl.focus(); }, 0);
+            }
+
+            function closeThreadSearch() {
+                threadSearchBarEl.classList.add('d-none');
+                threadSearchInputEl.value = '';
+                clearThreadSearchHighlights();
+                threadSearchCountEl.textContent = '';
+            }
+
+            if (threadSearchBtnEl) {
+                threadSearchBtnEl.addEventListener('click', function () {
+                    if (threadSearchBarEl.classList.contains('d-none')) {
+                        openThreadSearch();
+                    } else {
+                        closeThreadSearch();
+                    }
+                });
+            }
+
+            if (threadSearchCloseEl) threadSearchCloseEl.addEventListener('click', closeThreadSearch);
+            if (threadSearchNextEl) threadSearchNextEl.addEventListener('click', function () { stepThreadSearch(1); });
+            if (threadSearchPrevEl) threadSearchPrevEl.addEventListener('click', function () { stepThreadSearch(-1); });
+
+            if (threadSearchInputEl) {
+                threadSearchInputEl.addEventListener('input', performThreadSearch);
+                threadSearchInputEl.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        stepThreadSearch(e.shiftKey ? -1 : 1);
+                    } else if (e.key === 'Escape') {
+                        closeThreadSearch();
+                    }
+                });
+            }
+
+            // --- emoji / balasan cepat / template pesan pickers ---
+            // One shared popover reused for all 3 (filled differently per
+            // button) instead of three separate custom dropdowns — these
+            // were literally non-functional "coming soon" placeholders
+            // before (hidden on mobile too, see the removed CSS rule).
+            const COMMON_EMOJIS = ['😀','😁','😂','🤣','😊','😍','😘','😉','😎','🤔','😅','😢','😭','😡','👍','👎','🙏','👏','💪','🔥','🎉','❤️','💯','✅','❌','⚠️','📌','⏰','📞','📎','😴','🥳','🤗','😇','🙌','👋','🤝','💬','📷','🎁'];
+
+            function insertAtCursor(text) {
+                const start = sendInputEl.selectionStart != null ? sendInputEl.selectionStart : sendInputEl.value.length;
+                const end = sendInputEl.selectionEnd != null ? sendInputEl.selectionEnd : sendInputEl.value.length;
+                const value = sendInputEl.value;
+                sendInputEl.value = value.slice(0, start) + text + value.slice(end);
+                const cursor = start + text.length;
+                sendInputEl.focus();
+                sendInputEl.setSelectionRange(cursor, cursor);
+                autoGrowSendInput();
+            }
+
+            function closePicker() {
+                pickerPopoverEl.classList.add('d-none');
+                pickerPopoverBodyEl.innerHTML = '';
+            }
+
+            function openEmojiPicker() {
+                pickerPopoverTitleEl.textContent = 'Emoji';
+                const grid = document.createElement('div');
+                grid.className = 'wa-emoji-grid';
+                COMMON_EMOJIS.forEach(function (emoji) {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.textContent = emoji;
+                    btn.addEventListener('click', function () { insertAtCursor(emoji); });
+                    grid.appendChild(btn);
+                });
+                pickerPopoverBodyEl.innerHTML = '';
+                pickerPopoverBodyEl.appendChild(grid);
+                pickerPopoverEl.classList.remove('d-none');
+            }
+
+            function renderPickerList(items, opts) {
+                pickerPopoverBodyEl.innerHTML = '';
+
+                if (items.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.className = 'wa-picker-empty';
+                    empty.textContent = opts.emptyText;
+                    pickerPopoverBodyEl.appendChild(empty);
+                    return;
+                }
+
+                items.forEach(function (item) {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'wa-picker-list-item';
+
+                    const title = document.createElement('div');
+                    title.className = 'wa-picker-list-title';
+                    const titleText = document.createElement('span');
+                    titleText.textContent = opts.title(item);
+                    title.appendChild(titleText);
+
+                    const tag = opts.tag ? opts.tag(item) : null;
+                    if (tag) {
+                        const tagEl = document.createElement('span');
+                        tagEl.className = 'wa-picker-shortcut-tag';
+                        tagEl.textContent = tag;
+                        title.appendChild(tagEl);
+                    }
+
+                    const preview = document.createElement('div');
+                    preview.className = 'wa-picker-list-preview';
+                    preview.textContent = opts.body(item);
+
+                    btn.appendChild(title);
+                    btn.appendChild(preview);
+                    btn.addEventListener('click', function () {
+                        insertAtCursor(opts.body(item));
+                        closePicker();
+                    });
+
+                    pickerPopoverBodyEl.appendChild(btn);
+                });
+            }
+
+            function openQuickReplyPicker() {
+                pickerPopoverTitleEl.textContent = 'Balasan Cepat';
+                pickerPopoverBodyEl.innerHTML = '<div class="wa-picker-empty">Memuat...</div>';
+                pickerPopoverEl.classList.remove('d-none');
+
+                fetchJson(quickRepliesUrl).then(function (data) {
+                    if (pickerPopoverTitleEl.textContent !== 'Balasan Cepat') return; // closed/switched while loading
+                    renderPickerList(data.quick_replies || [], {
+                        emptyText: 'Belum ada balasan cepat. Kelola di Chat > Pengaturan > Balasan Cepat.',
+                        title: function (item) { return item.title; },
+                        tag: function (item) { return item.shortcut ? '/' + item.shortcut : null; },
+                        body: function (item) { return item.message_content; },
+                    });
+                });
+            }
+
+            function openTemplatePicker() {
+                pickerPopoverTitleEl.textContent = 'Template Pesan';
+                pickerPopoverBodyEl.innerHTML = '<div class="wa-picker-empty">Memuat...</div>';
+                pickerPopoverEl.classList.remove('d-none');
+
+                fetchJson(templatesUrl).then(function (data) {
+                    if (pickerPopoverTitleEl.textContent !== 'Template Pesan') return;
+                    renderPickerList(data.templates || [], {
+                        emptyText: 'Belum ada template. Kelola di Chat > Pengaturan > WA Template.',
+                        title: function (item) { return item.name; },
+                        body: function (item) { return item.template; },
+                    });
+                });
+            }
+
+            if (emojiBtnEl) {
+                emojiBtnEl.addEventListener('click', function () {
+                    const isOpen = !pickerPopoverEl.classList.contains('d-none') && pickerPopoverTitleEl.textContent === 'Emoji';
+                    isOpen ? closePicker() : openEmojiPicker();
+                });
+            }
+
+            if (quickReplyBtnEl) {
+                quickReplyBtnEl.addEventListener('click', function () {
+                    const isOpen = !pickerPopoverEl.classList.contains('d-none') && pickerPopoverTitleEl.textContent === 'Balasan Cepat';
+                    isOpen ? closePicker() : openQuickReplyPicker();
+                });
+            }
+
+            if (templateBtnEl) {
+                templateBtnEl.addEventListener('click', function () {
+                    const isOpen = !pickerPopoverEl.classList.contains('d-none') && pickerPopoverTitleEl.textContent === 'Template Pesan';
+                    isOpen ? closePicker() : openTemplatePicker();
+                });
+            }
+
+            if (pickerPopoverCloseEl) pickerPopoverCloseEl.addEventListener('click', closePicker);
+
+            // Click outside the popover (and off its 3 trigger buttons)
+            // closes it — standard dropdown/popover behavior.
+            document.addEventListener('click', function (e) {
+                if (pickerPopoverEl.classList.contains('d-none')) return;
+                const target = e.target;
+                if (pickerPopoverEl.contains(target) || target === emojiBtnEl || target === quickReplyBtnEl || target === templateBtnEl) return;
+                closePicker();
+            });
+
+            // "/" at the very start of an empty box opens quick replies —
+            // matches the input's own placeholder text ("/ for quick
+            // reply"), which promised this before it actually did
+            // anything.
+            sendInputEl.addEventListener('keydown', function (e) {
+                if (e.key === '/' && sendInputEl.value === '') {
+                    e.preventDefault();
+                    openQuickReplyPicker();
+                }
+            });
+
             function renderPresence(presence) {
                 if (presence.state === 'typing') {
                     threadSubEl.textContent = 'mengetik...';
@@ -964,7 +1406,7 @@
                 // LID<->phone mapping, which the client-side fallback
                 // (phoneFromJid) can't do since that resolution needs a
                 // live whatsmeow client, not just string parsing.
-                detailPhoneEl.textContent = chat.phone || phoneFromJid(chat.chat_jid);
+                detailPhoneEl.textContent = chat.phone || phoneFromJid(chat.chat_jid) || 'Nomor belum teridentifikasi';
             }
 
             // --- contact assignment ---
@@ -1029,7 +1471,15 @@
                     },
                     body: JSON.stringify({ assigned_to: contactAssignSelectEl.value, phone: currentContactPhone }),
                 }).then(function (data) {
-                    if (data.error) alert(data.error);
+                    if (data.error) {
+                        alert(data.error);
+                        return;
+                    }
+                    // Refresh the assignee badge in the chat list right
+                    // away instead of waiting for the next scheduled
+                    // loadAssignments() poll, same reasoning as loadChats()
+                    // being called immediately after opening a chat.
+                    loadAssignments();
                 });
             });
 
@@ -1364,6 +1814,8 @@
                 lastMessageId = 0;
                 renderedChatsSignature = ''; // force chat list re-render to highlight selection
                 clearAttachPreview(); // a pending attachment shouldn't follow you into a different chat
+                closeThreadSearch(); // matches/highlights belong to the chat being left, not the new one
+                closePicker();
 
                 // No-op above the 768px breakpoint (see the CSS) — below
                 // it, this swaps the list out for the thread taking the
@@ -1393,16 +1845,31 @@
                     });
                 }
 
+                // loadMessages() goes out alone, first — it's the one
+                // thing the user is actually staring at right after a
+                // click. The other five below are all secondary (detail
+                // panel content, unread badge refresh) but were
+                // previously fired in the very same tick, which meant
+                // they competed with loadMessages() for the browser's
+                // per-origin connection limit (6 on HTTP/1.1, which is
+                // what a bare XAMPP/Apache dev setup speaks) — on a slow
+                // connection that could visibly delay the thread from
+                // appearing. Deferring them by one tick (setTimeout 0)
+                // lets loadMessages()'s request actually get sent first.
                 loadMessages();
-                loadPresence();
-                loadLabels();
-                loadNotes();
-                loadMedia();
-                loadContact();
-                // Opening a chat clears its unread count server-side; pull
-                // the chat list again right away instead of waiting for the
-                // next scheduled poll, so the badge disappears immediately.
-                loadChats();
+                setTimeout(function () {
+                    if (activeChatJid !== chat.chat_jid) return; // switched again before this fired
+                    loadPresence();
+                    loadLabels();
+                    loadNotes();
+                    loadMedia();
+                    loadContact();
+                    // Opening a chat clears its unread count server-side;
+                    // pull the chat list again right away instead of
+                    // waiting for the next scheduled poll, so the badge
+                    // disappears immediately.
+                    loadChats();
+                }, 0);
             }
 
             function loadMessages() {
@@ -1445,6 +1912,24 @@
                 fetchJson(chatsUrl).then(function (data) {
                     renderChatList(data.chats || []);
                 });
+            }
+
+            // One query for every assigned contact the company has (see
+            // InboxController::assignments()), not a lookup per chat row —
+            // merged into chat list rows locally by phone so the "who is
+            // this assigned to" badge doesn't cost a network round trip
+            // per row. Polled on its own (slower) cadence since
+            // reassignments are rare compared to new messages.
+            function loadAssignments() {
+                fetchJson(assignmentsUrl).then(function (data) {
+                    assignmentsByPhone = data.assignments || {};
+                    renderedChatsSignature = ''; // force re-render so badges pick up the fresh map
+                    renderChatList(allChats);
+                });
+            }
+
+            function normalizeDigits(str) {
+                return (str || '').replace(/\D/g, '');
             }
 
             searchInputEl.addEventListener('input', function () {
@@ -1619,6 +2104,7 @@
                         if (!data.error) {
                             clearAttachPreview();
                             sendInputEl.value = '';
+                            resetSendInputHeight();
                             if (data.message && messagesInitialized) {
                                 appendMessages([data.message]);
                             } else {
@@ -1639,6 +2125,7 @@
                 const body = sendInputEl.value.trim();
                 if (!body) return;
                 const sentToChatJid = activeChatJid;
+                const tempId = 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2);
 
                 // Clear the box and let the user keep typing/hitting Enter
                 // right away, instead of disabling the input for the whole
@@ -1647,6 +2134,14 @@
                 // on a disabled field and was silently dropped). Sends are
                 // fire-and-forget from here, same as WhatsApp Web itself.
                 sendInputEl.value = '';
+                resetSendInputHeight();
+
+                // Paint the bubble now, not after the round trip — this is
+                // what actually makes sending *feel* instant, on top of
+                // the input already being clear and re-typable above.
+                if (messagesInitialized && activeChatJid === sentToChatJid) {
+                    appendOptimisticMessage(tempId, body);
+                }
 
                 fetchJson(urlFor(sendUrlTemplate, sentToChatJid), {
                     method: 'POST',
@@ -1658,10 +2153,11 @@
                     body: JSON.stringify({ body: body }),
                 }).then(function (data) {
                     if (!data.error) {
-                        // Show the message right away using the response we
+                        if (activeChatJid === sentToChatJid) removeOptimisticMessage(tempId);
+
+                        // Show the real message using the response we
                         // already have, instead of waiting for the next
-                        // 3-second poll to pick it up — this is what made
-                        // sending feel delayed.
+                        // 3-second poll to pick it up.
                         if (data.message && messagesInitialized && activeChatJid === sentToChatJid) {
                             appendMessages([data.message]);
                         } else if (activeChatJid === sentToChatJid) {
@@ -1669,16 +2165,40 @@
                         }
                         loadChats();
                     } else {
+                        if (activeChatJid === sentToChatJid) removeOptimisticMessage(tempId);
                         alert(data.error || 'Gagal mengirim pesan.');
                         sendInputEl.value = body;
+                        autoGrowSendInput();
                     }
                 });
             });
 
+            // Enter sends (matches every chat app), Shift+Enter inserts a
+            // newline (native textarea behavior — left alone). A plain
+            // <input> submitted its <form> on Enter for free; a <textarea>
+            // doesn't, so that has to be done explicitly here instead.
+            sendInputEl.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (typeof sendFormEl.requestSubmit === 'function') {
+                        sendFormEl.requestSubmit();
+                    } else {
+                        sendFormEl.dispatchEvent(new Event('submit', { cancelable: true }));
+                    }
+                }
+            });
+
+            sendInputEl.addEventListener('input', autoGrowSendInput);
+
             loadChats();
+            loadAssignments();
             setInterval(loadChats, 6000);
             setInterval(loadMessages, 3000);
             setInterval(loadPresence, 3000);
+            // Reassignments are rare compared to new messages — a much
+            // slower poll than loadChats() is enough to keep the badge
+            // fresh without adding meaningfully to request volume.
+            setInterval(loadAssignments, 30000);
         })();
     </script>
 @endsection

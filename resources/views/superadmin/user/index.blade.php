@@ -1,6 +1,64 @@
 @extends('layouts.dashboard')
 
 @section('content')
+    {{-- Summary cards — fixed to the whole dataset (see
+         Superadmin\UserController::index()'s $stats), not affected by
+         the search filter below. --}}
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-xl-3">
+            <div class="card border-0 shadow-sm mb-0 h-100">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <div class="avatar-item avatar-lg rounded-circle bg-primary-subtle text-primary flex-shrink-0">
+                        <i class="ri-group-line fs-4"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small">Total Users</div>
+                        <h4 class="mb-0">{{ number_format($stats['total'], 0, ',', '.') }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="card border-0 shadow-sm mb-0 h-100">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <div class="avatar-item avatar-lg rounded-circle bg-success-subtle text-success flex-shrink-0">
+                        <i class="ri-user-follow-line fs-4"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small">User Active</div>
+                        <h4 class="mb-0">{{ number_format($stats['active'], 0, ',', '.') }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="card border-0 shadow-sm mb-0 h-100">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <div class="avatar-item avatar-lg rounded-circle bg-warning-subtle text-warning flex-shrink-0">
+                        <i class="ri-shield-star-line fs-4"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small">Superadmin</div>
+                        <h4 class="mb-0">{{ number_format($stats['superadmin'], 0, ',', '.') }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="card border-0 shadow-sm mb-0 h-100">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <div class="avatar-item avatar-lg rounded-circle bg-info-subtle text-info flex-shrink-0">
+                        <i class="ri-wallet-3-line fs-4"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small">Total Saldo Wallet</div>
+                        <h4 class="mb-0">Rp {{ number_format($stats['total_balance'], 0, ',', '.') }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="card">
         <div class="card-body">
             <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">

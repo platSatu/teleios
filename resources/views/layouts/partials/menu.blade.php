@@ -1,27 +1,31 @@
 <aside class="pe-app-sidebar" id="sidebar">
-        <div class="pe-app-sidebar-logo px-5 d-flex align-items-center position-relative">
-            <!--begin::Brand Image-->
-            <a href="index.html" class="d-flex gap-2 logo-main">
-                <img height="33" width="33" class="logo-dark" alt="Dark Logo" src="{{asset('be')}}/assets/images/logo-md.png">
-                <h3 class="text-white text-opacity-80 mb-0 lh-base fw-semibold">Mirbal</h3>
-            </a>
-            <button type="button" id="sidebarDefaultArrow" class="btn btn-sm p-0 fs-4 ms-auto float-end d-none icon-hover-btn text-white text-opacity-60 d-none"><i class="ri-arrow-right-double-line"></i></button>
-            <!--end::Brand Image-->
-        </div>
-        <nav class="pe-app-sidebar-menu nav nav-pills" data-simplebar id="sidebar-simplebar">
-            <div class="d-flex align-items-start flex-column w-100">
-                <ul class="pe-main-menu list-unstyled">
-                    <!-- Main Menu -->
-                    <li class="pe-menu-title">Main</li>
-                    <li class="pe-slide pe-has-sub">
-                        <a href="#collapseDashboards" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="collapseDashboards" onclick="toggleCollapse('collapseAuth', this)">
-                            <i class="uil uil-tachometer-fast-alt pe-nav-icon"></i>
-                            <span class="pe-nav-content">Dashboards</span>
-                        </a>
-                    </li>
-                    <li class="pe-menu-title">Apps</li>
+    <div class="pe-app-sidebar-logo px-5 d-flex align-items-center position-relative">
+        <!--begin::Brand Image-->
+        <a href="index.html" class="d-flex gap-2 logo-main">
+            <img height="33" width="33" class="logo-dark" alt="Dark Logo"
+                src="{{ asset('be') }}/assets/images/logo-md.png">
+            <h3 class="text-white text-opacity-80 mb-0 lh-base fw-semibold">Mirbal</h3>
+        </a>
+        <button type="button" id="sidebarDefaultArrow"
+            class="btn btn-sm p-0 fs-4 ms-auto float-end d-none icon-hover-btn text-white text-opacity-60 d-none"><i
+                class="ri-arrow-right-double-line"></i></button>
+        <!--end::Brand Image-->
+    </div>
+    <nav class="pe-app-sidebar-menu nav nav-pills" data-simplebar id="sidebar-simplebar">
+        <div class="d-flex align-items-start flex-column w-100">
+            <ul class="pe-main-menu list-unstyled">
+                <!-- Main Menu -->
+                <li class="pe-menu-title">Main</li>
+                <li class="pe-slide pe-has-sub">
+                    <a href="#collapseDashboards" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
+                        aria-controls="collapseDashboards" onclick="toggleCollapse('collapseAuth', this)">
+                        <i class="uil uil-tachometer-fast-alt pe-nav-icon"></i>
+                        <span class="pe-nav-content">Dashboards</span>
+                    </a>
+                </li>
+                <li class="pe-menu-title">Apps</li>
 
-                    {{-- Chat menu (and its whole "Pengaturan" sub-tree) only
+                {{-- Chat menu (and its whole "Pengaturan" sub-tree) only
                          shown while the user has at least one active,
                          not-yet-expired package — same rule as the routes
                          underneath it (Route::prefix('chat')->middleware(
@@ -30,17 +34,19 @@
                          AppServiceProvider::boot() since this partial is
                          shared across every dashboard page, not rendered
                          by a single controller. --}}
-                    {{-- Per-role menu filter — null means unrestricted
+                {{-- Per-role menu filter — null means unrestricted
                          (owner/superadmin/no company context), a
                          Collection of route_names means "only these".
                          See AppServiceProvider's view composer and
                          App\Models\CompanyRoleMenu. --}}
-                    @php
-                        $canSeeChatMenu = fn (string $routeName) => $allowedChatRouteNames === null || $allowedChatRouteNames->contains($routeName);
-                    @endphp
-                    @if ($hasActivePackage)
+                @php
+                    $canSeeChatMenu = fn(string $routeName) => $allowedChatRouteNames === null ||
+                        $allowedChatRouteNames->contains($routeName);
+                @endphp
+                @if ($hasActivePackage)
                     <li class="pe-slide pe-has-sub">
-                        <a href="#collapseChat" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="collapseApplications">
+                        <a href="#collapseChat" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
+                            aria-controls="collapseApplications">
                             <i class="uil uil-apps pe-nav-icon"></i>
                             <span class="pe-nav-content">Chat</span>
                             <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
@@ -53,161 +59,188 @@
                                 </a>
                             </li> --}}
                             @if ($canSeeChatMenu('chat.connect-device.index'))
-                            <li class="pe-slide-item">
-                                <a href="{{ route('chat.connect-device.index') }}" class="pe-nav-link">
-                                    Device / Inbox
-                                </a>
-                            </li>
+                                <li class="pe-slide-item">
+                                    <a href="{{ route('chat.connect-device.index') }}" class="pe-nav-link">
+                                        Device / Inbox
+                                    </a>
+                                </li>
                             @endif
 
+                            {{-- "Pesan" moved up one level (used to sit under
+                                     Chat > Pengaturan > Pesan) so it's now
+                                     Chat > Pesan directly. This <li> itself is
+                                     intentionally NOT wrapped in its own
+                                     $canSeeChatMenu(...) check — same as every
+                                     other submenu group here (e.g. "Pengaturan"
+                                     below) — because it has no single route of
+                                     its own to test; visibility is decided
+                                     per-item by the checks already on each
+                                     child link, exactly like before the move. --}}
                             <li class="pe-slide-item pe-has-sub">
-                                <a href="#collapsePengaturanChat" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="collapseSocialMedia">
-                                    <span class="pe-nav-sub-content">Pengaturan</span>
+                                <a href="#collapseMenuLavels2" class="pe-nav-link" data-bs-toggle="collapse"
+                                    aria-expanded="false" aria-controls="collapseMenuLavels2">
+                                    <span class="pe-nav-sub-content">Pesan</span>
                                     <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
                                     <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
                                 </a>
-                                <ul class="pe-slide-menu collapse" id="collapsePengaturanChat">
-                                    <li class="pe-slide-item pe-has-sub">
-                                        <a href="#collapseFriends" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="collapseFriends">
-                                            <span class="pe-nav-sub-content">Pesan</span>
-                                            <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
-                                            <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
-                                        </a>
-                                        <ul class="pe-slide-menu collapse" id="collapseFriends">
-                                            @if ($canSeeChatMenu('chat.message-schedules.index'))
-                                            <li class="pe-slide-item">
-                                                <a href="{{ route('chat.message-schedules.index') }}" class="pe-nav-link">
-                                                    Pesan Terjadwal
-                                                </a>
-                                            </li>
-                                            @endif
-                                            @if ($canSeeChatMenu('chat.message-templates.index'))
-                                            <li class="pe-slide-item">
-                                                <a href="{{ route('chat.message-templates.index') }}" class="pe-nav-link">
-                                                    WA Template
-                                                </a>
-                                            </li>
-                                            @endif
-                                            @if ($canSeeChatMenu('chat.message-auto-replies.index'))
-                                            <li class="pe-slide-item">
-                                                <a href="{{ route('chat.message-auto-replies.index') }}" class="pe-nav-link">
-                                                    Auto Reply (Kata Kunci)
-                                                </a>
-                                            </li>
-                                            @endif
-                                            @if ($canSeeChatMenu('chat.message-quick-replies.index'))
-                                            <li class="pe-slide-item">
-                                                <a href="{{ route('chat.message-quick-replies.index') }}" class="pe-nav-link">
-                                                    Balasan Cepat
-                                                </a>
-                                            </li>
-                                            @endif
-                                            @if ($canSeeChatMenu('chat.ai-bots.index'))
-                                            <li class="pe-slide-item">
-                                                <a href="{{ route('chat.ai-bots.index') }}" class="pe-nav-link">
-                                                    AI Bot
-                                                </a>
-                                            </li>
-                                            @endif
-                                        </ul>
-                                    </li>
-                                    <li class="pe-slide-item pe-has-sub">
-                                        <a href="#collapseBukuTelephone" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="collapseMessages">
-                                            <span class="pe-nav-sub-content">Buku Telepon</span>
-                                            <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
-                                            <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
-                                        </a>
-                                        <ul class="pe-slide-menu collapse" id="collapseBukuTelephone">
-                                            @if ($canSeeChatMenu('chat.contacts.index'))
-                                            <li class="pe-slide-item">
-                                                <a href="{{ route('chat.contacts.index') }}" class="pe-nav-link">
-                                                    Kontak
-                                                </a>
-                                            </li>
-                                            @endif
-                                            <li class="pe-slide-item">
-                                                <a href="apps-social-compose.html" class="pe-nav-link">
-                                                    Kelompok
-                                                </a>
-                                            </li>
-                                            <li class="pe-slide-item">
-                                                <a href="apps-social-view.html" class="pe-nav-link">
-                                                    WA Group
-                                                </a>
-                                            </li>
-                                            <li class="pe-slide-item">
-                                                <a href="apps-social-view.html" class="pe-nav-link">
-                                                    Google Contact
-                                                </a>
-                                            </li>
-                                             <li class="pe-slide-item">
-                                                <a href="apps-social-view.html" class="pe-nav-link">
-                                                    Google CSV
-                                                </a>
-                                            </li>
-                                             <li class="pe-slide-item">
-                                                <a href="apps-social-view.html" class="pe-nav-link">
-                                                    Blacklist
-                                                </a>
-                                            </li>
-                                        </ul>
-                                    </li>
-                                    <li class="pe-slide-item pe-has-sub">
-                                        <a href="#collapseMessages" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="collapseMessages">
-                                            <span class="pe-nav-sub-content">Laporan</span>
-                                            <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
-                                            <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
-                                        </a>
-                                        <ul class="pe-slide-menu collapse" id="collapseMessages">
-                                            @if ($canSeeChatMenu('chat.labels.index'))
-                                            <li class="pe-slide-item">
-                                                <a href="{{ route('chat.labels.index') }}" class="pe-nav-link">
-                                                    Label
-                                                </a>
-                                            </li>
-                                            @endif
-                                            <li class="pe-slide-item">
-                                                <a href="apps-social-compose.html" class="pe-nav-link">
-                                                    Pesan
-                                                </a>
-                                            </li>
-                                            <li class="pe-slide-item">
-                                                <a href="apps-social-view.html" class="pe-nav-link">
-                                                    Pending
-                                                </a>
-                                            </li>
-                                            <li class="pe-slide-item">
-                                                <a href="apps-social-view.html" class="pe-nav-link">
-                                                    Tiket
-                                                </a>
-                                            </li>
-                                             <li class="pe-slide-item">
-                                                <a href="apps-social-view.html" class="pe-nav-link">
-                                                    Pengulangan
-                                                </a>
-                                            </li>
-                                             <li class="pe-slide-item">
-                                                <a href="apps-social-view.html" class="pe-nav-link">
-                                                    Agent
-                                                </a>
-                                            </li>
-                                             <li class="pe-slide-item">
-                                                <a href="apps-social-view.html" class="pe-nav-link">
-                                                    Statik
-                                                </a>
-                                            </li>
-                                        </ul>
-                                    </li>
+                                <ul class="pe-slide-menu collapse" id="collapseMenuLavels2">
+                                    @if ($canSeeChatMenu('chat.message-schedules.index'))
+                                        <li class="pe-slide-item">
+                                            <a href="{{ route('chat.message-schedules.index') }}"
+                                                class="pe-nav-link">
+                                                Pesan Terjadwal
+                                            </a>
+                                        </li>
+                                    @endif
+                                    @if ($canSeeChatMenu('chat.message-templates.index'))
+                                        <li class="pe-slide-item">
+                                            <a href="{{ route('chat.message-templates.index') }}"
+                                                class="pe-nav-link">
+                                                WA Template
+                                            </a>
+                                        </li>
+                                        <li class="pe-slide-item">
+                                            <a href="{{ route('chat.category-templates.index') }}"
+                                                class="pe-nav-link">
+                                                Kategori Template
+                                            </a>
+                                        </li>
+                                    @endif
+                                    @if ($canSeeChatMenu('chat.message-auto-replies.index'))
+                                        <li class="pe-slide-item">
+                                            <a href="{{ route('chat.message-auto-replies.index') }}"
+                                                class="pe-nav-link">
+                                                Auto Reply (Kata Kunci)
+                                            </a>
+                                        </li>
+                                    @endif
+                                    @if ($canSeeChatMenu('chat.message-quick-replies.index'))
+                                        <li class="pe-slide-item">
+                                            <a href="{{ route('chat.message-quick-replies.index') }}"
+                                                class="pe-nav-link">
+                                                Balasan Cepat
+                                            </a>
+                                        </li>
+                                    @endif
+                                    @if ($canSeeChatMenu('chat.ai-bots.index'))
+                                        <li class="pe-slide-item">
+                                            <a href="{{ route('chat.ai-bots.index') }}" class="pe-nav-link">
+                                                AI Bot
+                                            </a>
+                                        </li>
+                                    @endif
+                                    {{-- "Label" moved here from the now-removed
+                                             Pengaturan > Laporan submenu — that
+                                             submenu was almost entirely dead
+                                             links, so rather than keep an
+                                             empty "Laporan" shell around just
+                                             for this one working item, it's
+                                             folded straight into "Pesan". --}}
+                                    @if ($canSeeChatMenu('chat.labels.index'))
+                                        <li class="pe-slide-item">
+                                            <a href="{{ route('chat.labels.index') }}" class="pe-nav-link">
+                                                Label
+                                            </a>
+                                        </li>
+                                    @endif
+                                </ul>
+                            </li>
+
+                            {{-- "Buku Telepon" raised to sit directly under
+                                     Chat, alongside "Pesan" — used to be nested
+                                     two levels deep under Pengaturan. Kontak
+                                     here is the manually managed/imported
+                                     address book (App\Models\WaPhoneBook);
+                                     "Riwayat Kontak" below it is the separate,
+                                     auto-populated CRM book that already
+                                     existed (App\Models\WaContact) — kept
+                                     under its own label so the two data
+                                     sources aren't confused for one thing. --}}
+                            <li class="pe-slide-item pe-has-sub">
+                                <a href="#collapseBukuTelephone" class="pe-nav-link" data-bs-toggle="collapse"
+                                    aria-expanded="false" aria-controls="collapseBukuTelephone">
+                                    <span class="pe-nav-sub-content">Buku Telepon</span>
+                                    <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
+                                    <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
+                                </a>
+                                <ul class="pe-slide-menu collapse" id="collapseBukuTelephone">
+                                    @if ($canSeeChatMenu('chat.phone-books.index'))
+                                        <li class="pe-slide-item">
+                                            <a href="{{ route('chat.phone-books.index') }}" class="pe-nav-link">
+                                                Kontak
+                                            </a>
+                                        </li>
+                                    @endif
+                                    @if ($canSeeChatMenu('chat.contacts.index'))
+                                        <li class="pe-slide-item">
+                                            <a href="{{ route('chat.contacts.index') }}" class="pe-nav-link">
+                                                Riwayat Kontak
+                                            </a>
+                                        </li>
+                                    @endif
+                                    @if ($canSeeChatMenu('chat.category-phone-books.index'))
+                                        <li class="pe-slide-item">
+                                            <a href="{{ route('chat.category-phone-books.index') }}" class="pe-nav-link">
+                                                Kelompok
+                                            </a>
+                                        </li>
+                                    @endif
+                                    @if ($canSeeChatMenu('chat.wa-groups.index'))
+                                        <li class="pe-slide-item">
+                                            <a href="{{ route('chat.wa-groups.index') }}" class="pe-nav-link">
+                                                WA Group
+                                            </a>
+                                        </li>
+                                    @endif
+                                    @if ($canSeeChatMenu('chat.google-contacts.index'))
+                                        <li class="pe-slide-item">
+                                            <a href="{{ route('chat.google-contacts.index') }}" class="pe-nav-link">
+                                                Google Contact
+                                            </a>
+                                        </li>
+                                    @endif
+                                    @if ($canSeeChatMenu('chat.phone-books.index'))
+                                        <li class="pe-slide-item">
+                                            <a href="{{ route('chat.phone-books.index', ['blacklist' => 1]) }}" class="pe-nav-link">
+                                                Blacklist
+                                            </a>
+                                        </li>
+                                    @endif
+                                </ul>
+                            </li>
+
+                            {{-- "Third Party" — sibling of "Buku Telepon", holds
+                                     integrations with outside systems. Google Form
+                                     (App\Models\WaFormIntegration) is the first
+                                     entry; built as its own table/menu rather than
+                                     a type column so future third-party types (a
+                                     generic webhook, Typeform, etc.) can be added
+                                     here without restructuring. --}}
+                            <li class="pe-slide-item pe-has-sub">
+                                <a href="#collapseThirdParty" class="pe-nav-link" data-bs-toggle="collapse"
+                                    aria-expanded="false" aria-controls="collapseThirdParty">
+                                    <span class="pe-nav-sub-content">Third Party</span>
+                                    <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
+                                    <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
+                                </a>
+                                <ul class="pe-slide-menu collapse" id="collapseThirdParty">
+                                    @if ($canSeeChatMenu('chat.third-party.google-form.index'))
+                                        <li class="pe-slide-item">
+                                            <a href="{{ route('chat.third-party.google-form.index') }}" class="pe-nav-link">
+                                                Google Form
+                                            </a>
+                                        </li>
+                                    @endif
                                 </ul>
                             </li>
                         </ul>
                     </li>
-                    @endif
+                @endif
 
-                   @if(auth()->check() && auth()->user()->user_type === 'SUPERADMIN')
-
+                @if (auth()->check() && auth()->user()->user_type === 'SUPERADMIN')
                     <li class="pe-slide pe-has-sub">
-                        <a href="#collapseUsers" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="collapseDashboards" onclick="toggleCollapse('collapseAuth', this)">
+                        <a href="#collapseUsers" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
+                            aria-controls="collapseDashboards" onclick="toggleCollapse('collapseAuth', this)">
                             <i class="uil uil-apps pe-nav-icon"></i>
                             <span class="pe-nav-content">Users</span>
                             <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
@@ -220,7 +253,7 @@
                                 </a>
                             </li>
                             <li class="pe-slide-item">
-                                <a href="{{route('wallet.index')}}" class="pe-nav-link">
+                                <a href="{{ route('wallet.index') }}" class="pe-nav-link">
                                     Wallets
                                 </a>
                             </li>
@@ -247,7 +280,9 @@
                         </ul>
                     </li>
                     <li class="pe-slide pe-has-sub">
-                        <a href="#collapsePackages" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="collapseDashboards" onclick="toggleCollapse('collapseAuth', this)">
+                        <a href="#collapsePackages" class="pe-nav-link" data-bs-toggle="collapse"
+                            aria-expanded="false" aria-controls="collapseDashboards"
+                            onclick="toggleCollapse('collapseAuth', this)">
                             <i class="uil uil-apps pe-nav-icon"></i>
                             <span class="pe-nav-content">Packages</span>
                             <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
@@ -286,9 +321,76 @@
                             </li>
                         </ul>
                     </li>
+                    <li class="pe-slide pe-has-sub">
+                        <a href="#collapseWebContent" class="pe-nav-link" data-bs-toggle="collapse"
+                            aria-expanded="false" aria-controls="collapseDashboards"
+                            onclick="toggleCollapse('collapseAuth', this)">
+                            <i class="uil uil-globe pe-nav-icon"></i>
+                            <span class="pe-nav-content">Web Content</span>
+                            <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
+                            <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
+                        </a>
+                        <ul class="pe-slide-menu collapse" id="collapseWebContent">
+                            <li class="pe-slide-item">
+                                <a href="{{ route('web.meta-tags.index') }}" class="pe-nav-link">
+                                    Meta Tags
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('web.category-articles.index') }}" class="pe-nav-link">
+                                    Kategori Artikel
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('web.articles.index') }}" class="pe-nav-link">
+                                    Artikel
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('web.faqs.index') }}" class="pe-nav-link">
+                                    FAQ
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('web.category-videos.index') }}" class="pe-nav-link">
+                                    Kategori Video
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('web.videos.index') }}" class="pe-nav-link">
+                                    Video
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
 
                     <li class="pe-slide pe-has-sub">
-                        <a href="#collapseAiBotCatalog" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="collapseDashboards" onclick="toggleCollapse('collapseAuth', this)">
+                        <a href="#collapseWaTemplateReview" class="pe-nav-link" data-bs-toggle="collapse"
+                            aria-expanded="false" aria-controls="collapseDashboards"
+                            onclick="toggleCollapse('collapseAuth', this)">
+                            <i class="uil uil-clipboard-notes pe-nav-icon"></i>
+                            <span class="pe-nav-content">Review Template WA</span>
+                            <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
+                            <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
+                        </a>
+                        <ul class="pe-slide-menu collapse" id="collapseWaTemplateReview">
+                            <li class="pe-slide-item">
+                                <a href="{{ route('wa-templates.index') }}" class="pe-nav-link">
+                                    Kategori Template
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('wa-templates.uncategorized') }}" class="pe-nav-link">
+                                    Template Tanpa Kategori
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+
+                    <li class="pe-slide pe-has-sub">
+                        <a href="#collapseAiBotCatalog" class="pe-nav-link" data-bs-toggle="collapse"
+                            aria-expanded="false" aria-controls="collapseDashboards"
+                            onclick="toggleCollapse('collapseAuth', this)">
                             <i class="uil uil-robot pe-nav-icon"></i>
                             <span class="pe-nav-content">AI Bot</span>
                             <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
@@ -309,7 +411,9 @@
                     </li>
 
                     <li class="pe-slide pe-has-sub">
-                        <a href="#collapseCompany" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="collapseDashboards" onclick="toggleCollapse('collapseAuth', this)">
+                        <a href="#collapseCompany" class="pe-nav-link" data-bs-toggle="collapse"
+                            aria-expanded="false" aria-controls="collapseDashboards"
+                            onclick="toggleCollapse('collapseAuth', this)">
                             <i class="uil uil-apps pe-nav-icon"></i>
                             <span class="pe-nav-content">Company</span>
                             <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
@@ -350,7 +454,9 @@
                     </li>
 
                     <li class="pe-slide pe-has-sub">
-                        <a href="#collapseDeposits" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="collapseDashboards" onclick="toggleCollapse('collapseAuth', this)">
+                        <a href="#collapseDeposits" class="pe-nav-link" data-bs-toggle="collapse"
+                            aria-expanded="false" aria-controls="collapseDashboards"
+                            onclick="toggleCollapse('collapseAuth', this)">
                             <i class="uil uil-apps pe-nav-icon"></i>
                             <span class="pe-nav-content">Deposits</span>
                             <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
@@ -377,12 +483,12 @@
                                     Ledger Entries
                                 </a>
                             </li>
-                             <li class="pe-slide-item">
+                            <li class="pe-slide-item">
                                 <a href="{{ route('ledger-transaction.index') }}" class="pe-nav-link">
                                     Ledger Transaction
                                 </a>
                             </li>
-                             <li class="pe-slide-item">
+                            <li class="pe-slide-item">
                                 <a href="{{ route('payment-transactions.index') }}" class="pe-nav-link">
                                     Payment Transaction
                                 </a>
@@ -396,7 +502,9 @@
                     </li>
 
                     <li class="pe-slide pe-has-sub">
-                        <a href="#collapseVouchers" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="collapseDashboards" onclick="toggleCollapse('collapseAuth', this)">
+                        <a href="#collapseVouchers" class="pe-nav-link" data-bs-toggle="collapse"
+                            aria-expanded="false" aria-controls="collapseDashboards"
+                            onclick="toggleCollapse('collapseAuth', this)">
                             <i class="uil uil-apps pe-nav-icon"></i>
                             <span class="pe-nav-content">Vouchers</span>
                             <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
@@ -427,7 +535,9 @@
                     </li>
 
                     <li class="pe-slide pe-has-sub">
-                        <a href="#collapseReferrals" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="collapseDashboards" onclick="toggleCollapse('collapseAuth', this)">
+                        <a href="#collapseReferrals" class="pe-nav-link" data-bs-toggle="collapse"
+                            aria-expanded="false" aria-controls="collapseDashboards"
+                            onclick="toggleCollapse('collapseAuth', this)">
                             <i class="uil uil-apps pe-nav-icon"></i>
                             <span class="pe-nav-content">Referrals</span>
                             <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
@@ -448,7 +558,9 @@
                     </li>
 
                     <li class="pe-slide pe-has-sub">
-                        <a href="#collapseHelpCenters" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="collapseDashboards" onclick="toggleCollapse('collapseAuth', this)">
+                        <a href="#collapseHelpCenters" class="pe-nav-link" data-bs-toggle="collapse"
+                            aria-expanded="false" aria-controls="collapseDashboards"
+                            onclick="toggleCollapse('collapseAuth', this)">
                             <i class="uil uil-apps pe-nav-icon"></i>
                             <span class="pe-nav-content">Help Center</span>
                             <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
@@ -467,24 +579,24 @@
                             </li>
                         </ul>
                     </li>
-                   @endif
-                    <li class="pe-slide pe-has-sub">
-                        {{-- Was a dead static link to a demo theme page
+                @endif
+                <li class="pe-slide pe-has-sub">
+                    {{-- Was a dead static link to a demo theme page
                              (auth-signout.html) — clicking it did nothing.
                              logout is a POST route (see routes/auth.php),
                              so this needs a real form; onclick submits it
                              so the link keeps looking/behaving like every
                              other sidebar item. --}}
-                        <form id="logout-form" method="POST" action="{{ route('logout') }}" class="d-none">
-                            @csrf
-                        </form>
-                        <a href="{{ route('logout') }}" class="pe-nav-link"
-                            onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
-                            <i class="uil uil-sign-out-alt pe-nav-icon"></i>
-                            <span class="pe-nav-content">Log Out</span>
-                        </a>
-                    </li>
-                </ul>
-            </div>
-        </nav>
-    </aside>
+                    <form id="logout-form" method="POST" action="{{ route('logout') }}" class="d-none">
+                        @csrf
+                    </form>
+                    <a href="{{ route('logout') }}" class="pe-nav-link"
+                        onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
+                        <i class="uil uil-sign-out-alt pe-nav-icon"></i>
+                        <span class="pe-nav-content">Log Out</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+</aside>

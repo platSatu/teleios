@@ -12,23 +12,44 @@
         </a>
     </div>
 
-    <div class="row justify-content-center">
-        <div class="col-lg-8">
-            <div class="card border-0 shadow-sm">
-                <div class="card-body">
-                    <form action="{{ route('chat.message-templates.update', $template->id) }}" method="POST">
-                        @csrf
-                        @method('PUT')
-                        @include('chat.message-templates._form', ['template' => $template])
+    @if ($template->review_status === 'rejected' && $template->rejection_reason)
+        <div class="alert alert-danger">
+            <strong>Ditolak superadmin:</strong> {{ $template->rejection_reason }}
+        </div>
+    @elseif ($template->review_status === 'in_review')
+        <div class="alert alert-warning">Template ini sedang menunggu review superadmin.</div>
+    @endif
 
-                        <div class="d-flex gap-2">
-                            <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
-                            <a href="{{ route('chat.message-templates.index') }}" class="btn btn-light">Batal</a>
-                        </div>
-                    </form>
-                </div>
-            </div>
+    @if (session('success'))
+        <div class="alert alert-success">{{ session('success') }}</div>
+    @endif
+    @if (session('error'))
+        <div class="alert alert-danger">{{ session('error') }}</div>
+    @endif
+    @if ($errors->any())
+        <div class="alert alert-danger">
+            <div class="fw-semibold mb-1">Periksa kembali isian berikut:</div>
+            <ul class="mb-0">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
+    <div class="row">
+        <div class="col-lg-7">
+            <form action="{{ route('chat.message-templates.update', $template->id) }}" method="POST" enctype="multipart/form-data">
+                @csrf
+                @method('PUT')
+                @include('chat.message-templates._form', ['template' => $template])
+            </form>
+        </div>
+        <div class="col-lg-5 mt-4 mt-lg-0">
+            @include('chat.message-templates._preview')
         </div>
     </div>
 </div>
+
+@include('chat.partials.device-select-script')
 @endsection

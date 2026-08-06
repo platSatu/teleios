@@ -54,7 +54,18 @@ class DepositController extends Controller
 
         $users = User::orderBy('name')->get(['id', 'name', 'email']);
 
-        return view('superadmin.deposit.index', compact('deposits', 'users'));
+        // Summary cards above the table — fixed to the WHOLE dataset
+        // (not $request's search/status/user filters), same "at a
+        // glance dashboard, not numbers that shift mid-search" rule as
+        // Chat\MessageScheduleController::index()'s $stats.
+        $stats = [
+            'total' => Deposit::count(),
+            'success_amount' => Deposit::where('status', 'SUCCESS')->sum('amount'),
+            'pending' => Deposit::where('status', 'PENDING')->count(),
+            'failed' => Deposit::where('status', 'FAILED')->count(),
+        ];
+
+        return view('superadmin.deposit.index', compact('deposits', 'users', 'stats'));
     }
 
     public function show(string $id): View

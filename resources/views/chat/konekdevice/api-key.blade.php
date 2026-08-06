@@ -72,28 +72,20 @@
 
                         <hr class="my-3">
 
+                        {{-- The old "Feedback dari Google Form ke WhatsApp" script
+                             generator that used to live here has moved to its own
+                             proper integration under Chat > Third Party > Google
+                             Form (App\Models\WaFormIntegration) — a real saved
+                             config (name, target-number field, WA Template reply)
+                             instead of a one-off client-side script tied to
+                             whatever was typed into this page at the time. --}}
                         <p class="fw-semibold mb-1">Feedback dari Google Form ke WhatsApp</p>
-                        <p class="text-muted fs-12 mb-2">
-                            Tempel script di bawah ke Google Form kamu (Extensions &gt; Apps Script), lalu pasang trigger
-                            "On form submit" — setiap jawaban baru otomatis dikirim ke nomor WhatsApp di bawah lewat device ini.
+                        <p class="text-muted fs-12 mb-0">
+                            Fitur ini sudah pindah ke menu <strong>Third Party &rarr; Google Form</strong> di sidebar
+                            Chat — di sana kamu bisa membuat integrasi bernama, memilih WA Template sebagai balasan,
+                            dan melihat log setiap submission yang masuk.
+                            <a href="{{ route('chat.third-party.google-form.index') }}">Buka Third Party &rarr; Google Form</a>
                         </p>
-
-                        <div class="mb-2">
-                            <label class="form-label fw-semibold mb-1">Nomor WhatsApp Tujuan Feedback</label>
-                            <input type="text" class="form-control form-control-sm" id="wa-api-key-feedback-target"
-                                placeholder="628xxxxxxxxxx" value="{{ $devicePhone }}">
-                        </div>
-
-                        <div class="mb-1">
-                            <label class="form-label fw-semibold mb-1">Script Google Apps Script</label>
-                            <textarea class="form-control form-control-sm" id="wa-api-key-feedback-script" rows="10"
-                                readonly style="font-family: monospace; font-size: 11px;"></textarea>
-                        </div>
-                        <div class="text-end">
-                            <button type="button" class="btn btn-outline-secondary btn-sm wa-copy-btn" data-target="wa-api-key-feedback-script">
-                                <i class="ri-file-copy-line"></i> Salin Script
-                            </button>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -126,70 +118,11 @@
             const apiKeyTokenInput = document.getElementById('wa-api-key-token');
             const apiKeySecretInput = document.getElementById('wa-api-key-secret');
             const apiKeyLastUsedEl = document.getElementById('wa-api-key-last-used');
-            const apiKeyFeedbackTargetInput = document.getElementById('wa-api-key-feedback-target');
-            const apiKeyFeedbackScriptTextarea = document.getElementById('wa-api-key-feedback-script');
 
             function apiKeyShowState(state) {
                 apiKeyLoading.classList.toggle('d-none', state !== 'loading');
                 apiKeyEmpty.classList.toggle('d-none', state !== 'empty');
                 apiKeyDetails.classList.toggle('d-none', state !== 'details');
-            }
-
-            // Builds the ready-to-paste Google Apps Script for "Feedback dari
-            // Google Form ke WhatsApp" — POSTs to the SAME public endpoint any
-            // third party uses (App\Http\Controllers\Api\
-            // WaApiSendMessageController, X-WA-Token/X-WA-Secret headers),
-            // just from Apps Script's onFormSubmit trigger instead of another
-            // backend. Regenerated live whenever the token/secret/target
-            // number change so it's always copy-paste ready.
-            function buildFeedbackScript() {
-                const apiUrl = (apiKeyHostInput.value || '').replace(/\/+$/, '') + '/api/wa-api/v1/send-message';
-                const target = apiKeyFeedbackTargetInput.value.trim() || '628xxxxxxxxxx';
-
-                return [
-                    'function onFormSubmit(e) {',
-                    '  var CONFIG = {',
-                    '    apiUrl: ' + JSON.stringify(apiUrl) + ',',
-                    '    waToken: ' + JSON.stringify(apiKeyTokenInput.value || '') + ',',
-                    '    waSecret: ' + JSON.stringify(apiKeySecretInput.value || '') + ',',
-                    '    targetNumber: ' + JSON.stringify(target),
-                    '  };',
-                    '',
-                    '  var lines = ["Feedback Baru:", ""];',
-                    '  e.response.getItemResponses().forEach(function (item) {',
-                    '    lines.push(item.getItem().getTitle() + ": " + item.getResponse());',
-                    '  });',
-                    '',
-                    '  var options = {',
-                    '    method: "post",',
-                    '    contentType: "application/json",',
-                    '    headers: {',
-                    '      "X-WA-Token": CONFIG.waToken,',
-                    '      "X-WA-Secret": CONFIG.waSecret',
-                    '    },',
-                    '    payload: JSON.stringify({ to: CONFIG.targetNumber, message: lines.join("\\n") }),',
-                    '    muteHttpExceptions: true',
-                    '  };',
-                    '',
-                    '  var response = UrlFetchApp.fetch(CONFIG.apiUrl, options);',
-                    '  // Logged so a failed send is visible in Apps Script\'s',
-                    '  // "Executions" panel (View > Executions) instead of failing',
-                    '  // silently — muteHttpExceptions above stops a non-2xx',
-                    '  // response from throwing, so without this log line there',
-                    '  // would be no way to tell a send failed at all.',
-                    '  Logger.log("WA API response %s: %s", response.getResponseCode(), response.getContentText());',
-                    '}',
-                ].join('\n');
-            }
-
-            function refreshFeedbackScript() {
-                if (apiKeyFeedbackScriptTextarea) {
-                    apiKeyFeedbackScriptTextarea.value = buildFeedbackScript();
-                }
-            }
-
-            if (apiKeyFeedbackTargetInput) {
-                apiKeyFeedbackTargetInput.addEventListener('input', refreshFeedbackScript);
             }
 
             function renderApiKey(apiKey) {
@@ -202,11 +135,6 @@
                 apiKeyTokenInput.value = apiKey.token || '';
                 apiKeySecretInput.value = apiKey.secret_key || '';
                 apiKeyLastUsedEl.textContent = apiKey.last_used_at || 'Belum pernah dipakai';
-
-                if (apiKeyFeedbackTargetInput && !apiKeyFeedbackTargetInput.value) {
-                    apiKeyFeedbackTargetInput.value = devicePhone || '';
-                }
-                refreshFeedbackScript();
 
                 apiKeyShowState('details');
             }

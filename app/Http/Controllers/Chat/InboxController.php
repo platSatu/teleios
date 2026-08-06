@@ -8,6 +8,8 @@ use App\Models\WaChatLabel;
 use App\Models\WaChatLabelAssignment;
 use App\Models\WaChatNote;
 use App\Models\WaContact;
+use App\Models\WaMessageQuickReply;
+use App\Models\WaMessageTemplate;
 use App\Services\Chat\InboxService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -420,6 +422,71 @@ class InboxController extends Controller
     private function presentUsers($users): array
     {
         return $users->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values()->all();
+    }
+
+    /**
+     * AJAX: assignee name for every contact the company has an
+     * assignment on, keyed by phone — powers the small "assigned to"
+     * badge on chat list rows. Deliberately one query for the whole
+     * list (not one lookup per chat_jid) since the list can run to a
+     * couple hundred rows and this is polled on the same cadence as
+     * chats() — see the perf notes on renderChatList() in inbox.blade.php
+     * for why per-row network calls are exactly what this avoids.
+     */
+    public function assignments(Request $request, string $device): JsonResponse
+    {
+        $context = $this->companyContext($request);
+
+        $contacts = WaContact::where('company_id', $context->company->id)
+            ->whereNotNull('assigned_to')
+            ->with('assignee:id,name')
+            ->get(['id', 'phone', 'assigned_to']);
+
+        return response()->json([
+            'assignments' => $contacts->mapWithKeys(fn (WaContact $c) => [
+                $c->phone => $c->assignee?->name,
+            ])->filter()->all(),
+        ]);
+    }
+
+    /**
+     * AJAX: this device's active "Balasan Cepat" (quick replies), for
+     * the picker behind the lightning-bolt button / "/" shortcut in the
+     * inbox's message box — see App\Models\WaMessageQuickReply and
+     * Chat\MessageQuickReplyController (where these are actually
+     * managed; this endpoint only ever reads).
+     */
+    public function quickReplies(Request $request, string $device): JsonResponse
+    {
+        $company = $this->ownedCompanyOrFail($request);
+
+        $quickReplies = WaMessageQuickReply::where('company_id', $company->id)
+            ->where('device_id', $device)
+            ->where('status', 'active')
+            ->orderBy('title')
+            ->get(['id', 'title', 'shortcut', 'category', 'message_content']);
+
+        return response()->json(['quick_replies' => $quickReplies]);
+    }
+
+    /**
+     * AJAX: this company's active WA Templates, for the picker behind
+     * the template button in the inbox's message box — see
+     * App\Models\WaMessageTemplate and Chat\MessageTemplateController
+     * (where these are actually managed; this endpoint only ever reads).
+     * Company-wide, not per-device (unlike quickReplies() above) —
+     * matches how wa_message_templates itself has no device_id column.
+     */
+    public function templates(Request $request, string $device): JsonResponse
+    {
+        $company = $this->ownedCompanyOrFail($request);
+
+        $templates = WaMessageTemplate::where('company_id', $company->id)
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get(['id', 'name', 'template']);
+
+        return response()->json(['templates' => $templates]);
     }
 
     /**

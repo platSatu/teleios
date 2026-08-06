@@ -1,0 +1,25 @@
+<svg width="1000" height="340" viewBox="0 0 1000 340" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="markGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F0897C"/>
+      <stop offset="55%" stop-color="#E2604F"/>
+      <stop offset="100%" stop-color="#C4392E"/>
+    </linearGradient>
+  </defs>
+
+  <!-- "K" -->
+  <text x="100" y="250" font-family="Poppins, Arial, sans-serif" font-size="200" font-weight="700"
+        fill="#20242C" stroke="#20242C" stroke-width="5" paint-order="stroke fill">K</text>
+
+  <!-- the "o" itself, replaced by the mark: a ring (donut) sized/placed to
+       sit exactly where the real lowercase "o" would, at Poppins Bold's
+       actual x-height and advance width, so it reads inline as a letter,
+       not a logo bolted beside the word. -->
+  <circle cx="303.1" cy="192.7" r="63.7" fill="url(#markGrad)"/>
+  <circle cx="303.1" cy="192.7" r="18.5" fill="#FFFFFF"/>
+  <circle cx="350.9" cy="144.9" r="9" fill="#C4392E"/>
+
+  <!-- "nexa" -->
+  <text x="366.8" y="250" font-family="Poppins, Arial, sans-serif" font-size="200" font-weight="700"
+        fill="#20242C" stroke="#20242C" stroke-width="5" paint-order="stroke fill">nexa</text>
+</svg>

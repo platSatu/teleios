@@ -71,6 +71,19 @@ use App\Http\Controllers\Superadmin\HelpCenters\HelpCenterController as Superadm
 
 use App\Http\Controllers\User\HelpCenters\HelpCenterController as UserHelpCenterController;
 
+use App\Http\Controllers\Superadmin\Web\MetaTagController as WebMetaTagController;
+
+use App\Http\Controllers\Superadmin\Web\CategoryArticleController as WebCategoryArticleController;
+
+use App\Http\Controllers\Superadmin\Web\ArticleController as WebArticleController;
+
+use App\Http\Controllers\Superadmin\Web\FaqController as WebFaqController;
+
+use App\Http\Controllers\Superadmin\Web\CategoryVideoController as WebCategoryVideoController;
+
+use App\Http\Controllers\Superadmin\Web\VideoController as WebVideoController;
+use App\Http\Controllers\Superadmin\WaTemplateReviewController;
+
 
 
 // Aliased (not Superadmin\CompanyRoleController / CompanyRoleMenuController
@@ -89,9 +102,15 @@ use App\Http\Controllers\Chat\ConnectDeviceController;
 use App\Http\Controllers\Chat\WaApiKeyController;
 use App\Http\Controllers\Chat\ChatLabelController;
 use App\Http\Controllers\Chat\ContactController;
+use App\Http\Controllers\Chat\CategoryPhoneBookController;
+use App\Http\Controllers\Chat\PhoneBookController;
+use App\Http\Controllers\Chat\WaGroupController;
+use App\Http\Controllers\Chat\GoogleContactController;
+use App\Http\Controllers\Chat\GoogleFormIntegrationController;
 use App\Http\Controllers\Chat\InboxController;
 use App\Http\Controllers\Chat\MessageScheduleController;
 use App\Http\Controllers\Chat\MessageTemplateController;
+use App\Http\Controllers\Chat\CategoryTemplateController;
 use App\Http\Controllers\Chat\MessageAutoReplyController;
 use App\Http\Controllers\Chat\MessageQuickReplyController;
 use App\Http\Controllers\Chat\AiBotController;
@@ -161,6 +180,9 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::get('/chats/{jid}/media-list', 'mediaList')->name('inbox.media-list');
                 Route::get('/chats/{jid}/contact', 'contact')->name('inbox.contact');
                 Route::post('/chats/{jid}/contact/assign', 'assignContact')->name('inbox.contact.assign');
+                Route::get('/assignments', 'assignments')->name('inbox.assignments');
+                Route::get('/quick-replies', 'quickReplies')->name('inbox.quick-replies');
+                Route::get('/templates', 'templates')->name('inbox.templates');
             });
 
         Route::prefix('connect-device')
@@ -223,6 +245,17 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::delete('/{id}', 'destroy')->name('chat.message-templates.destroy');
             });
 
+        Route::prefix('category-templates')
+            ->controller(CategoryTemplateController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('chat.category-templates.index');
+                Route::get('/create', 'create')->name('chat.category-templates.create');
+                Route::post('/', 'store')->name('chat.category-templates.store');
+                Route::get('/{id}/edit', 'edit')->name('chat.category-templates.edit');
+                Route::put('/{id}', 'update')->name('chat.category-templates.update');
+                Route::delete('/{id}', 'destroy')->name('chat.category-templates.destroy');
+            });
+
         Route::prefix('chat-labels')
             ->controller(ChatLabelController::class)
             ->group(function () {
@@ -242,6 +275,73 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::get('/', 'index')->name('chat.contacts.index');
                 Route::get('/list', 'list')->name('chat.contacts.list');
                 Route::put('/{contact}', 'update')->name('chat.contacts.update');
+            });
+
+        // "Kelompok" — Buku Telepon groups. See
+        // App\Http\Controllers\Chat\CategoryPhoneBookController's docblock.
+        Route::prefix('category-phone-books')
+            ->controller(CategoryPhoneBookController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('chat.category-phone-books.index');
+                Route::get('/create', 'create')->name('chat.category-phone-books.create');
+                Route::post('/', 'store')->name('chat.category-phone-books.store');
+                Route::get('/{id}/edit', 'edit')->name('chat.category-phone-books.edit');
+                Route::put('/{id}', 'update')->name('chat.category-phone-books.update');
+                Route::delete('/{id}', 'destroy')->name('chat.category-phone-books.destroy');
+                Route::get('/import/template', 'importTemplate')->name('chat.category-phone-books.import-template');
+                Route::post('/import', 'import')
+                    ->middleware('throttle:10,1')
+                    ->name('chat.category-phone-books.import');
+            });
+
+        // "WA Group" — live, read-only browse of a device's WhatsApp
+        // groups. See App\Http\Controllers\Chat\WaGroupController's docblock.
+        Route::get('/wa-groups', [WaGroupController::class, 'index'])
+            ->name('chat.wa-groups.index');
+
+        // "Google Contact" — placeholder, see
+        // App\Http\Controllers\Chat\GoogleContactController's docblock.
+        Route::get('/google-contacts', [GoogleContactController::class, 'index'])
+            ->name('chat.google-contacts.index');
+
+        // "Buku Telepon" — the manually curated/imported phone book. See
+        // App\Http\Controllers\Chat\PhoneBookController's docblock.
+        Route::prefix('phone-books')
+            ->controller(PhoneBookController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('chat.phone-books.index');
+                Route::get('/create', 'create')->name('chat.phone-books.create');
+                Route::post('/', 'store')->name('chat.phone-books.store');
+                Route::get('/{id}/edit', 'edit')->name('chat.phone-books.edit');
+                Route::put('/{id}', 'update')->name('chat.phone-books.update');
+                Route::delete('/{id}', 'destroy')->name('chat.phone-books.destroy');
+                Route::post('/{id}/blacklist', 'blacklist')->name('chat.phone-books.blacklist');
+                Route::post('/{id}/unblacklist', 'unblacklist')->name('chat.phone-books.unblacklist');
+                Route::get('/export', 'export')->name('chat.phone-books.export');
+                Route::get('/import/template', 'importTemplate')->name('chat.phone-books.import-template');
+                Route::post('/import', 'import')
+                    ->middleware('throttle:10,1')
+                    ->name('chat.phone-books.import');
+            });
+
+        // "Third Party > Google Form" — see
+        // App\Http\Controllers\Chat\GoogleFormIntegrationController's
+        // docblock. The public receiving endpoint a company's own Google
+        // Apps Script posts to lives separately in routes/api.php
+        // (App\Http\Controllers\Api\GoogleFormWebhookController), since
+        // it's authenticated purely by the webhook_token path segment,
+        // not a logged-in session.
+        Route::prefix('third-party/google-form')
+            ->controller(GoogleFormIntegrationController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('chat.third-party.google-form.index');
+                Route::get('/create', 'create')->name('chat.third-party.google-form.create');
+                Route::post('/', 'store')->name('chat.third-party.google-form.store');
+                Route::get('/{id}', 'show')->name('chat.third-party.google-form.show');
+                Route::get('/{id}/edit', 'edit')->name('chat.third-party.google-form.edit');
+                Route::put('/{id}', 'update')->name('chat.third-party.google-form.update');
+                Route::delete('/{id}', 'destroy')->name('chat.third-party.google-form.destroy');
+                Route::post('/{id}/regenerate-token', 'regenerateToken')->name('chat.third-party.google-form.regenerate-token');
             });
 
         Route::prefix('message-auto-replies')
@@ -839,6 +939,79 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
                 });
         });
 
+        // Public web content catalog (meta tags, category-articles,
+        // articles, faqs, category-videos, videos) — being built one
+        // table at a time. No public/frontend routes yet, superadmin
+        // CRUD only for now. See App\Models\WebMetaTag and
+        // Superadmin\Web\MetaTagController.
+        Route::prefix('web')->group(function () {
+            Route::prefix('meta-tags')
+                ->controller(WebMetaTagController::class)
+                ->group(function () {
+                    Route::get('/', 'index')->name('web.meta-tags.index');
+                    Route::get('/create', 'create')->name('web.meta-tags.create');
+                    Route::post('/create', 'store')->name('web.meta-tags.store');
+                    Route::get('/{id}/edit', 'edit')->name('web.meta-tags.edit');
+                    Route::put('/{id}', 'update')->name('web.meta-tags.update');
+                    Route::delete('/{id}', 'destroy')->name('web.meta-tags.destroy');
+                });
+
+            Route::prefix('category-articles')
+                ->controller(WebCategoryArticleController::class)
+                ->group(function () {
+                    Route::get('/', 'index')->name('web.category-articles.index');
+                    Route::get('/create', 'create')->name('web.category-articles.create');
+                    Route::post('/create', 'store')->name('web.category-articles.store');
+                    Route::get('/{id}/edit', 'edit')->name('web.category-articles.edit');
+                    Route::put('/{id}', 'update')->name('web.category-articles.update');
+                    Route::delete('/{id}', 'destroy')->name('web.category-articles.destroy');
+                });
+
+            Route::prefix('articles')
+                ->controller(WebArticleController::class)
+                ->group(function () {
+                    Route::get('/', 'index')->name('web.articles.index');
+                    Route::get('/create', 'create')->name('web.articles.create');
+                    Route::post('/create', 'store')->name('web.articles.store');
+                    Route::get('/{id}/edit', 'edit')->name('web.articles.edit');
+                    Route::put('/{id}', 'update')->name('web.articles.update');
+                    Route::delete('/{id}', 'destroy')->name('web.articles.destroy');
+                });
+
+            Route::prefix('faqs')
+                ->controller(WebFaqController::class)
+                ->group(function () {
+                    Route::get('/', 'index')->name('web.faqs.index');
+                    Route::get('/create', 'create')->name('web.faqs.create');
+                    Route::post('/create', 'store')->name('web.faqs.store');
+                    Route::get('/{id}/edit', 'edit')->name('web.faqs.edit');
+                    Route::put('/{id}', 'update')->name('web.faqs.update');
+                    Route::delete('/{id}', 'destroy')->name('web.faqs.destroy');
+                });
+
+            Route::prefix('category-videos')
+                ->controller(WebCategoryVideoController::class)
+                ->group(function () {
+                    Route::get('/', 'index')->name('web.category-videos.index');
+                    Route::get('/create', 'create')->name('web.category-videos.create');
+                    Route::post('/create', 'store')->name('web.category-videos.store');
+                    Route::get('/{id}/edit', 'edit')->name('web.category-videos.edit');
+                    Route::put('/{id}', 'update')->name('web.category-videos.update');
+                    Route::delete('/{id}', 'destroy')->name('web.category-videos.destroy');
+                });
+
+            Route::prefix('videos')
+                ->controller(WebVideoController::class)
+                ->group(function () {
+                    Route::get('/', 'index')->name('web.videos.index');
+                    Route::get('/create', 'create')->name('web.videos.create');
+                    Route::post('/create', 'store')->name('web.videos.store');
+                    Route::get('/{id}/edit', 'edit')->name('web.videos.edit');
+                    Route::put('/{id}', 'update')->name('web.videos.update');
+                    Route::delete('/{id}', 'destroy')->name('web.videos.destroy');
+                });
+        });
+
         // "Company Role Menus" in the sidebar — every company_role_menus
         // row across every company (which Application Menu entries each
         // company has switched on). Lets a superadmin fix a company's
@@ -911,6 +1084,24 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
                 Route::put('/{id}', 'update')->name('help-center.update');
                 Route::delete('/{id}', 'destroy')->name('help-center.destroy');
                 Route::post('/{id}/reply', 'reply')->name('help-center.reply');
+            });
+
+        // WA Template/Broadcast review — category list -> drill into that
+        // category's templates. See Superadmin\WaTemplateReviewController.
+        // "/uncategorized" is defined before "/categories/{id}" segments
+        // are unambiguous by path shape here, but kept first regardless
+        // for readability (list -> uncategorized bucket -> single
+        // category drill-down -> approve/reject actions).
+        Route::prefix('wa-templates')
+            ->controller(WaTemplateReviewController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('wa-templates.index');
+                Route::get('/uncategorized', 'uncategorized')->name('wa-templates.uncategorized');
+                Route::get('/categories/{id}', 'show')->name('wa-templates.categories.show');
+                Route::post('/categories/{id}/approve', 'approveCategory')->name('wa-templates.categories.approve');
+                Route::post('/categories/{id}/reject', 'rejectCategory')->name('wa-templates.categories.reject');
+                Route::post('/templates/{id}/approve', 'approveTemplate')->name('wa-templates.templates.approve');
+                Route::post('/templates/{id}/reject', 'rejectTemplate')->name('wa-templates.templates.reject');
             });
 
     });

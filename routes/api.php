@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\Superadmin\UserController;
 use App\Http\Controllers\Api\WaIncomingMessageWebhookController;
 use App\Http\Controllers\Api\WaApiSendMessageController;
+use App\Http\Controllers\Api\GoogleFormWebhookController;
 use App\Http\Controllers\User\Deposit\DuitkuCallbackController;
 
 // Server-to-server webhook Duitku posts payment results to — resolves
@@ -37,6 +38,18 @@ Route::post('/webhooks/wa/incoming-message', [WaIncomingMessageWebhookController
 Route::post('/wa-api/v1/send-message', [WaApiSendMessageController::class, 'send'])
     ->middleware('wa.api-key')
     ->name('wa-api.send-message');
+
+// Public webhook a company's own Google Apps Script (Extensions > Apps
+// Script > onFormSubmit trigger, generated on the integration's detail
+// page) POSTs to on every new Google Form response. Authenticated purely
+// by the unguessable {token} path segment — see App\Models\
+// WaFormIntegration::generateUniqueWebhookToken() and
+// App\Http\Controllers\Api\GoogleFormWebhookController. Throttled since
+// it's unauthenticated-by-header and reachable by anyone who has (or
+// guesses) a token.
+Route::post('/third-party/google-form/{token}', [GoogleFormWebhookController::class, 'receive'])
+    ->middleware('throttle:60,1')
+    ->name('third-party.google-form.receive');
 
 Route::prefix('superadmin')->middleware('auth:sanctum')->group(function () {
 

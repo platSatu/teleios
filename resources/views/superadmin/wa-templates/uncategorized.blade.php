@@ -1,0 +1,98 @@
+@extends('layouts.dashboard')
+
+@section('content')
+    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+        <div>
+            <h4 class="mb-1">Template Tanpa Kategori</h4>
+            <p class="text-muted mb-0">Dibuat sebelum ada kategori, atau perusahaan sengaja memilih "Tanpa kategori".</p>
+        </div>
+        <a href="{{ route('wa-templates.index') }}" class="btn btn-light">
+            <i class="ri-arrow-left-line"></i> Kembali
+        </a>
+    </div>
+
+    @if (session('success'))
+        <div class="alert alert-success">{{ session('success') }}</div>
+    @endif
+
+    <div class="card">
+        <div class="card-body">
+            {{-- min-width per column (not just on the table) is what
+                 actually keeps this readable on narrow screens — see
+                 resources/views/superadmin/wa-templates/index.blade.php's
+                 comment for the full "why". --}}
+            <div class="table-responsive">
+                <table class="table table-centered table-hover align-middle mb-0" style="min-width: 1100px;">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="min-width: 150px;">Nama</th>
+                            <th style="min-width: 150px;">Perusahaan</th>
+                            <th style="min-width: 90px;">Bahasa</th>
+                            <th style="min-width: 220px;">Isi Pesan</th>
+                            <th style="min-width: 110px;">Status</th>
+                            <th style="min-width: 110px;">Review</th>
+                            <th class="text-end" style="min-width: 220px;">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse ($templates as $template)
+                            <tr>
+                                <td class="fw-semibold">{{ $template->name }}</td>
+                                <td class="text-muted">{{ $template->company->name ?? '—' }}</td>
+                                <td class="text-uppercase text-muted small">{{ $template->language }}</td>
+                                <td class="text-muted">{{ \Illuminate\Support\Str::limit($template->template, 90) }}</td>
+                                <td>
+                                    <span class="badge {{ $template->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $template->status }}</span>
+                                </td>
+                                <td>
+                                    @if ($template->review_status === 'approved')
+                                        <span class="badge bg-success-subtle text-success">Approved</span>
+                                    @elseif ($template->review_status === 'rejected')
+                                        <span class="badge bg-danger-subtle text-danger" title="{{ $template->rejection_reason }}">Rejected</span>
+                                    @elseif ($template->review_status === 'in_review')
+                                        <span class="badge bg-warning-subtle text-warning">In Review</span>
+                                    @else
+                                        <span class="badge bg-secondary-subtle text-secondary">Draft</span>
+                                    @endif
+                                </td>
+                                <td class="text-end">
+                                    <div class="btn-group btn-group-sm">
+                                        @if ($template->review_status !== 'approved')
+                                            <button type="submit" form="approve-template-{{ $template->id }}" class="btn btn-outline-success">
+                                                <i class="ri-check-line"></i> Setujui
+                                            </button>
+                                        @endif
+                                        @if ($template->review_status !== 'rejected')
+                                            <button type="submit" form="reject-template-{{ $template->id }}" class="btn btn-outline-danger">
+                                                <i class="ri-close-line"></i> Tolak
+                                            </button>
+                                        @endif
+                                    </div>
+                                    @if ($template->review_status !== 'approved')
+                                        <form id="approve-template-{{ $template->id }}" action="{{ route('wa-templates.templates.approve', $template->id) }}" method="POST" class="d-none js-approve-form" data-confirm-text="Setujui template &quot;{{ $template->name }}&quot;?">
+                                            @csrf
+                                        </form>
+                                    @endif
+                                    @if ($template->review_status !== 'rejected')
+                                        <form id="reject-template-{{ $template->id }}" action="{{ route('wa-templates.templates.reject', $template->id) }}" method="POST" class="d-none js-reject-form" data-reject-title="Tolak template &quot;{{ $template->name }}&quot;?">
+                                            @csrf
+                                            <input type="hidden" name="reason">
+                                        </form>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-4">Tidak ada template tanpa kategori.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="mt-3">{{ $templates->links('pagination::bootstrap-5') }}</div>
+        </div>
+    </div>
+
+    @include('superadmin.wa-templates._reject-script')
+@endsection

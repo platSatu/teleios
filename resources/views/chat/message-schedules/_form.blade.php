@@ -15,21 +15,91 @@
     // Pre-built here as plain PHP so the JS block below only ever has
     // to embed a single already-computed variable — keeps every raw
     // echo in this file to a simple one-liner instead of a multi-line
-    // expression.
+    // expression. `recipients` travels along too — see the "Tujuan
+    // Pengiriman" section further down: when "Gunakan Template" is on,
+    // that section switches from the editable tri-tab to a read-only
+    // summary of whichever template is selected, since recipients now
+    // live on the template itself (Chat\MessageTemplateController).
     $templatesForJs = $templates->map(function ($t) {
-        return ['id' => $t->id, 'name' => $t->name, 'template' => $t->template];
+        $recipients = collect($t->recipients ?? []);
+
+        return [
+            'id' => $t->id,
+            'name' => $t->name,
+            'template' => $t->template,
+            'recipients' => [
+                'phone' => $recipients->where('type', 'phone')->count(),
+                'group' => $recipients->where('type', 'group')->count(),
+                'user' => $recipients->where('type', 'user')->count(),
+            ],
+        ];
     })->values();
+
+    $existingAttachmentName = $schedule->attachment_original_name ?? null;
 @endphp
 
-<div class="mb-3">
-    <label class="form-label">Jenis Pengiriman</label>
-    <select name="type" id="scheduleTypeSelect" class="form-select @error('type') is-invalid @enderror">
-        <option value="once" @selected($currentType == 'once')>Sekali Kirim (broadcast langsung/terjadwal 1x)</option>
-        <option value="recurring" @selected($currentType == 'recurring')>Berulang Setiap Hari (rentang tanggal)</option>
-        <option value="drip" @selected($currentType == 'drip')>Bertahap per Kontak (drip, beberapa pesan berjarak hari)</option>
-    </select>
-    @error('type')<div class="invalid-feedback">{{ $message }}</div>@enderror
+{{-- ============================================================
+     Jenis Pengiriman — sengaja jadi field PALING ATAS & satu-satunya
+     yang memicu bagian lain (Isi Pesan vs Langkah Pesan, label
+     tanggal, dsb) lewat syncTypeSections() di bawah. Kartu, bukan
+     <select> polos, supaya pilihan ini benar-benar terasa sebagai
+     keputusan utama form ("mau kirim dengan cara apa?") sebelum
+     mengisi apa pun yang lain — sesuai referensi tampilan yang
+     diminta.
+============================================================ --}}
+<div class="mb-4">
+    <label class="form-label d-block mb-2">Jenis Pengiriman</label>
+    <div class="row g-2" id="scheduleTypeCards">
+        <div class="col-sm-4">
+            <input type="radio" class="btn-check schedule-type-radio" name="type" id="scheduleType-once"
+                value="once" autocomplete="off" @checked($currentType == 'once')>
+            <label class="btn btn-outline-primary w-100 h-100 text-start p-3 schedule-type-card" for="scheduleType-once">
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <i class="ri-send-plane-line fs-4"></i>
+                    <span class="fw-semibold">Sekali Kirim</span>
+                </div>
+                <div class="small text-body-secondary">Broadcast langsung atau terjadwal, satu kali di satu tanggal &amp; jam.</div>
+            </label>
+        </div>
+        <div class="col-sm-4">
+            <input type="radio" class="btn-check schedule-type-radio" name="type" id="scheduleType-recurring"
+                value="recurring" autocomplete="off" @checked($currentType == 'recurring')>
+            <label class="btn btn-outline-primary w-100 h-100 text-start p-3 schedule-type-card" for="scheduleType-recurring">
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <i class="ri-repeat-line fs-4"></i>
+                    <span class="fw-semibold">Berulang</span>
+                </div>
+                <div class="small text-body-secondary">Terkirim otomatis setiap hari, dalam rentang tanggal yang dipilih.</div>
+            </label>
+        </div>
+        <div class="col-sm-4">
+            <input type="radio" class="btn-check schedule-type-radio" name="type" id="scheduleType-drip"
+                value="drip" autocomplete="off" @checked($currentType == 'drip')>
+            <label class="btn btn-outline-primary w-100 h-100 text-start p-3 schedule-type-card" for="scheduleType-drip">
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <i class="ri-flow-chart fs-4"></i>
+                    <span class="fw-semibold">Bertahap per Kontak</span>
+                </div>
+                <div class="small text-body-secondary">Beberapa pesan berjarak hari (drip), sama untuk semua tujuan.</div>
+            </label>
+        </div>
+    </div>
+    @error('type')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
 </div>
+
+<style>
+    /* Bootstrap's .btn-check:checked + .btn-outline-primary turns the
+       label's own text white automatically (that's why "Sekali Kirim"
+       above is readable), but it doesn't touch descendant elements that
+       carry their own text-color utility class — .text-body-secondary
+       on the description line keeps its normal gray regardless of the
+       red/primary background behind it. This targets just that one
+       element only while its radio is actually checked, instead of
+       overriding it everywhere. */
+    .schedule-type-radio:checked + .schedule-type-card .text-body-secondary {
+        color: rgba(255, 255, 255, .85) !important;
+    }
+</style>
 
 <div class="row">
     <div class="col-md-6 mb-3">
@@ -87,7 +157,7 @@
         <div id="manualFields">
             <div class="mb-3">
                 <label class="form-label">Kategori</label>
-                <select name="category_schedule" class="form-select @error('category_schedule') is-invalid @enderror">
+                <select name="category_schedule" id="categoryScheduleSelect" class="form-select @error('category_schedule') is-invalid @enderror">
                     <option value="text" @selected(old('category_schedule', $schedule->category_schedule ?? 'text') == 'text')>Text</option>
                     <option value="location" @selected(old('category_schedule', $schedule->category_schedule ?? '') == 'location')>Location</option>
                     <option value="image" @selected(old('category_schedule', $schedule->category_schedule ?? '') == 'image')>Image</option>
@@ -96,11 +166,44 @@
                 @error('category_schedule')<div class="invalid-feedback">{{ $message }}</div>@enderror
             </div>
 
-            <div class="mb-0">
-                <label class="form-label">Isi Pesan</label>
-                <textarea name="message" rows="4" class="form-control @error('message') is-invalid @enderror"
+            {{-- text: isi pesan saja. location: dipakai sebagai "Nama
+                 Lokasi" (JS mengubah label/placeholder/rows-nya) + field
+                 Link di bawah. image/document: disembunyikan, ganti ke
+                 upload file. --}}
+            <div class="mb-3" id="categoryMessageWrapper">
+                <label class="form-label" id="categoryMessageLabel">Isi Pesan</label>
+                <textarea name="message" id="categoryMessageInput" rows="4" class="form-control @error('message') is-invalid @enderror"
                     placeholder="Tulis isi pesan...">{{ old('message', $schedule->message ?? '') }}</textarea>
                 @error('message')<div class="invalid-feedback">{{ $message }}</div>@enderror
+            </div>
+
+            {{-- Muncul untuk kategori location --}}
+            <div class="mb-3" id="categoryLinkWrapper" style="display:none;">
+                <label class="form-label">Link Lokasi</label>
+                <input type="text" name="link" maxlength="2000" value="{{ old('link', $schedule->link ?? '') }}"
+                    class="form-control @error('link') is-invalid @enderror" placeholder="https://maps.google.com/...">
+                @error('link')<div class="invalid-feedback">{{ $message }}</div>@enderror
+            </div>
+
+            {{-- Muncul untuk kategori image/document --}}
+            <div class="mb-0" id="categoryAttachmentWrapper" style="display:none;">
+                <label class="form-label">Upload File</label>
+                @if ($schedule && $schedule->attachment_path)
+                    <div class="d-flex align-items-center gap-2 border rounded p-2 mb-2 bg-light-subtle">
+                        <i class="ri-file-3-line fs-4"></i>
+                        <div class="flex-grow-1 small">
+                            <a href="{{ asset('storage/'.$schedule->attachment_path) }}" target="_blank">{{ $schedule->attachment_original_name }}</a>
+                            <div class="text-muted">{{ number_format(($schedule->attachment_size ?? 0) / 1024, 0) }} KB</div>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="remove_attachment" value="1" id="scheduleRemoveAttachment">
+                            <label class="form-check-label small text-danger" for="scheduleRemoveAttachment">Hapus</label>
+                        </div>
+                    </div>
+                @endif
+                <input type="file" name="attachment" id="categoryAttachmentInput" class="form-control @error('attachment') is-invalid @enderror">
+                <div class="form-text" id="categoryAttachmentHint"></div>
+                @error('attachment')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
             </div>
         </div>
     </div>
@@ -152,10 +255,20 @@
 </div>
 
 {{-- ============================================================
-     Tujuan Pengiriman: 3 tab (nomor / grup WA / user company) —
-     selalu tampil untuk ketiga jenis pengiriman.
+     Tujuan Pengiriman: 3 tab (nomor / grup WA / user company) — hanya
+     untuk 'drip' atau saat "Gunakan Template" OFF. Saat template
+     dipakai, tujuan sudah ikut tersimpan di template itu sendiri (lihat
+     Chat\MessageTemplateController), jadi bagian ini diganti ringkasan
+     read-only supaya tidak terlihat seperti input yang harus diisi
+     ulang.
 ============================================================ --}}
-<div class="mb-3">
+<div class="alert alert-light border d-none" id="recipientFromTemplateNotice">
+    <div class="fw-semibold mb-1"><i class="ri-file-list-3-line"></i> Tujuan dari Template</div>
+    <div id="recipientFromTemplateSummary" class="small text-muted">Pilih template di atas untuk melihat tujuannya.</div>
+    <div class="small mt-1">Mau ubah tujuan? <a href="{{ route('chat.message-templates.index') }}" target="_blank">Edit di halaman WA Template</a>.</div>
+</div>
+
+<div class="mb-3" id="recipientSection">
     <label class="form-label d-block">Tujuan Pengiriman</label>
     @error('recipients')<div class="text-danger small mb-2">{{ $message }}</div>@enderror
 
@@ -283,15 +396,24 @@
 <script>
 (function () {
     // --- Jenis Pengiriman: toggle content section / date fields / steps section ---
-    var typeSelect = document.getElementById('scheduleTypeSelect');
+    // A btn-check radio group, not a <select> — getType()/setType() below
+    // are the only two places that need to know that, everything else
+    // still just calls getType() the same way it would call .value on a
+    // <select>.
+    var typeRadios = Array.prototype.slice.call(document.querySelectorAll('.schedule-type-radio'));
     var contentSection = document.getElementById('contentSection');
     var dripStepsSection = document.getElementById('dripStepsSection');
     var dateStartLabel = document.getElementById('dateStartLabel');
     var dateEndCol = document.getElementById('dateEndCol');
     var scheduleTimeLabel = document.getElementById('scheduleTimeLabel');
 
+    function getType() {
+        var checked = typeRadios.filter(function (r) { return r.checked; })[0];
+        return checked ? checked.value : 'recurring';
+    }
+
     function syncTypeSections() {
-        var type = typeSelect.value;
+        var type = getType();
 
         contentSection.style.display = type === 'drip' ? 'none' : '';
         dripStepsSection.style.display = type === 'drip' ? '' : 'none';
@@ -307,10 +429,19 @@
             dateStartLabel.textContent = 'Tanggal Mulai';
             scheduleTimeLabel.textContent = 'Jam Kirim';
         }
+
+        // Drip needs at least one step row present the moment it becomes
+        // the active type (e.g. user switches to it after page load,
+        // not just on initial render — see existingSteps handling below
+        // for the initial-load case).
+        if (type === 'drip' && stepsContainer && stepsContainer.children.length === 0) {
+            addStepRow();
+        }
     }
 
-    typeSelect.addEventListener('change', syncTypeSections);
-    syncTypeSections();
+    typeRadios.forEach(function (radio) {
+        radio.addEventListener('change', syncTypeSections);
+    });
 
     // --- Template vs manual message toggle (jenis once/recurring) ---
     var useTemplateToggle = document.getElementById('useTemplateToggle');
@@ -318,22 +449,101 @@
     var manualFields = document.getElementById('manualFields');
     var templateSelect = templateFields.querySelector('select[name="wa_message_template_id"]');
     var templatePreview = document.getElementById('templatePreview');
+    var recipientSection = document.getElementById('recipientSection');
+    var recipientFromTemplateNotice = document.getElementById('recipientFromTemplateNotice');
+    var recipientFromTemplateSummary = document.getElementById('recipientFromTemplateSummary');
+    var templatesData = @json($templatesForJs);
 
     function syncTemplateToggle() {
         var on = useTemplateToggle.checked;
         templateFields.style.display = on ? '' : 'none';
         manualFields.style.display = on ? 'none' : '';
+
+        // Recipients only come from the tri-tab below for 'drip' or a
+        // manual (non-template) once/recurring message — a template in
+        // use already carries its own recipients (see
+        // Chat\MessageTemplateController), so showing an empty tri-tab
+        // here on top of that would just be confusing/redundant.
+        var usesTemplateRecipients = on && getType() !== 'drip';
+        recipientSection.classList.toggle('d-none', usesTemplateRecipients);
+        recipientFromTemplateNotice.classList.toggle('d-none', !usesTemplateRecipients);
+    }
+
+    function syncTemplateRecipientsSummary() {
+        var tpl = templatesData.filter(function (t) { return t.id === templateSelect.value; })[0];
+        if (!tpl) {
+            recipientFromTemplateSummary.textContent = 'Pilih template di atas untuk melihat tujuannya.';
+            return;
+        }
+        var r = tpl.recipients || { phone: 0, group: 0, user: 0 };
+        var parts = [];
+        if (r.phone) parts.push(r.phone + ' nomor');
+        if (r.group) parts.push(r.group + ' grup');
+        if (r.user) parts.push(r.user + ' user company');
+        recipientFromTemplateSummary.textContent = parts.length
+            ? 'Terkirim ke: ' + parts.join(', ') + '.'
+            : 'Template ini belum punya tujuan tersimpan — atur dulu di halaman WA Template.';
     }
 
     function syncTemplatePreview() {
         var opt = templateSelect.options[templateSelect.selectedIndex];
         templatePreview.textContent = (opt && opt.getAttribute('data-preview')) || 'Pilih template untuk melihat isi pesannya di sini.';
+        syncTemplateRecipientsSummary();
     }
 
     useTemplateToggle.addEventListener('change', syncTemplateToggle);
     templateSelect.addEventListener('change', syncTemplatePreview);
     syncTemplateToggle();
     syncTemplatePreview();
+
+    // --- Kategori (manual, non-template): text / location / image / document ---
+    var categorySelect = document.getElementById('categoryScheduleSelect');
+    var categoryMessageWrapper = document.getElementById('categoryMessageWrapper');
+    var categoryMessageLabel = document.getElementById('categoryMessageLabel');
+    var categoryMessageInput = document.getElementById('categoryMessageInput');
+    var categoryLinkWrapper = document.getElementById('categoryLinkWrapper');
+    var categoryAttachmentWrapper = document.getElementById('categoryAttachmentWrapper');
+    var categoryAttachmentInput = document.getElementById('categoryAttachmentInput');
+    var categoryAttachmentHint = document.getElementById('categoryAttachmentHint');
+
+    var CATEGORY_ATTACHMENT_ACCEPT = {
+        image: '.jpg,.jpeg,.png',
+        document: '.xlsx,.xls,.docx,.doc,.pdf',
+    };
+    var CATEGORY_ATTACHMENT_HINT = {
+        image: 'Format: JPG, JPEG, PNG. Maks. 5MB.',
+        document: 'Format: XLSX, XLS, DOCX, DOC, PDF. Maks. 10MB.',
+    };
+
+    function syncManualCategory() {
+        var category = categorySelect.value;
+
+        if (category === 'text') {
+            categoryMessageWrapper.style.display = '';
+            categoryMessageLabel.textContent = 'Isi Pesan';
+            categoryMessageInput.rows = 4;
+            categoryMessageInput.placeholder = 'Tulis isi pesan...';
+            categoryLinkWrapper.style.display = 'none';
+            categoryAttachmentWrapper.style.display = 'none';
+        } else if (category === 'location') {
+            categoryMessageWrapper.style.display = '';
+            categoryMessageLabel.textContent = 'Nama Lokasi';
+            categoryMessageInput.rows = 1;
+            categoryMessageInput.placeholder = 'Contoh: Kantor Pusat Jakarta';
+            categoryLinkWrapper.style.display = '';
+            categoryAttachmentWrapper.style.display = 'none';
+        } else {
+            // image | document
+            categoryMessageWrapper.style.display = 'none';
+            categoryLinkWrapper.style.display = 'none';
+            categoryAttachmentWrapper.style.display = '';
+            categoryAttachmentInput.setAttribute('accept', CATEGORY_ATTACHMENT_ACCEPT[category] || '');
+            categoryAttachmentHint.textContent = CATEGORY_ATTACHMENT_HINT[category] || '';
+        }
+    }
+
+    categorySelect.addEventListener('change', syncManualCategory);
+    syncManualCategory();
 
     // --- Langkah Pesan (drip) — repeatable step rows ---
     var stepsContainer = document.getElementById('stepsContainer');
@@ -432,9 +642,15 @@
     try { existingSteps = JSON.parse(document.getElementById('existingStepsData').textContent || '[]'); } catch (e) {}
     if (existingSteps.length) {
         existingSteps.forEach(function (s) { addStepRow(s); });
-    } else if (typeSelect.value === 'drip') {
+    } else if (getType() === 'drip') {
         addStepRow();
     }
+
+    // Now that stepsContainer/addStepRow/existingSteps are all set up,
+    // run the Jenis Pengiriman sync once for whatever type is selected
+    // on load ($currentType above — the schedule's own type when
+    // editing, 'recurring' by default on create).
+    syncTypeSections();
 
     // --- Tab badge counters ---
     var phoneInput = document.getElementById('phoneNumbersInput');
