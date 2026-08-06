@@ -73,7 +73,18 @@ class MessageScheduleController extends Controller
                 $query->where('status', $request->string('status'));
             })
             ->withCount([
-                'logs as sent_count' => fn ($q) => $q->where('status', 'sent'),
+                // 'sent' rank-and-above (sent/delivered/read all mean the
+                // send itself succeeded) — kept broad rather than exactly
+                // status='sent' so this count (used below for the
+                // "Belum diproses" fallback) doesn't go stale the moment
+                // a receipt advances a row past 'sent'.
+                'logs as sent_count' => fn ($q) => $q->whereIn('status', ['sent', 'delivered', 'read']),
+                // 'delivered' rank-and-above — real WhatsApp delivery
+                // receipts forwarded by App\Http\Controllers\Api\
+                // WaMessageStatusWebhookController, not just "handed to
+                // the Go backend" like the old sent-only count implied.
+                'logs as delivered_count' => fn ($q) => $q->whereIn('status', ['delivered', 'read']),
+                'logs as read_count' => fn ($q) => $q->where('status', 'read'),
                 'logs as failed_count' => fn ($q) => $q->where('status', 'failed'),
                 'logs as pending_count' => fn ($q) => $q->where('status', 'pending'),
                 'steps',
@@ -101,8 +112,12 @@ class MessageScheduleController extends Controller
         $stats = [
             'total' => WaMessageSchedule::where('company_id', $company->id)->count(),
             'active' => WaMessageSchedule::where('company_id', $company->id)->where('status', 'active')->count(),
+            // "Total Terkirim" = every log that successfully left the
+            // device, regardless of whether a delivered/read receipt has
+            // come back yet — sent/delivered/read all mean the send
+            // itself worked (see WaMessageScheduleLog::STATUS_RANK).
             'delivered' => WaMessageScheduleLog::whereHas('schedule', fn ($q) => $q->where('company_id', $company->id))
-                ->where('status', 'sent')->count(),
+                ->whereIn('status', ['sent', 'delivered', 'read'])->count(),
             'failed' => WaMessageScheduleLog::whereHas('schedule', fn ($q) => $q->where('company_id', $company->id))
                 ->where('status', 'failed')->count(),
         ];

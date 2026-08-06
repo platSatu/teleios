@@ -39,7 +39,7 @@ JS;
             <div>
                 <h4 class="mb-0">{{ $integration->name }}</h4>
                 <p class="text-muted mb-0 small">
-                    Device: {{ $integration->device_id }} &middot;
+                    Device: <span id="gform-device-label" data-device-id="{{ $integration->device_id }}">memeriksa&hellip;</span> &middot;
                     WA Template: {{ $integration->waMessageTemplate->name ?? '(belum dipilih)' }} &middot;
                     <span class="badge {{ $integration->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $integration->status }}</span>
                 </p>
@@ -49,6 +49,15 @@ JS;
         @if(session('success'))
             <div class="alert alert-success">{{ session('success') }}</div>
         @endif
+
+        {{-- Populated/shown by the script at the bottom once the device
+             list comes back — covers exactly the case the user reported:
+             a submission failing with "pastikan device masih terhubung"
+             gives no way to tell, from this page, whether that's actually
+             true. This turns it into an explicit, actionable banner
+             instead of something only visible per-submission in the
+             table on the right. --}}
+        <div id="gform-device-warning" class="alert alert-danger d-none mb-3"></div>
 
         <div class="row">
             <div class="col-12 col-xl-7">
@@ -169,5 +178,53 @@ JS;
             });
         });
     });
+
+    // Resolves the device_id stored on this integration to a readable
+    // "+62812... (Terhubung)" label, and surfaces #gform-device-warning
+    // when the device is missing entirely (deleted, or moved to another
+    // company) or currently disconnected — both silently produce the
+    // exact "Gagal mengirim pesan. Pastikan device masih terhubung."
+    // failure on every submission, so this makes the real cause visible
+    // on the page itself instead of only inside error_message per-row.
+    (function () {
+        var label = document.getElementById('gform-device-label');
+        var warning = document.getElementById('gform-device-warning');
+        if (!label) return;
+
+        var deviceId = label.getAttribute('data-device-id');
+        var listUrl = @json(route('chat.connect-device.list'));
+        var connectDeviceUrl = @json(route('chat.connect-device.index'));
+        var editUrl = @json(route('chat.third-party.google-form.edit', $integration->id));
+
+        fetch(listUrl, { headers: { 'Accept': 'application/json' } })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                var devices = data.devices || [];
+                var match = null;
+                for (var i = 0; i < devices.length; i++) {
+                    if (devices[i].id === deviceId) { match = devices[i]; break; }
+                }
+
+                if (!match) {
+                    label.textContent = 'tidak ditemukan';
+                    label.className = 'text-danger fw-semibold';
+                    warning.innerHTML = '<i class="ri-error-warning-line"></i> Device pengirim integrasi ini tidak ditemukan &mdash; kemungkinan sudah dihapus atau dipindah ke company lain. Setiap submission form akan gagal terkirim sampai ini diperbaiki. <a href="' + editUrl + '" class="alert-link">Pilih ulang device di halaman Edit</a>.';
+                    warning.classList.remove('d-none');
+                    return;
+                }
+
+                var connected = match.status === 'connected';
+                label.textContent = '+' + match.phone_number + (connected ? ' (Terhubung)' : ' (' + match.status + ')');
+
+                if (!connected) {
+                    label.className = 'text-warning fw-semibold';
+                    warning.innerHTML = '<i class="ri-error-warning-line"></i> Device pengirim (+' + match.phone_number + ') sedang tidak terhubung ke WhatsApp, jadi balasan form ini akan gagal terkirim. <a href="' + connectDeviceUrl + '" class="alert-link">Sambungkan ulang di menu Connect Device</a>.';
+                    warning.classList.remove('d-none');
+                }
+            })
+            .catch(function () {
+                label.textContent = 'gagal memuat status';
+            });
+    })();
 </script>
 @endsection

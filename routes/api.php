@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\Superadmin\UserController;
 use App\Http\Controllers\Api\WaIncomingMessageWebhookController;
+use App\Http\Controllers\Api\WaMessageStatusWebhookController;
 use App\Http\Controllers\Api\WaApiSendMessageController;
 use App\Http\Controllers\Api\GoogleFormWebhookController;
 use App\Http\Controllers\User\Deposit\DuitkuCallbackController;
@@ -29,6 +30,18 @@ Route::post('/duitku/callback', [DuitkuCallbackController::class, 'handle'])
 Route::post('/webhooks/wa/incoming-message', [WaIncomingMessageWebhookController::class, 'handle'])
     ->middleware('golang.api-key')
     ->name('webhooks.wa.incoming-message');
+
+// Server-to-server webhook the Go backend posts to every time a sent
+// message's delivery/read receipt arrives (see g_backend's
+// WaInboxService.notifyMessageStatusWebhook, fired from
+// UpdateMessageStatus() as *events.Receipt events come in from whatsmeow)
+// — drives real Delivered/Read tracking on the Pesan Terjadwal history
+// page. See App\Http\Controllers\Api\WaMessageStatusWebhookController.
+// Same trust model as the incoming-message webhook above (shared
+// X-API-KEY via golang.api-key middleware).
+Route::post('/webhooks/wa/message-status', [WaMessageStatusWebhookController::class, 'handle'])
+    ->middleware('golang.api-key')
+    ->name('webhooks.wa.message-status');
 
 // Public third-party WhatsApp send API — authenticated purely by the
 // per-device token/secret_key pair (App\Http\Middleware\VerifyWaApiKey),

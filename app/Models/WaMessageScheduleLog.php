@@ -31,9 +31,26 @@ class WaMessageScheduleLog extends Model
         'step_order',
         'send_date',
         'status',
+        'message_id',
         'error',
         'sent_at',
         'attempts',
+    ];
+
+    /**
+     * Same "never move backwards" ladder as g_backend's own
+     * messageStatusRank() (wa-inbox-service.go) — kept in sync
+     * deliberately, since a delivery/read receipt forwarded by
+     * WaMessageStatusWebhookController must never downgrade a row that
+     * already progressed further. 'pending'/'failed' aren't part of this
+     * ladder: 'pending' is the unsent starting state (rank 0, same as an
+     * unrecognized value), and 'failed' is a send-attempt outcome set
+     * only by SendScheduledWaMessage itself, never touched by a receipt.
+     */
+    public const STATUS_RANK = [
+        'sent' => 1,
+        'delivered' => 2,
+        'read' => 3,
     ];
 
     protected $casts = [

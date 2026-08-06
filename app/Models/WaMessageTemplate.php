@@ -148,6 +148,72 @@ class WaMessageTemplate extends Model
     }
 
     /**
+     * The actual text that goes out over WhatsApp for this template —
+     * header + body + link + buttons(-as-text) + footer, in that order,
+     * blank separated. Before this existed, every send path
+     * (App\Jobs\SendScheduledWaMessage) only ever forwarded `template`
+     * (the body column), silently dropping header/footer/link/buttons
+     * even though the builder form lets a company fill all of them in.
+     *
+     * `buttons` can't become real tappable WhatsApp buttons this way —
+     * that needs a WhatsApp interactive-message protocol type
+     * (waE2E.Message_ButtonsMessage / InteractiveMessage) that
+     * g_backend's whatsmeow integration doesn't build yet (it only ever
+     * sends a bare Conversation-type text message). Rendering each
+     * button as a plain, readable line is the honest fallback until that
+     * Go-side work exists — better than the button silently vanishing
+     * with no trace at all.
+     */
+    public function composedMessage(): string
+    {
+        $parts = [];
+
+        if (filled($this->header)) {
+            $parts[] = trim($this->header);
+        }
+
+        if (filled($this->template)) {
+            $parts[] = trim($this->template);
+        }
+
+        // Only text_link/text_link_file templates carry a link — a plain
+        // 'text' template's `link` column is expected to be empty, but
+        // filled() guards against a stray value left over from switching
+        // content_type back and forth in the builder.
+        if (filled($this->link)) {
+            $parts[] = trim($this->link);
+        }
+
+        $buttonLines = collect($this->buttons ?? [])
+            ->map(function (array $button) {
+                $label = trim((string) ($button['label'] ?? ''));
+                $value = trim((string) ($button['value'] ?? ''));
+
+                if ($label === '') {
+                    return null;
+                }
+
+                return match ($button['type'] ?? null) {
+                    'url' => $value !== '' ? "🔗 {$label}: {$value}" : "🔗 {$label}",
+                    'phone' => $value !== '' ? "📞 {$label}: {$value}" : "📞 {$label}",
+                    default => "• {$label}",
+                };
+            })
+            ->filter()
+            ->values();
+
+        if ($buttonLines->isNotEmpty()) {
+            $parts[] = $buttonLines->implode("\n");
+        }
+
+        if (filled($this->footer)) {
+            $parts[] = trim($this->footer);
+        }
+
+        return implode("\n\n", $parts);
+    }
+
+    /**
      * Selectable for actually sending: company has it switched on AND
      * a superadmin has approved its content. An in_review/rejected/
      * draft template — or one whose category isn't itself approved —

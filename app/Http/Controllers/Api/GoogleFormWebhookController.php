@@ -139,11 +139,51 @@ class GoogleFormWebhookController extends Controller
             ]);
 
             $submission->status = 'failed';
-            $submission->error_message = 'Gagal mengirim pesan. Pastikan device masih terhubung.';
+            $submission->error_message = $this->describeSendFailure($e);
             $submission->save();
 
             return response()->json(['error' => $submission->error_message], 200);
         }
+    }
+
+    /**
+     * Turns InboxService::send()'s raw exception into a message the
+     * company can actually act on — this used to always be the same
+     * generic "Pastikan device masih terhubung." string no matter what
+     * really went wrong, which is exactly what made a genuine "device
+     * not found" failure indistinguishable from a template problem or a
+     * transient network error.
+     *
+     * App\Services\Chat\InboxService::request() wraps the Go backend's
+     * raw JSON error body straight into its RuntimeException message
+     * ("...failed: {"error":"..."}"), so this pulls the `error` key back
+     * out when present and maps the couple of causes a company can
+     * self-serve on to a clear, specific Indonesian sentence.
+     */
+    private function describeSendFailure(Throwable $e): string
+    {
+        $reason = null;
+
+        if (preg_match('/\{.*\}\s*$/s', $e->getMessage(), $matches)) {
+            $decoded = json_decode($matches[0], true);
+            if (is_array($decoded) && ! empty($decoded['error'])) {
+                $reason = (string) $decoded['error'];
+            }
+        }
+
+        if ($reason === null) {
+            return 'Gagal mengirim pesan. Pastikan device masih terhubung.';
+        }
+
+        if (str_contains($reason, 'device not found')) {
+            return 'Device pengirim untuk integrasi ini tidak ditemukan (mungkin sudah dihapus atau dipindah ke company lain). Buka menu Edit integrasi ini, lalu pilih ulang device pengirimnya.';
+        }
+
+        if (str_contains($reason, 'not connected')) {
+            return 'Device pengirim untuk integrasi ini sedang tidak terhubung ke WhatsApp. Sambungkan ulang device-nya di menu Connect Device, lalu coba isi form lagi.';
+        }
+
+        return "Gagal mengirim pesan: {$reason}.";
     }
 
     /**

@@ -201,10 +201,18 @@
                                         @endif
                                     </td>
                                     <td>
-                                        <span class="badge bg-success-subtle text-success"><i class="ri-check-double-line"></i> {{ $schedule->sent_count }}</span>
+                                        @if($schedule->delivered_count)
+                                            <span class="badge bg-success-subtle text-success"><i class="ri-check-double-line"></i> {{ $schedule->delivered_count }}</span>
+                                        @else
+                                            <span class="badge bg-secondary-subtle text-secondary">0</span>
+                                        @endif
                                     </td>
                                     <td>
-                                        <span class="badge bg-secondary-subtle text-secondary" title="Belum tersedia — menunggu sinkronisasi status baca dari WhatsApp."><i class="ri-eye-line"></i> &mdash;</span>
+                                        @if($schedule->read_count)
+                                            <span class="badge bg-info-subtle text-info"><i class="ri-eye-line"></i> {{ $schedule->read_count }}</span>
+                                        @else
+                                            <span class="badge bg-secondary-subtle text-secondary">0</span>
+                                        @endif
                                     </td>
                                     <td>
                                         @if($schedule->failed_count)

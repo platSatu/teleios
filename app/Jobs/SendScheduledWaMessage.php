@@ -128,10 +128,15 @@ class SendScheduledWaMessage implements ShouldQueue
         try {
             $token = $jwtService->mintFor($owner);
 
-            $inbox->send($token, $schedule->device_id, $chatJid, $body);
+            $sent = $inbox->send($token, $schedule->device_id, $chatJid, $body);
 
             $log->forceFill([
                 'status' => 'sent',
+                // WhatsApp's own message id (g_backend's WaMessage.
+                // MessageID) — captured so a later delivery/read receipt
+                // (App\Http\Controllers\Api\WaMessageStatusWebhookController)
+                // can find its way back to this exact log row.
+                'message_id' => $sent['message_id'] ?? null,
                 'sent_at' => now(),
                 'attempts' => $log->attempts + 1,
                 'error' => null,
@@ -211,13 +216,13 @@ class SendScheduledWaMessage implements ShouldQueue
                 return null;
             }
 
-            $body = $step->use_template ? $step->waMessageTemplate?->template : $step->message;
+            $body = $step->use_template ? $step->waMessageTemplate?->composedMessage() : $step->message;
             $category = $step->use_template ? 'text' : ($step->category_schedule ?: 'text');
 
             return $body ? [$category, $body] : null;
         }
 
-        $body = $schedule->use_template ? $schedule->waMessageTemplate?->template : $schedule->message;
+        $body = $schedule->use_template ? $schedule->waMessageTemplate?->composedMessage() : $schedule->message;
         $category = $schedule->use_template ? 'text' : ($schedule->category_schedule ?: 'text');
 
         return $body ? [$category, $body] : null;
