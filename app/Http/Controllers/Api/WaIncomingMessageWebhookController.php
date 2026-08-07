@@ -82,6 +82,12 @@ class WaIncomingMessageWebhookController extends Controller
             'device_id' => ['required', 'string'],
             'user_id' => ['nullable', 'string'],
             'chat_jid' => ['required', 'string'],
+            // Real phone number of the sender, resolved on the Go side —
+            // added because chat_jid alone is no longer reliably a phone
+            // number: WhatsApp increasingly addresses chats via "@lid"
+            // (Linked ID), an opaque internal identifier with no phone
+            // digits in it at all. See tryJadwalConfirmation()'s docblock.
+            'sender_phone' => ['nullable', 'string'],
             'message_id' => ['required', 'string'],
             'body' => ['required', 'string'],
             'sent_at' => ['nullable', 'date'],
@@ -214,10 +220,24 @@ class WaIncomingMessageWebhookController extends Controller
      * that matches neither CONFIRM_WORDS nor DECLINE_WORDS, falls
      * through to the normal keyword/AI-bot chain untouched (never
      * silently swallowed).
+     *
+     * Sender identification prefers `sender_phone` (resolved on the Go
+     * side, real digits) over parsing `chat_jid` — WhatsApp increasingly
+     * addresses chats via "@lid" (Linked ID), an opaque internal ID with
+     * no phone number embedded in it at all, which silently broke every
+     * confirmation match for those senders (found live in production:
+     * device replied "IYA" from a `…@lid` chat, webhook fired fine, but
+     * User::where('handphone', ...) never matched anything because the
+     * digits being matched weren't a phone number). `chat_jid` parsing
+     * is kept as a fallback only for payloads from an older Go build
+     * that hasn't been redeployed with `sender_phone` yet.
      */
     protected function tryJadwalConfirmation(array $validated): ?JsonResponse
     {
-        $digits = preg_replace('/\D+/', '', explode('@', $validated['chat_jid'])[0] ?? '');
+        $senderPhone = $validated['sender_phone'] ?? null;
+        $digits = $senderPhone !== null && $senderPhone !== ''
+            ? preg_replace('/\D+/', '', $senderPhone)
+            : preg_replace('/\D+/', '', explode('@', $validated['chat_jid'])[0] ?? '');
 
         if ($digits === '') {
             return null;
