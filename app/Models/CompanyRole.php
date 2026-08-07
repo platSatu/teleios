@@ -20,6 +20,7 @@ class CompanyRole extends Model
 
     protected $fillable = [
         'company_id',
+        'branch_office_id',
         'name',
         'description',
         'status',
@@ -39,6 +40,15 @@ class CompanyRole extends Model
     public function company()
     {
         return $this->belongsTo(Company::class);
+    }
+
+    /**
+     * Null when this role applies company-wide — see the migration's
+     * docblock (2026_08_07_110000_add_branch_office_id_to_company_roles_table).
+     */
+    public function branchOffice()
+    {
+        return $this->belongsTo(BranchOffice::class);
     }
 
     public function members()

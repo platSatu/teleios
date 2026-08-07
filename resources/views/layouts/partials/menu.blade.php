@@ -17,8 +17,9 @@
                 <!-- Main Menu -->
                 <li class="pe-menu-title">Main</li>
                 <li class="pe-slide pe-has-sub">
-                    <a href="{{ route('dashboard') }}" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
-                        aria-controls="collapseDashboards" onclick="toggleCollapse('collapseAuth', this)">
+                    <a href="{{ route('dashboard') }}" class="pe-nav-link" data-bs-toggle="collapse"
+                        aria-expanded="false" aria-controls="collapseDashboards"
+                        onclick="toggleCollapse('collapseAuth', this)">
                         <i class="uil uil-tachometer-fast-alt pe-nav-icon"></i>
                         <span class="pe-nav-content">Dashboards</span>
                     </a>
@@ -86,22 +87,19 @@
                                 <ul class="pe-slide-menu collapse" id="collapseMenuLavels2">
                                     @if ($canSeeChatMenu('chat.message-schedules.index'))
                                         <li class="pe-slide-item">
-                                            <a href="{{ route('chat.message-schedules.index') }}"
-                                                class="pe-nav-link">
+                                            <a href="{{ route('chat.message-schedules.index') }}" class="pe-nav-link">
                                                 Pesan Terjadwal
                                             </a>
                                         </li>
                                     @endif
                                     @if ($canSeeChatMenu('chat.message-templates.index'))
                                         <li class="pe-slide-item">
-                                            <a href="{{ route('chat.message-templates.index') }}"
-                                                class="pe-nav-link">
+                                            <a href="{{ route('chat.message-templates.index') }}" class="pe-nav-link">
                                                 WA Template
                                             </a>
                                         </li>
                                         <li class="pe-slide-item">
-                                            <a href="{{ route('chat.category-templates.index') }}"
-                                                class="pe-nav-link">
+                                            <a href="{{ route('chat.category-templates.index') }}" class="pe-nav-link">
                                                 Kategori Template
                                             </a>
                                         </li>
@@ -180,7 +178,8 @@
                                     @endif
                                     @if ($canSeeChatMenu('chat.category-phone-books.index'))
                                         <li class="pe-slide-item">
-                                            <a href="{{ route('chat.category-phone-books.index') }}" class="pe-nav-link">
+                                            <a href="{{ route('chat.category-phone-books.index') }}"
+                                                class="pe-nav-link">
                                                 Kelompok
                                             </a>
                                         </li>
@@ -201,7 +200,8 @@
                                     @endif
                                     @if ($canSeeChatMenu('chat.phone-books.index'))
                                         <li class="pe-slide-item">
-                                            <a href="{{ route('chat.phone-books.index', ['blacklist' => 1]) }}" class="pe-nav-link">
+                                            <a href="{{ route('chat.phone-books.index', ['blacklist' => 1]) }}"
+                                                class="pe-nav-link">
                                                 Blacklist
                                             </a>
                                         </li>
@@ -226,7 +226,8 @@
                                 <ul class="pe-slide-menu collapse" id="collapseThirdParty">
                                     @if ($canSeeChatMenu('chat.third-party.google-form.index'))
                                         <li class="pe-slide-item">
-                                            <a href="{{ route('chat.third-party.google-form.index') }}" class="pe-nav-link">
+                                            <a href="{{ route('chat.third-party.google-form.index') }}"
+                                                class="pe-nav-link">
                                                 Google Form
                                             </a>
                                         </li>
@@ -236,7 +237,35 @@
                         </ul>
                     </li>
                 @endif
-
+                @if ($hasActiveJadwalPackage)
+                    <li class="pe-slide pe-has-sub">
+                        <a href="#collapseJadwal" class="pe-nav-link" data-bs-toggle="collapse"
+                            aria-expanded="false" aria-controls="collapseDashboards"
+                            onclick="toggleCollapse('collapseAuth', this)">
+                            <i class="uil uil-calendar-alt pe-nav-icon"></i>
+                            <span class="pe-nav-content">Jadwal</span>
+                            <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
+                            <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
+                        </a>
+                        <ul class="pe-slide-menu collapse" id="collapseJadwal">
+                            <li class="pe-slide-item">
+                                <a href="{{ route('jadwal.mata-pelajaran.index') }}" class="pe-nav-link">
+                                    Mata Pelajaran
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('jadwal.jadwal-kelas.index') }}" class="pe-nav-link">
+                                    Jadwal Kelas
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('jadwal.pengaturan-pesan.index') }}" class="pe-nav-link">
+                                    Pengaturan Pesan
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                @endif
                 @if (auth()->check() && auth()->user()->user_type === 'SUPERADMIN')
                     <li class="pe-slide pe-has-sub">
                         <a href="#collapseUsers" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
@@ -457,6 +486,19 @@
                             </li>
                         </ul>
                     </li>
+
+                    {{-- "Jadwal" — sibling top-level menu to Chat, not
+                         nested under it, and its own SEPARATE paid
+                         package: gated by $hasActiveJadwalPackage
+                         (category-scoped to "Jadwal", NOT the general
+                         $hasActivePackage this whole outer block uses —
+                         see AppServiceProvider::boot()), so a Chat-only
+                         subscriber never sees this. Route access itself
+                         is backstopped by 'active.package:Jadwal' +
+                         'menu.access' + App\Models\CompanyRoleMenu once
+                         granted to a CompanyRole, same as every other
+                         menu here. --}}
+
 
                     <li class="pe-slide pe-has-sub">
                         <a href="#collapseDeposits" class="pe-nav-link" data-bs-toggle="collapse"
