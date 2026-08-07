@@ -71,7 +71,11 @@ class PhoneBookController extends Controller
             $query->where('is_blacklisted', false);
         }
 
-        $phoneBooks = $query->latest()->paginate(20)->withQueryString();
+        // 10/page + a tighter pagination window (onEachSide) to match
+        // Pesan Terjadwal and Google Form's list pages — was 20/page with
+        // Laravel's default onEachSide=3, which read as a wall of page
+        // number links on a table with hundreds of rows.
+        $phoneBooks = $query->latest()->paginate(10)->withQueryString()->onEachSide(1);
 
         $categories = WaCategoryPhoneBook::where('company_id', $company->id)
             ->orderBy('name')

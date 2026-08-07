@@ -4,8 +4,8 @@
             <div class="d-inline-flex align-items-center gap-2">
                 <a href="index.html" class="align-items-center logo-main d-none me-5 gap-2">
                     <img height="33" width="33" class="logo-dark" alt="Dark Logo"
-                        src="{{ asset('be') }}/assets/images/logo-md.png">
-                    <h3 class="text-white text-opacity-80 mb-0 lh-base fw-semibold">Mirbal</h3>
+                        src="{{ asset('be') }}/assets/images/favicon.png">
+                    <h3 class="text-white text-opacity-80 mb-0 lh-base fw-semibold">Konexa</h3>
                 </a>
                 <button type="button" class="vertical-toggle btn text-muted rounded-circle icon-btn" id="toggleSidebar"
                     aria-label="Toggle Sidebar">
@@ -35,10 +35,7 @@
                                 <img src="{{ asset('be') }}/assets/images/circle-flag/gb.svg" alt="English"
                                     width="26" height="26" class="rounded-circle"> English
                             </div>
-                            <div class="noti-item d-flex align-items-center gap-2 py-2">
-                                <img src="{{ asset('be') }}/assets/images/circle-flag/id.svg" alt="Indonesia"
-                                 width="26" height="26" class="rounded-circle"> Indonesia
-                        </div>
+                            
                     </ul>
                 </div>
                 <div class="dropdown pe-dropdown-mega">

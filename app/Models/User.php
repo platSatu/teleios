@@ -31,6 +31,12 @@ class User extends Authenticatable
         'email',
         'password',
         'handphone',
+        // Which App\Models\WebTermCondition version this user agreed to,
+        // and when — set once at registration (see AuthController::register()),
+        // never edited afterward. See that migration's docblock for why
+        // this is two columns instead of one boolean.
+        'terms_id',
+        'terms_accepted_at',
         'image',
        // 'role',
        // 'parent_id',
@@ -79,6 +85,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'email_verification_expires_at' => 'datetime',
+            'terms_accepted_at' => 'datetime',
             'password' => 'hashed',
             // Same 'hashed' cast as password — assigning a plain 6-digit
             // string to ->pin automatically runs it through Hash::make()
@@ -128,6 +135,20 @@ class User extends Authenticatable
 
         });
 
+    }
+
+    /**
+     * The Syarat & Ketentuan version this user agreed to at registration
+     * — null for accounts created before this feature existed, or via
+     * Google sign-up (that flow doesn't collect acceptance yet).
+     */
+    public function termCondition()
+    {
+        return $this->belongsTo(
+            WebTermCondition::class,
+            'terms_id',
+            'id'
+        );
     }
 
     public function wallet()

@@ -4,7 +4,7 @@
 <head>
 
     <meta charset="utf-8" />
-    <title>Forgot Password | Mirbal - Bootstrap Admin & Dashboard Template</title>
+    <title>Forgot Password | Konexa - Forgot Password</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta content="Bootstrap Admin & Dashboard Template" name="description" />
     <meta content="SRBThemes" name="author" />
@@ -45,13 +45,13 @@
                 <a href="{{ route('login') }}"
                     class="d-flex justify-content-end align-items-center gap-2 logo-main mt-lg-2 mb-5 mb-lg-0">
                     <img height="33" width="33" class="logo-dark" alt="Dark Logo"
-                        src="{{ asset('be') }}/assets/images/logo-md.png">
-                    <h3 class="mb-0 lh-base fw-semibold">Mirbal</h3>
+                        src="{{ asset('be') }}/assets/images/favicon.png">
+                    <h3 class="mb-0 lh-base fw-semibold">Konexa</h3>
                 </a>
                 <div class="d-flex flex-column justify-content-center h-100 ">
                     <div class="mb-12">
                         <h5 class="mb-2">Trouble logging in?</h5>
-                        <p class="text-muted mb-0">Enter your email and we'll send you a reset link.</p>
+                        <p class="text-muted mb-0">No problem. Enter your registered email address below, and we'll send you a secure password reset link. Once you receive the email, follow the instructions to create a new password and securely access your account again.</p>
                     </div>
 
                     @if (session('status'))

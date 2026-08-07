@@ -136,7 +136,7 @@ class DepositController extends Controller
     {
         abort_unless($deposit->user_id === Auth::id(), 403);
 
-        if ($deposit->status !== 'PENDING') {
+        if ($deposit->status !== 'PENDING' || $this->hasExpiredWindow($deposit)) {
             return redirect()
                 ->route('deposit.history')
                 ->with('error', 'Deposit ini sudah tidak menunggu pembayaran.');
@@ -205,7 +205,7 @@ class DepositController extends Controller
     {
         abort_unless($deposit->user_id === Auth::id(), 403);
 
-        if ($deposit->status !== 'PENDING') {
+        if ($deposit->status !== 'PENDING' || $this->hasExpiredWindow($deposit)) {
             return redirect()
                 ->route('deposit.history')
                 ->with('error', 'Deposit ini sudah tidak menunggu pembayaran.');
@@ -258,8 +258,14 @@ class DepositController extends Controller
                 'response_payload' => $result['raw'],
             ]);
 
+            // Same window Duitku itself was just told to enforce (see
+            // DuitkuService::createInvoice's 'expiryPeriod') — this is
+            // what App\Console\Commands\ProcessDepositExpiry checks
+            // every minute to send the "segera selesaikan pembayaran"
+            // reminder and, once passed, flip this deposit to EXPIRED.
             $deposit->update([
                 'provider_transaction_id' => $result['reference'],
+                'expires_at' => now()->addMinutes((int) config('services.duitku.expiry_minutes', 60)),
             ]);
         });
 
@@ -293,9 +299,27 @@ class DepositController extends Controller
             'FAILED' => redirect()
                 ->route('deposit.history')
                 ->with('error', 'Pembayaran gagal atau dibatalkan.'),
+            'EXPIRED' => redirect()
+                ->route('deposit.history')
+                ->with('error', 'Waktu pembayaran sudah habis. Silakan buat deposit baru.'),
             default => redirect()
                 ->route('deposit.history')
                 ->with('success', 'Pembayaran sedang diproses Duitku. Saldo akan otomatis bertambah begitu pembayaran dikonfirmasi.'),
         };
+    }
+
+    /**
+     * Defense-in-depth on top of App\Console\Commands\ProcessDepositExpiry:
+     * that command only runs once a minute, so there's a short window
+     * where a deposit's expires_at has already passed but its status
+     * hasn't been flipped to EXPIRED yet. checkout()/proceedToDuitku()
+     * both treat that window the same as an already-EXPIRED deposit —
+     * "pembayaran yang sudah expired tidak dapat diteruskan kembali ke
+     * Duitku" — rather than trusting the status column alone to always
+     * be perfectly up to date.
+     */
+    private function hasExpiredWindow(Deposit $deposit): bool
+    {
+        return $deposit->expires_at !== null && $deposit->expires_at->isPast();
     }
 }

@@ -146,7 +146,8 @@
             </div>
 
             <div class="mt-3">
-                {{ $deposits->links() }}
+                {{ $deposits->links('pagination::bootstrap-5') }}
+                
             </div>
         </div>
     </div>

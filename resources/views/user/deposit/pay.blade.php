@@ -43,6 +43,13 @@
 
 </div>
 
+{{-- SweetAlert2 for the "Terima kasih atas deposit Anda" success
+     popup — same asset pair already used by resources/views/superadmin/
+     wa-templates/_reject-script.blade.php, loaded here rather than
+     globally since this is the only place on this page that needs it. --}}
+<link rel="stylesheet" href="{{ asset('be') }}/assets/libs/sweetalert2/sweetalert2.min.css">
+<script src="{{ asset('be') }}/assets/libs/sweetalert2/sweetalert2.min.js"></script>
+
 <script src="{{ $widgetScriptUrl }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -68,10 +75,33 @@ document.addEventListener('DOMContentLoaded', function () {
     checkout.process(@json($reference), {
         defaultLanguage: 'id',
         successEvent: function () {
-            // Informational redirect only — the wallet is credited by
-            // the server-to-server webhook (DuitkuCallbackController),
-            // never by this client-side event.
-            window.location.href = returnUrl;
+            // Duitku's own widget popup has already closed itself by
+            // the time this fires. The wallet itself is still only
+            // ever credited by the server-to-server webhook
+            // (DuitkuCallbackController) — never by this client-side
+            // event — so this SweetAlert is purely a "thank you, we've
+            // got it" acknowledgment, not a guarantee the balance is
+            // updated yet. Redirect only happens once the user
+            // dismisses it (or after the delay below), landing on
+            // returnFromDuitku() which itself re-checks the deposit's
+            // real status.
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Pembayaran Berhasil',
+                    text: 'Terima kasih atas deposit Anda!',
+                    confirmButtonText: 'OK',
+                    customClass: { confirmButton: 'btn btn-primary' },
+                    buttonsStyling: false,
+                    allowOutsideClick: false,
+                    timer: 4000,
+                    timerProgressBar: true,
+                }).then(function () {
+                    window.location.href = returnUrl;
+                });
+            } else {
+                window.location.href = returnUrl;
+            }
         },
         pendingEvent: function () {
             window.location.href = returnUrl;

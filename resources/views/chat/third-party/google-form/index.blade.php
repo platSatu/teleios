@@ -58,17 +58,22 @@
                                             {{ $item->status }}
                                         </span>
                                     </td>
-                                    <td class="text-end">
-                                        <div class="btn-group btn-group-sm">
-                                            <a href="{{ route('chat.third-party.google-form.show', $item->id) }}" class="btn btn-outline-secondary">
-                                                <i class="ri-eye-line"></i> Detail
+                                    <td class="text-end" style="white-space: nowrap;">
+                                        {{-- Icon-only btn-light + title tooltip, same pattern as
+                                             Pesan Terjadwal (message-schedules/index.blade.php) and
+                                             Kontak (phone-books/index.blade.php) — was a labeled
+                                             btn-group/btn-outline-* here, the only page in Chat still
+                                             styled that way. --}}
+                                        <div class="d-flex flex-nowrap justify-content-end gap-1">
+                                            <a href="{{ route('chat.third-party.google-form.show', $item->id) }}" class="btn btn-sm btn-light" title="Detail">
+                                                <i class="ri-eye-line"></i>
                                             </a>
-                                            <a href="{{ route('chat.third-party.google-form.edit', $item->id) }}" class="btn btn-outline-secondary">
-                                                <i class="ri-edit-line"></i> Edit
+                                            <a href="{{ route('chat.third-party.google-form.edit', $item->id) }}" class="btn btn-sm btn-light" title="Edit">
+                                                <i class="ri-edit-line"></i>
                                             </a>
-                                            <button type="submit" form="delete-gform-{{ $item->id }}" class="btn btn-outline-danger"
+                                            <button type="submit" form="delete-gform-{{ $item->id }}" class="btn btn-sm btn-light text-danger" title="Hapus"
                                                 onclick="return confirm('Hapus integrasi ini? Log submission-nya ikut terhapus.');">
-                                                <i class="ri-delete-bin-line"></i> Hapus
+                                                <i class="ri-delete-bin-line"></i>
                                             </button>
                                         </div>
                                         <form id="delete-gform-{{ $item->id }}" action="{{ route('chat.third-party.google-form.destroy', $item->id) }}" method="POST" class="d-none">

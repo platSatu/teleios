@@ -79,7 +79,8 @@
             </div>
 
             <div class="mt-3">
-                {{ $referralCodes->links() }}
+                 {{ $referralCodes->links('pagination::bootstrap-5') }}
+                
             </div>
         </div>
     </div>

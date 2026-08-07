@@ -90,8 +90,14 @@ class MessageScheduleController extends Controller
                 'steps',
             ])
             ->latest()
-            ->paginate(15)
-            ->withQueryString();
+            ->paginate(10)
+            ->withQueryString()
+            // Default Laravel window (onEachSide=3) only starts collapsing
+            // into "..." once there are 14+ pages, which reads as a wall of
+            // page numbers for anything under that — trimmed to 1 so this
+            // (and the other paginated Chat list pages, kept in sync for a
+            // consistent look) windows down sooner.
+            ->onEachSide(1);
 
         // Audiens = distinct recipients declared on the schedule itself
         // (JSON column, can't be counted in SQL) — this and sent/failed/

@@ -4,10 +4,10 @@
 <head>
 
     <meta charset="utf-8" />
-    <title>Sign In | Mirbal - Bootstrap Admin & Dashboard Template</title>
+    <title>Sign In | Konexa - Login</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta content="Bootstrap Admin & Dashboard Template" name="description" />
-    <meta content="SRBThemes" name="author" />
+    <meta name="description" content="Masuk ke akun Konexa untuk mengakses dashboard, mengelola data, memantau aktivitas, dan menggunakan berbagai fitur yang dirancang untuk meningkatkan produktivitas Anda." />
+    <meta content="SRBThemes" name="konexa" />
 
     <!-- layout setup -->
     <script type="module" src="{{ asset('be') }}/assets/js/layout-setup.js"></script>
@@ -42,16 +42,17 @@
             class="main-wrapper border bg-white rounded-4 d-flex flex-column flex-lg-row gap-xl-5 position-relative overflow-hidden w-100 shadow">
             <div class="decoration-section m-5 bg-dark-subtle rounded-3 me-0 mb-0 mb-lg-5 mb-0 mb-lg-5"></div>
             <div class="login-section bg-white rounded-4 p-6 px-xl-12">
-                <a href="index.html"
+                <a href="{{ route('login') }}"
                     class="d-flex justify-content-end align-items-center gap-2 logo-main mt-lg-2 mb-10">
-                    <img height="33" width="33" class="logo-dark" alt="Dark Logo"
-                        src="{{ asset('be') }}/assets/images/logo-md.png">
-                    <h3 class="mb-0 lh-base fw-semibold">Mirbal</h3>
+                    <img height="33" width="33" class="logo-dark" alt="Logo Konexa"
+                        src="{{ asset('be') }}/assets/images/favicon.png">
+                    <h3 class="mb-0 lh-base fw-semibold">Konexa</h3>
                 </a>
-                <div class="mb-12">
+                <div class="mb-6">
                     <h5 class="mb-2">Welcome Back</h5>
                     <p class="text-muted mb-0">
-                        Sign in to access your dashboard, manage data, and explore analytics
+                        Sign in to access your dashboard, manage your data efficiently, monitor key activities, and gain
+                        valuable insights through powerful analytics—all in one secure place.
                     </p>
                 </div>
                 @if (session('status'))
@@ -94,7 +95,7 @@
                     </div>
 
                     <!-- Remember Me & Forgot Password -->
-                    <div class="mb-10">
+                    <div class="mb-4">
                         <div class="d-flex flex-wrap justify-content-between align-items-center">
 
                             <div class="form-check">
@@ -134,7 +135,8 @@
                 <p class="text-center text-muted fs-14 my-6">Not a Member yet? <a href="{{ route('register') }}"
                         class="link link-primary">Sign up</a></p>
                 <div class="d-flex flex-wrap align-items-center justify-content-center gap-2">
-                    <a href="{{ route('auth.google') }}" class="btn btn-outline-light text-black d-flex align-items-center justify-content-center gap-2 w-100">
+                    <a href="{{ route('auth.google') }}"
+                        class="btn btn-outline-light text-black d-flex align-items-center justify-content-center gap-2 w-100">
                         <img src="{{ asset('be') }}/assets/images/auth/google-icon.svg" alt="Google"
                             class="w-16px">Sign in via Google
                     </a>

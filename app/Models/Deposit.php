@@ -27,6 +27,8 @@ class Deposit extends Model
         'provider_transaction_id',
         'status',
         'paid_at',
+        'expires_at',
+        'reminder_sent_at',
         'failure_reason',
         'metadata',
     ];
@@ -36,6 +38,8 @@ class Deposit extends Model
     protected $casts = [
         'amount' => 'decimal:2',
         'paid_at' => 'datetime',
+        'expires_at' => 'datetime',
+        'reminder_sent_at' => 'datetime',
         'metadata' => 'array',
     ];
 

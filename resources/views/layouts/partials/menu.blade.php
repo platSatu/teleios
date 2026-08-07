@@ -3,8 +3,8 @@
         <!--begin::Brand Image-->
         <a href="index.html" class="d-flex gap-2 logo-main">
             <img height="33" width="33" class="logo-dark" alt="Dark Logo"
-                src="{{ asset('be') }}/assets/images/logo-md.png">
-            <h3 class="text-white text-opacity-80 mb-0 lh-base fw-semibold">Mirbal</h3>
+                src="{{ asset('be') }}/assets/images/favicon.png">
+            <h3 class="text-white text-opacity-80 mb-0 lh-base fw-semibold">Konexa</h3>
         </a>
         <button type="button" id="sidebarDefaultArrow"
             class="btn btn-sm p-0 fs-4 ms-auto float-end d-none icon-hover-btn text-white text-opacity-60 d-none"><i
@@ -17,7 +17,7 @@
                 <!-- Main Menu -->
                 <li class="pe-menu-title">Main</li>
                 <li class="pe-slide pe-has-sub">
-                    <a href="#collapseDashboards" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
+                    <a href="{{ route('dashboard') }}" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
                         aria-controls="collapseDashboards" onclick="toggleCollapse('collapseAuth', this)">
                         <i class="uil uil-tachometer-fast-alt pe-nav-icon"></i>
                         <span class="pe-nav-content">Dashboards</span>
@@ -352,6 +352,11 @@
                                 </a>
                             </li>
                             <li class="pe-slide-item">
+                                <a href="{{ route('web.term-conditions.index') }}" class="pe-nav-link">
+                                    Syarat & Ketentuan
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
                                 <a href="{{ route('web.category-videos.index') }}" class="pe-nav-link">
                                     Kategori Video
                                 </a>
@@ -496,6 +501,11 @@
                             <li class="pe-slide-item">
                                 <a href="{{ route('queue-monitor.index') }}" class="pe-nav-link">
                                     Queue Monitor
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('payment-webhooks.index') }}" class="pe-nav-link">
+                                    Payment Callback Log
                                 </a>
                             </li>
                         </ul>

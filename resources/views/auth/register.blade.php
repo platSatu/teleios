@@ -4,10 +4,10 @@
 <head>
 
     <meta charset="utf-8" />
-    <title>Sign Up | Mirbal - Bootstrap Admin & Dashboard Template</title>
+    <title>Sign Up | Konexa - Register</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta content="Bootstrap Admin & Dashboard Template" name="description" />
-    <meta content="SRBThemes" name="author" />
+    <meta name="description" content="Daftar akun Konexa sekarang untuk mengakses dashboard yang aman, mengelola data dengan lebih mudah, memantau aktivitas, dan meningkatkan produktivitas dalam satu platform." />
+    <meta content="SRBThemes" name="konexa" />
 
     <!-- layout setup -->
     <script type="module" src="{{ asset('be') }}/assets/js/layout-setup.js"></script>
@@ -37,30 +37,30 @@
 </head>
 
 <body>
-    <div class="min-vh-100 d-flex align-items-center justify-content-center px-5 py-10 auth-bg">
+    <div class="min-vh-200 d-flex align-items-center justify-content-center px-5 py-10 auth-bg">
         <div
             class="main-wrapper border bg-white rounded-4 d-flex flex-column flex-lg-row gap-xl-5 position-relative overflow-hidden w-100 shadow">
             <div class="decoration-section m-5 bg-dark-subtle rounded-3 me-0 mb-0 mb-lg-5"></div>
             <div class="login-section bg-white rounded-4 p-6 px-xl-12">
-                <a href="index.html"
-                    class="d-flex justify-content-end align-items-center gap-2 logo-main mt-lg-2 mb-10">
+                {{-- <a href="{{ route('login') }}"
+                    class="d-flex justify-content-end align-items-center gap-2 logo-main mt-lg-2 mb-3">
                     <img height="33" width="33" class="logo-dark" alt="Dark Logo"
-                        src="{{ asset('be') }}/assets/images/logo-md.png">
-                    <h3 class="mb-0 lh-base fw-semibold">Mirbal</h3>
-                </a>
-                <div class="mb-8">
-                    <h5 class="mb-2">Join Mirbal Now</h5>
+                        src="{{ asset('be') }}/assets/images/favicon.png">
+                    <h3 class="mb-0 lh-base fw-semibold">Konexa</h3>
+                </a> --}}
+                {{-- <div class="mb-8">
+                    <h5 class="mb-2">Join Konexa Now</h5>
                     <p class="text-muted mb-0">
-                        It only takes a moment to create your account
+                        Getting started is quick and easy. Create your account to securely access your dashboard, organize your data, and take advantage of features built to simplify your workflow.
                     </p>
-                </div>
+                </div> --}}
                 <form method="POST" action="{{ route('register') }}">
                     @csrf
 
                     <!-- Name -->
                     <div class="mb-4">
                         <input type="text" class="form-control @error('name') is-invalid @enderror" id="name"
-                            name="name" value="{{ old('name') }}" placeholder="Username" required autofocus
+                            name="name" value="{{ old('name') }}" placeholder="Name" required autofocus
                             autocomplete="name">
 
                         @error('name')
@@ -76,6 +76,21 @@
 
                         @error('email')
                             <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <!-- Handphone (WhatsApp) -->
+                    <div class="mb-4">
+                        <div class="input-group">
+                            <span class="input-group-text">+62</span>
+                            <input type="text" inputmode="numeric" class="form-control @error('handphone') is-invalid @enderror"
+                                id="handphone" name="handphone" value="{{ old('handphone') }}"
+                                placeholder="81234567890" required maxlength="14" autocomplete="tel-national">
+                        </div>
+                        <div class="form-text" style="font-size: 0.7rem;">Nomor WhatsApp aktif, tanpa awalan 0 atau 62 — cukup 10-14 digit setelahnya.</div>
+
+                        @error('handphone')
+                            <div class="text-danger fs-13 mt-1">{{ $message }}</div>
                         @enderror
                     </div>
 
@@ -118,20 +133,28 @@
                         </div>
                     </div>
 
-                    <!-- Remember Me (Optional) -->
+                    <!-- Terms & Conditions -->
                     <div class="mb-4">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div class="form-check">
-                                <input type="checkbox" class="form-check-input" id="rememberMe">
-
-                                <label class="form-check-label" for="rememberMe">
-                                    Remember me
-                                </label>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input @error('terms') is-invalid @enderror"
+                                id="terms" name="terms" value="1"
+                                @checked(old('terms')) @disabled(! old('terms')) required>
+                            <label class="form-check-label" for="terms">
+                                Saya menyetujui
+                                <a href="#" data-bs-toggle="modal" data-bs-target="#termsModal">Syarat dan Ketentuan</a>
+                            </label>
+                            <div class="form-text" id="termsHint" style="{{ old('terms') ? 'display:none' : '' }}"><span style="font-size: 0.7rem;">
+                                Buka dan baca Syarat &amp; Ketentuan di atas terlebih dahulu.
+                                </span>
                             </div>
+
+                            @error('terms')
+                                <div class="invalid-feedback d-block">{{ $message }}</div>
+                            @enderror
                         </div>
                     </div>
 
-                    <!-- Captcha -->
+                    
                     <div class="mb-4">
                         <div class="cf-turnstile" data-sitekey="{{ config('services.turnstile.site_key') }}"></div>
                         @error('cf-turnstile-response')
@@ -139,20 +162,16 @@
                         @enderror
                     </div>
 
-                    <!-- Register Button -->
+                    
                     <div class="text-center mb-4">
                         <button type="submit" class="btn btn-primary w-100">
                             Create An Account
                         </button>
                     </div>
 
-                    <!-- Login Link -->
-                    <div class="text-center">
-                        <a href="{{ route('login') }}">
-                            Already registered?
-                        </a>
-                    </div>
+                  
                 </form>
+
                 <p class="text-center text-muted fs-14 my-6">Already have an account? <a href="{{ route('login') }}"
                         class="link link-primary">Sign In</a></p>
                 <div class="d-flex flex-wrap align-items-center justify-content-center gap-2">
@@ -186,6 +205,65 @@
 
     <!-- Auth init -->
     <script src="{{ asset('be') }}/assets/js/auth/auth.init.js"></script>
+
+    <!-- Syarat & Ketentuan popup — moved here, as a direct child of
+         <body>, instead of living inside .main-wrapper (which has
+         overflow-hidden + is inside a transformed/animated decoration
+         wrapper on this page). Bootstrap's .modal/.modal-backdrop are
+         position: fixed, which is normally relative to the viewport —
+         but nested inside an ancestor with overflow-hidden (and,
+         depending on the theme's CSS, a transform on top of that), fixed
+         positioning becomes relative to THAT ancestor instead, which is
+         exactly what clipped the popup and made the backdrop only cover
+         part of the screen (and made outside-clicks land outside the
+         real clickable area, so Tutup/X felt broken). Content is
+         App\Models\WebTermCondition::current() — whichever row a
+         superadmin has marked Active (see
+         Superadmin\Web\TermConditionController). -->
+    <div class="modal fade" id="termsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">{{ $currentTerms->name ?? 'Syarat dan Ketentuan' }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    @if ($currentTerms)
+                        <div style="white-space: pre-line;">{{ $currentTerms->descriptions }}</div>
+                    @else
+                        <p class="text-muted mb-0">Syarat dan Ketentuan belum tersedia.</p>
+                    @endif
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Tutup</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Ticks (and re-enables) the "Saya menyetujui..." checkbox the
+        // instant #termsModal finishes closing — via the X, the Tutup
+        // button, clicking the backdrop, or pressing Escape, all of which
+        // fire this same 'hidden.bs.modal' event, so every way of
+        // dismissing it is covered by one listener. The checkbox itself
+        // starts disabled (see the form field above) precisely so this is
+        // the ONLY way to ever check it — there's no path to a checked
+        // box without the popup having actually been opened first.
+        document.addEventListener('DOMContentLoaded', function () {
+            var termsModalEl = document.getElementById('termsModal');
+            var termsCheckbox = document.getElementById('terms');
+            var termsHint = document.getElementById('termsHint');
+
+            if (!termsModalEl || !termsCheckbox) return;
+
+            termsModalEl.addEventListener('hidden.bs.modal', function () {
+                termsCheckbox.disabled = false;
+                termsCheckbox.checked = true;
+                if (termsHint) termsHint.style.display = 'none';
+            });
+        });
+    </script>
 
 </body>
 

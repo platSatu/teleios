@@ -74,7 +74,8 @@
             </div>
 
             <div class="mt-3">
-                {{ $companyRoles->links() }}
+                {{ $companyRoles->links('pagination::bootstrap-5') }}
+                
             </div>
         </div>
     </div>

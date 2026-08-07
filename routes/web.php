@@ -30,6 +30,7 @@ use App\Http\Controllers\Superadmin\PaymentTransactionController;
 use App\Http\Controllers\Superadmin\AuditLogController;
 
 use App\Http\Controllers\Superadmin\QueueMonitorController;
+use App\Http\Controllers\Superadmin\PaymentWebhookController;
 
 use App\Http\Controllers\Superadmin\RoleController;
 
@@ -82,6 +83,7 @@ use App\Http\Controllers\Superadmin\Web\FaqController as WebFaqController;
 use App\Http\Controllers\Superadmin\Web\CategoryVideoController as WebCategoryVideoController;
 
 use App\Http\Controllers\Superadmin\Web\VideoController as WebVideoController;
+use App\Http\Controllers\Superadmin\Web\TermConditionController as WebTermConditionController;
 use App\Http\Controllers\Superadmin\WaTemplateReviewController;
 
 
@@ -776,6 +778,18 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
                 Route::delete('/failed/{id}', 'destroyFailed')->name('queue-monitor.failed.destroy');
             });
 
+        // UAT/audit log of every Duitku payment callback (success,
+        // pending, failed, our own processing errors) plus the
+        // synthetic PAYMENT_EXPIRED rows from
+        // App\Console\Commands\ProcessDepositExpiry — see
+        // Superadmin\PaymentWebhookController's docblock.
+        Route::prefix('payment-webhooks')
+            ->controller(PaymentWebhookController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('payment-webhooks.index');
+                Route::get('/{id}', 'show')->name('payment-webhooks.show');
+            });
+
         Route::prefix('roles')
             ->controller(RoleController::class)
             ->group(function () {
@@ -998,6 +1012,17 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
                     Route::get('/{id}/edit', 'edit')->name('web.faqs.edit');
                     Route::put('/{id}', 'update')->name('web.faqs.update');
                     Route::delete('/{id}', 'destroy')->name('web.faqs.destroy');
+                });
+
+            Route::prefix('term-conditions')
+                ->controller(WebTermConditionController::class)
+                ->group(function () {
+                    Route::get('/', 'index')->name('web.term-conditions.index');
+                    Route::get('/create', 'create')->name('web.term-conditions.create');
+                    Route::post('/create', 'store')->name('web.term-conditions.store');
+                    Route::get('/{id}/edit', 'edit')->name('web.term-conditions.edit');
+                    Route::put('/{id}', 'update')->name('web.term-conditions.update');
+                    Route::delete('/{id}', 'destroy')->name('web.term-conditions.destroy');
                 });
 
             Route::prefix('category-videos')

@@ -260,36 +260,64 @@
         });
     }
 
+    // Turns one button into the exact text line
+    // App\Models\WaMessageTemplate::composedMessage() sends it as — g_backend's
+    // whatsmeow integration has no real "tappable button bar" message type,
+    // so every button is really just flattened into a plain text line with
+    // an emoji instead (see that method's docblock). Kept in sync with the
+    // PHP `match` there by hand since the preview here runs client-side.
+    function buttonLine(btn) {
+        const label = (btn.label || '').trim();
+        if (!label) return null;
+        const value = (btn.value || '').trim();
+
+        if (btn.type === 'phone') return value ? ('📞 ' + label + ': ' + value) : ('📞 ' + label);
+        if (btn.type === 'url') return value ? ('🔗 ' + label + ': ' + value) : ('🔗 ' + label);
+        return '• ' + label;
+    }
+
     window.__tplUpdatePreview = function () {
         if (!window.__tplGetState) return;
         const state = window.__tplGetState();
 
-        headerOut.innerHTML = renderMarkdown(applyVariables(state.header, state.variables));
-        bodyOut.innerHTML = state.body
-            ? renderMarkdown(applyVariables(state.body, state.variables))
-            : 'Isi pesan akan muncul di sini...';
-        footerOut.innerHTML = renderMarkdown(applyVariables(state.footer, state.variables));
-
+        // Everything below used to render in its own styled zone (bold
+        // header line, blue clickable link row, a separate green button
+        // bar below the bubble) — which looked right in this mockup but
+        // doesn't match what actually arrives on WhatsApp: g_backend only
+        // ever sends ONE plain text message, built by flattening header +
+        // body + link + buttons(-as-text) + footer together with blank
+        // lines between them (WaMessageTemplate::composedMessage(), the
+        // exact function every send path calls). Composing that same
+        // single block here — instead of 4 separately-styled pieces — is
+        // what makes this preview actually match the WhatsApp bubble the
+        // recipient gets.
         const showLink = (state.contentType === 'text_link' || state.contentType === 'text_link_file') && state.link;
-        linkOut.style.display = showLink ? '' : 'none';
-        if (showLink) {
-            linkOut.innerHTML = '<i class="ri-link"></i> ' + escapeHtml(state.link);
-        }
+
+        const parts = [
+            applyVariables(state.header, state.variables).trim(),
+            applyVariables(state.body, state.variables).trim(),
+            showLink ? state.link.trim() : '',
+            (state.buttons || []).map(buttonLine).filter(Boolean).join('\n'),
+            applyVariables(state.footer, state.variables).trim(),
+        ].filter(function (part) { return part !== ''; });
+
+        const composed = parts.join('\n\n');
+        bodyOut.innerHTML = composed ? renderMarkdown(composed) : 'Isi pesan akan muncul di sini...';
+
+        // These no longer get their own content — left empty (not just
+        // hidden) so the :empty CSS rules already on .tpl-bubble-header/
+        // -footer keep collapsing their spacing too.
+        headerOut.innerHTML = '';
+        footerOut.innerHTML = '';
+        linkOut.style.display = 'none';
+        buttonsOut.style.display = 'none';
+        buttonsOut.innerHTML = '';
 
         const showAttachment = state.contentType === 'text_link_file' && attachmentLabel;
         attachmentOut.style.display = showAttachment ? '' : 'none';
         if (showAttachment) {
             attachmentOut.innerHTML = '<i class="ri-file-3-line"></i> <span class="text-truncate">' + escapeHtml(attachmentLabel) + '</span>';
         }
-
-        buttonsOut.innerHTML = '';
-        (state.buttons || []).forEach(function (btn) {
-            if (!btn.label) return;
-            const el = document.createElement('div');
-            el.className = 'tpl-preview-btn';
-            el.innerHTML = '<i class="' + iconFor(btn.type) + '"></i> ' + escapeHtml(btn.label);
-            buttonsOut.appendChild(el);
-        });
     };
 
     document.addEventListener('DOMContentLoaded', function () {

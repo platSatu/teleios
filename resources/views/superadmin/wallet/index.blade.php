@@ -58,7 +58,8 @@
             </div>
 
             <div class="mt-3">
-                {{ $wallets->links() }}
+                 {{ $wallets->links('pagination::bootstrap-5') }}
+                
             </div>
         </div>
     </div>

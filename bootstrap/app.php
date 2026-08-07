@@ -42,6 +42,17 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('package:send-expiry-reminders')
             ->dailyAt('08:00')
             ->withoutOverlapping();
+
+        // Duitku payment-window reminders + expiry — see
+        // App\Console\Commands\ProcessDepositExpiry. Minute-granular
+        // (not daily, unlike the reminder above) since a Duitku
+        // payment window is typically 60 minutes, not days — Duitku
+        // itself never pushes an "expired" callback, so this command
+        // is the only thing that ever moves a PENDING deposit to
+        // EXPIRED.
+        $schedule->command('deposit:process-expiry')
+            ->everyMinute()
+            ->withoutOverlapping();
     })
      ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([

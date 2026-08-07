@@ -64,9 +64,14 @@ class DuitkuCallbackController extends Controller
         ]);
 
         try {
+            // event_type starts generic and gets refined below once the
+            // outcome is actually known (PAYMENT_SUCCESS / _PENDING /
+            // _FAILED / _ERROR / _IGNORED_DUPLICATE — see
+            // Superadmin\PaymentWebhookController for how these are
+            // surfaced for UAT).
             $webhook = PaymentWebhook::create([
                 'provider' => 'DUITKU',
-                'event_type' => 'PAYMENT_NOTIFICATION',
+                'event_type' => 'PAYMENT_CALLBACK_RECEIVED',
                 'signature' => $notification['signature'] ?? null,
                 'payload' => $notification,
                 'processed' => false,
@@ -91,7 +96,7 @@ class DuitkuCallbackController extends Controller
                 'merchantOrderId' => $notification['merchantOrderId'] ?? null,
             ]);
 
-            $webhook->update(['processing_error' => 'Invalid signature']);
+            $webhook->update(['event_type' => 'PAYMENT_ERROR', 'processing_error' => 'Invalid signature']);
 
             // Plain 400 (not "OK") so Duitku's dashboard shows this
             // callback as failed rather than acknowledged — an invalid
@@ -108,7 +113,10 @@ class DuitkuCallbackController extends Controller
                 'merchantOrderId' => $notification['merchantOrderId'] ?? null,
             ]);
 
-            $webhook->update(['processing_error' => 'Deposit not found for merchantOrderId: ' . ($notification['merchantOrderId'] ?? '')]);
+            $webhook->update([
+                'event_type' => 'PAYMENT_ERROR',
+                'processing_error' => 'Deposit not found for merchantOrderId: ' . ($notification['merchantOrderId'] ?? ''),
+            ]);
 
             // Still 200/OK: the signature was genuinely valid, so this
             // really did come from Duitku — but retrying won't ever
@@ -271,6 +279,12 @@ class DuitkuCallbackController extends Controller
                 }
 
                 $webhook->update([
+                    'event_type' => match ($outcomeStatus) {
+                        'success' => 'PAYMENT_SUCCESS',
+                        'pending' => 'PAYMENT_PENDING',
+                        'failed' => 'PAYMENT_FAILED',
+                        default => 'PAYMENT_NOTIFICATION',
+                    },
                     'processed' => true,
                     'processed_at' => now(),
                 ]);
@@ -291,6 +305,7 @@ class DuitkuCallbackController extends Controller
             ]);
 
             $webhook->update([
+                'event_type' => 'PAYMENT_ERROR',
                 'processing_error' => 'Exception: ' . $e->getMessage(),
             ]);
 
@@ -321,6 +336,7 @@ class DuitkuCallbackController extends Controller
 
         if ($outcome['status'] === 'ignored') {
             $webhook->update([
+                'event_type' => 'PAYMENT_IGNORED_DUPLICATE',
                 'processed' => true,
                 'processed_at' => now(),
                 'processing_error' => 'Ignored — deposit already left PENDING (duplicate/late callback)',

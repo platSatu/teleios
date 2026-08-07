@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\HistoryUserLogin;
 use App\Models\User;
+use App\Models\WebTermCondition;
 use App\Rules\Turnstile;
 use App\Services\Chat\SystemJwtService;
 use App\Services\GolangAuthService;
@@ -296,7 +297,9 @@ class AuthController extends Controller
 
     public function showRegister(): View
     {
-        return view('auth.register');
+        return view('auth.register', [
+            'currentTerms' => WebTermCondition::current(),
+        ]);
     }
 
     public function register(Request $request): RedirectResponse
@@ -304,9 +307,38 @@ class AuthController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
+            // Bare national number only — no leading 0, no '62' country
+            // code, e.g. "81286800080" (11 digits). Normalized to the
+            // same digit-only, '62'-prefixed shape every other phone
+            // number in this app is stored/expected in (see
+            // App\Jobs\Concerns\NormalizesWhatsAppJid::toIndividualJid())
+            // right after validation passes, below — kept as a plain
+            // regex here rather than a Rule class since nothing else in
+            // the app has one to share yet.
+            'handphone' => ['required', 'regex:/^[1-9][0-9]{9,13}$/'],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            // Checkbox on the register form — 'accepted' fails unless
+            // it's literally "yes"/"on"/"1"/true, i.e. unchecked or
+            // missing entirely both fail this the same way.
+            'terms' => ['accepted'],
             'cf-turnstile-response' => $this->turnstileRules(),
+        ], [
+            'handphone.regex' => 'Nomor WhatsApp harus 10-14 digit angka, tanpa awalan 0 atau kode negara 62 (contoh: 81286800080).',
+            'terms.accepted' => 'Anda harus menyetujui Syarat dan Ketentuan untuk mendaftar.',
         ]);
+
+        // Uniqueness is checked against the NORMALIZED number (below),
+        // not the raw form input — a plain 'unique:users,handphone' rule
+        // above would compare against the bare "81286800080" the user
+        // typed, but the column actually stores "6281286800080", so it
+        // would never catch a real duplicate.
+        $normalizedHandphone = '62'.$validated['handphone'];
+
+        if (User::where('handphone', $normalizedHandphone)->exists()) {
+            return back()
+                ->withErrors(['handphone' => 'Nomor WhatsApp ini sudah terdaftar.'])
+                ->withInput();
+        }
 
         // Max 2 registrations per email+IP per 15 minutes — an active
         // user not receiving the verification email is almost always a
@@ -316,14 +348,25 @@ class AuthController extends Controller
         $this->ensureActionIsNotRateLimited($request, 'register');
         RateLimiter::hit($this->actionThrottleKey($request, 'register'), self::EMAIL_ACTION_DECAY_SECONDS);
 
+        // Snapshot which Syarat & Ketentuan version they're agreeing to
+        // right now — null only in the unlikely case no 'active' row
+        // exists at all (see WebTermCondition::current()), which the
+        // seeded starting row (create_web_term_conditions_table
+        // migration) is meant to prevent from ever happening on a fresh
+        // install.
+        $currentTerms = WebTermCondition::current();
+
         $user = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
+            'handphone' => $normalizedHandphone,
             'password' => Hash::make($validated['password']),
             // Explicit even though it matches the column's own DB
             // default — makes the "starts inactive" rule visible here,
             // not just in the migration.
             'status' => 'inactive',
+            'terms_id' => $currentTerms?->id,
+            'terms_accepted_at' => now(),
         ]);
 
         $user->sendCustomVerificationEmail();

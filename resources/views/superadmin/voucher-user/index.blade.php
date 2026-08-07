@@ -88,7 +88,8 @@
             </div>
 
             <div class="mt-3">
-                {{ $voucherUsers->links() }}
+                 {{ $voucherUsers->links('pagination::bootstrap-5') }}
+                
             </div>
         </div>
     </div>

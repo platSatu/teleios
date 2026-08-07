@@ -40,7 +40,11 @@ class GoogleFormIntegrationController extends Controller
             ->withCount('submissions')
             ->latest()
             ->paginate(15)
-            ->withQueryString();
+            ->withQueryString()
+            // Matches Pesan Terjadwal/Kontak's tighter pagination window —
+            // see those controllers for why (default onEachSide=3 doesn't
+            // start collapsing to "..." until 14+ pages).
+            ->onEachSide(1);
 
         return view('chat.third-party.google-form.index', compact('integrations'));
     }

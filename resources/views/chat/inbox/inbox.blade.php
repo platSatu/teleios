@@ -208,8 +208,21 @@
         @media (max-width: 1200px) {
             .wa-col-detail { display: none; }
         }
-        @media (max-width: 860px) {
+
+        /* --- small tablets / large phones in landscape: the 3-column
+           layout above still applies (list + thread side by side), but
+           320px for the list is too wide relative to the thread once the
+           viewport itself is this narrow — shrink it further (in two
+           steps) so the thread keeps a usable amount of space instead of
+           being squeezed to a sliver. Replaces the old single 860px
+           breakpoint, which only ever shrank the list once and left
+           everything from ~769-860px onward unhandled. --- */
+        @media (max-width: 992px) and (min-width: 769px) {
             .wa-col-contacts { width: 260px; flex-basis: 260px; }
+        }
+        @media (max-width: 860px) and (min-width: 769px) {
+            .wa-col-contacts { width: 220px; flex-basis: 220px; }
+            .wa-chat-item-assignee { display: none; }
         }
 
         /* --- mobile: one column at a time (list OR thread), like the --
@@ -234,8 +247,22 @@
 
             .wa-thread-body { padding: 12px; }
             .wa-msg-bubble { max-width: 86%; }
-            .wa-send-form { padding: 8px 10px; }
+            .wa-send-form { padding: 8px 10px; gap: 8px; }
             .wa-send-icons { gap: 2px; }
+            .wa-picker-popover { left: 8px; right: 8px; max-width: none; max-height: 45vh; }
+        }
+
+        /* --- very small phones: the icon row (emoji/quick-reply/
+           template/attach) plus input plus send button was crowding
+           together and clipping on ~320-360px wide screens — trim the
+           icon buttons and input padding a bit further here rather than
+           letting them overflow/wrap awkwardly. --- */
+        @media (max-width: 380px) {
+            .wa-icon-btn { width: 28px; height: 28px; }
+            .wa-send-icons { gap: 0; }
+            .wa-send-input { padding: 8px 12px; }
+            .wa-send-btn { width: 38px; height: 38px; }
+            .wa-chat-item-assignee { display: none; }
         }
 
         /* --- left column --- */
@@ -276,15 +303,21 @@
 
         .wa-date-divider { padding: 8px 14px 4px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; color: #9ca3af; text-transform: uppercase; }
 
-        .wa-chat-item { display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left; background: transparent; border: none; border-bottom: 1px solid #f5f5f5; padding: 10px 14px; cursor: pointer; }
+        .wa-chat-item { display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left; background: transparent; border: none; border-bottom: 1px solid #f5f5f5; padding: 10px 14px; cursor: pointer; transition: background 0.12s ease; }
         .wa-chat-item:hover { background: #f9fafb; }
         .wa-chat-item.active { background: #eef7ee; }
         .wa-chat-item-body { flex: 1 1 auto; min-width: 0; }
         .wa-chat-item-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-        .wa-chat-item-name { font-weight: 600; font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* min-width: 0 is what actually lets text-overflow: ellipsis
+           kick in on a flex child — without it a flex item won't shrink
+           below its content's natural width, so long contact names/
+           previews were overflowing past the time/badge instead of
+           truncating, especially in the narrower 260px contacts column
+           used at tablet widths. */
+        .wa-chat-item-name { font-weight: 600; font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; min-width: 0; }
         .wa-chat-item-time { font-size: 0.72rem; color: #9ca3af; flex-shrink: 0; }
         .wa-chat-item-bottom { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 2px; }
-        .wa-chat-item-preview { font-size: 0.8rem; color: #6b7280; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+        .wa-chat-item-preview { font-size: 0.8rem; color: #6b7280; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; min-width: 0; }
         .wa-chat-item-assignee { font-size: 0.68rem; font-weight: 600; color: #6d28d9; background: #ede9fe; border-radius: 999px; padding: 1px 8px; flex-shrink: 0; white-space: nowrap; }
         .wa-unread-badge { background: #16a34a; color: #fff; border-radius: 999px; min-width: 20px; height: 20px; padding: 0 6px; font-size: 0.72rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
 
@@ -317,6 +350,9 @@
         .wa-thread-empty i { font-size: 2.5rem; }
 
         .wa-thread-body { flex: 1 1 auto; overflow-y: auto; padding: 18px; }
+        .wa-thread-loading { display: flex; align-items: center; justify-content: center; height: 100%; color: #9ca3af; font-size: 1.8rem; }
+        .wa-thread-loading i { animation: wa-spin 0.8s linear infinite; }
+        @keyframes wa-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .wa-msg-divider { text-align: center; margin: 10px 0; }
         .wa-msg-divider span { background: rgba(255,255,255,0.7); color: #6b7280; font-size: 0.72rem; padding: 3px 12px; border-radius: 999px; }
 
@@ -645,23 +681,37 @@
                 container.style.width = size + 'px';
                 container.style.height = size + 'px';
 
+                const label = chat.name || chat.chat_jid;
+
+                // Falls back to the initials avatar if the thumbnail URL
+                // 404s or otherwise fails to load (e.g. a stale/expired
+                // Go-backend media link) — without this an onerror-less
+                // <img> just shows a broken-image icon forever instead of
+                // the colored initials every contact without a photo
+                // already gets.
+                function showInitialsFallback() {
+                    container.innerHTML = '';
+                    container.style.background = colorForName(label);
+                    container.style.fontSize = Math.max(12, Math.round(size * 0.4)) + 'px';
+                    container.textContent = initials(label);
+                }
+
                 if (chat.avatar_url) {
                     container.style.background = 'transparent';
                     const img = document.createElement('img');
                     img.src = chat.avatar_url;
                     img.alt = '';
+                    img.loading = 'lazy';
                     img.style.width = '100%';
                     img.style.height = '100%';
                     img.style.objectFit = 'cover';
                     img.style.borderRadius = '50%';
+                    img.addEventListener('error', showInitialsFallback);
                     container.appendChild(img);
                     return;
                 }
 
-                const label = chat.name || chat.chat_jid;
-                container.style.background = colorForName(label);
-                container.style.fontSize = Math.max(12, Math.round(size * 0.4)) + 'px';
-                container.textContent = initials(label);
+                showInitialsFallback();
             }
 
             // Used for chat list rows, which are always freshly created
@@ -1344,6 +1394,13 @@
                         tag: function (item) { return item.shortcut ? '/' + item.shortcut : null; },
                         body: function (item) { return item.message_content; },
                     });
+                }).catch(function () {
+                    // Without this, a failed request left the popover
+                    // stuck on "Memuat..." forever — which reads as the
+                    // button just being broken/non-functional rather than
+                    // a network hiccup.
+                    if (pickerPopoverTitleEl.textContent !== 'Balasan Cepat') return;
+                    pickerPopoverBodyEl.innerHTML = '<div class="wa-picker-empty">Gagal memuat balasan cepat. Coba lagi.</div>';
                 });
             }
 
@@ -1393,6 +1450,9 @@
                             }
                         },
                     });
+                }).catch(function () {
+                    if (pickerPopoverTitleEl.textContent !== 'Template Pesan') return;
+                    pickerPopoverBodyEl.innerHTML = '<div class="wa-picker-empty">Gagal memuat template. Coba lagi.</div>';
                 });
             }
 
@@ -1890,6 +1950,13 @@
                 sendFormEl.classList.remove('d-none');
                 threadTitleEl.textContent = chat.name || chat.chat_jid;
                 threadSubEl.textContent = '';
+
+                // Instant feedback the moment a chat is tapped, instead of
+                // leaving the thread pane blank until loadMessages()'s
+                // network round trip resolves — on a slow connection that
+                // blank gap is what reads as "opening a chat is slow",
+                // even though the actual fetch time is unchanged.
+                threadBodyEl.innerHTML = '<div class="wa-thread-loading"><i class="ri-loader-4-line"></i></div>';
 
                 applyAvatar(threadAvatarEl, chat, 40);
 
