@@ -16,7 +16,7 @@
                     </div>
 
                     <div class="table-responsive">
-                        <table class="table table-centered table-hover align-middle mb-0">
+                        <table id="wa-device-table" class="table table-centered table-hover align-middle mb-0">
                             <thead class="table-light">
                                 <tr>
                                     <th style="width: 60px;">No</th>
@@ -137,6 +137,68 @@
         .wa-history-label { font-weight: 600; font-size: 0.86rem; }
         .wa-history-detail { font-size: 0.8rem; color: #6b7280; margin-top: 2px; }
         .wa-history-time { font-size: 0.72rem; color: #9ca3af; margin-top: 2px; }
+
+        /* Action buttons wrap onto multiple lines instead of forcing the
+           whole table wider — .btn-group's joined-border layout never
+           wraps, which was the main reason 5 labeled buttons pushed the
+           Status/Terakhir Terhubung columns off-screen on mobile even
+           inside .table-responsive's horizontal scroll. */
+        .wa-action-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        /* Below md: table rows re-flow into stacked "cards" (one per
+           device) instead of relying on horizontal scroll — each cell
+           becomes its own line, labeled via data-label (set in the
+           renderDevices() JS below), so every field (No Handphone,
+           Status, Terakhir Terhubung) stays fully visible without
+           side-scrolling; only the action buttons area keeps its normal
+           left-to-right flow (wrapped, see .wa-action-buttons above). */
+        @media (max-width: 767.98px) {
+            #wa-device-table thead { display: none; }
+            #wa-device-table, #wa-device-table tbody, #wa-device-table tr, #wa-device-table td {
+                display: block;
+                width: 100%;
+            }
+            #wa-device-table tbody tr {
+                margin-bottom: 12px;
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                padding: 4px 0;
+            }
+            #wa-device-table tbody tr:last-child { margin-bottom: 0; }
+            #wa-device-table td {
+                border-top: none;
+                padding: 6px 12px;
+            }
+            #wa-device-table td[data-label] {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+                text-align: right;
+            }
+            #wa-device-table td[data-label]::before {
+                content: attr(data-label);
+                font-weight: 600;
+                font-size: 0.8rem;
+                color: #6b7280;
+                text-align: left;
+            }
+            #wa-device-table td.wa-action-cell {
+                text-align: left;
+            }
+            #wa-device-table td.wa-action-cell .wa-action-buttons {
+                justify-content: flex-start;
+            }
+            #wa-device-table-empty td {
+                text-align: center !important;
+                display: block !important;
+            }
+            #wa-device-table-empty td::before { content: none; }
+        }
     </style>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -233,11 +295,14 @@
 
                     const noCell = document.createElement('td');
                     noCell.textContent = index + 1;
+                    noCell.dataset.label = 'No';
 
                     const phoneCell = document.createElement('td');
                     phoneCell.textContent = device.phone_number ? ('+' + device.phone_number) : '-';
+                    phoneCell.dataset.label = 'No Handphone';
 
                     const statusCell = document.createElement('td');
+                    statusCell.dataset.label = 'Status';
                     const badge = document.createElement('span');
                     badge.className = 'badge d-inline-flex align-items-center ' + meta.badge;
                     const dot = document.createElement('span');
@@ -249,15 +314,21 @@
                     const connectedCell = document.createElement('td');
                     connectedCell.textContent = timeLabel(device.connected_at);
                     connectedCell.className = 'text-muted small';
+                    connectedCell.dataset.label = 'Terakhir Terhubung';
 
                     const actionCell = document.createElement('td');
-                    actionCell.className = 'text-end';
+                    actionCell.className = 'text-end wa-action-cell';
 
+                    // Not .btn-group — its joined-border layout can't
+                    // wrap onto multiple lines, which is what was
+                    // forcing this cell (and the whole table) wider than
+                    // the screen on mobile. See .wa-action-buttons CSS
+                    // above.
                     const actionGroup = document.createElement('div');
-                    actionGroup.className = 'btn-group btn-group-sm';
+                    actionGroup.className = 'wa-action-buttons';
 
                     const inboxBtn = document.createElement('a');
-                    inboxBtn.className = 'btn btn-outline-primary';
+                    inboxBtn.className = 'btn btn-sm btn-outline-primary';
                     inboxBtn.innerHTML = '<i class="ri-message-3-line"></i> Inbox';
                     if (device.status === 'connected') {
                         inboxBtn.href = urlFor(inboxUrlTemplate, device.id);
@@ -269,7 +340,7 @@
 
                     const refreshBtn = document.createElement('button');
                     refreshBtn.type = 'button';
-                    refreshBtn.className = 'btn btn-outline-secondary';
+                    refreshBtn.className = 'btn btn-sm btn-outline-secondary';
                     refreshBtn.innerHTML = '<i class="ri-refresh-line"></i> Refresh';
                     refreshBtn.addEventListener('click', function () {
                         openQrModalForReconnect(device.id);
@@ -277,7 +348,7 @@
 
                     const disconnectBtn = document.createElement('button');
                     disconnectBtn.type = 'button';
-                    disconnectBtn.className = 'btn btn-outline-danger';
+                    disconnectBtn.className = 'btn btn-sm btn-outline-danger';
                     disconnectBtn.innerHTML = '<i class="ri-link-unlink-m"></i> Disconnect';
                     disconnectBtn.disabled = device.status === 'disconnected';
                     disconnectBtn.addEventListener('click', function () {
@@ -285,7 +356,7 @@
                     });
 
                     const apiKeyBtn = document.createElement('a');
-                    apiKeyBtn.className = 'btn btn-outline-dark';
+                    apiKeyBtn.className = 'btn btn-sm btn-outline-dark';
                     apiKeyBtn.innerHTML = '<i class="ri-key-2-line"></i> API Key';
                     let apiKeyHref = urlFor(apiKeyPageUrlTemplate, device.id);
                     if (device.phone_number) {
@@ -295,7 +366,7 @@
 
                     const historyBtn = document.createElement('button');
                     historyBtn.type = 'button';
-                    historyBtn.className = 'btn btn-outline-secondary';
+                    historyBtn.className = 'btn btn-sm btn-outline-secondary';
                     historyBtn.innerHTML = '<i class="ri-history-line"></i> Riwayat';
                     historyBtn.addEventListener('click', function () {
                         openHistoryModal(device.id, device.phone_number);

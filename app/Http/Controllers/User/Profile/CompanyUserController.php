@@ -146,6 +146,18 @@ class CompanyUserController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
+            // Optional — a member can be created without WhatsApp yet
+            // and have it added later via edit(). Bare national number
+            // only (no leading 0, no '62' country code), same shape/
+            // regex as Auth\AuthController::register() — normalized to
+            // the '62'-prefixed digit-only form every other phone number
+            // in this app expects (see App\Jobs\Concerns\
+            // NormalizesWhatsAppJid) right after validation, below.
+            // Guru/murid notifications (App\Services\Jadwal\
+            // JadwalNotificationService) silently no-op for anyone
+            // without one, so this is the field that actually makes
+            // Jadwal's WA automation work for a user created here.
+            'handphone' => ['nullable', 'regex:/^[1-9][0-9]{9,13}$/'],
             'company_role_id' => ['required', 'uuid'],
             // Both optional — a member doesn't have to be placed under a
             // branch office/unit, e.g. a company that hasn't set up
@@ -156,6 +168,8 @@ class CompanyUserController extends Controller
             'status' => ['required', 'in:active,inactive'],
             'category_application_id' => ['required', 'array', 'min:1'],
             'category_application_id.*' => ['uuid', Rule::in($activeCategoryApplicationIds->all())],
+        ], [
+            'handphone.regex' => 'Nomor WhatsApp harus 10-14 digit angka, tanpa awalan 0 atau kode negara 62 (contoh: 81286800080).',
         ]);
 
         $validator->after(function ($validator) use ($request, $company) {
@@ -168,6 +182,7 @@ class CompanyUserController extends Controller
             }
 
             $this->validateBranchOfficeAndUnit($validator, $request, $company);
+            $this->validateUniqueHandphone($validator, $request);
         });
 
         if ($validator->fails()) {
@@ -179,7 +194,11 @@ class CompanyUserController extends Controller
 
         $validated = $validator->validated();
 
-        DB::transaction(function () use ($validated, $company) {
+        // Same normalization as Auth\AuthController::register() — see
+        // the field's validation comment above.
+        $normalizedHandphone = filled($validated['handphone'] ?? null) ? '62'.$validated['handphone'] : null;
+
+        DB::transaction(function () use ($validated, $company, $normalizedHandphone) {
             // password hashes automatically — User::casts() has
             // 'password' => 'hashed', so this plain create() call hashes
             // it on the way in (same pattern as Superadmin\UserController).
@@ -187,6 +206,7 @@ class CompanyUserController extends Controller
                 'name' => $validated['name'],
                 'email' => $validated['email'],
                 'password' => $validated['password'],
+                'handphone' => $normalizedHandphone,
                 'status' => 'active',
                 'user_type' => 'USER',
             ]);
@@ -317,14 +337,24 @@ class CompanyUserController extends Controller
 
         $validator = Validator::make($request->all(), [
             'company_role_id' => ['required', 'uuid'],
+            // Editable here (unlike name/email, which stay locked once
+            // created — see edit()'s view) since this is exactly the
+            // field that wasn't collected at all before this change, so
+            // every member created earlier needs a way to have it added
+            // after the fact for Jadwal's WA automation to work for them.
+            // Same shape/normalization as store() — see that method's
+            // comment.
+            'handphone' => ['nullable', 'regex:/^[1-9][0-9]{9,13}$/'],
             'branch_office_id' => ['nullable', 'uuid'],
             'branch_office_unit_id' => ['nullable', 'uuid'],
             'status' => ['required', 'in:active,inactive'],
             'category_application_id' => ['required', 'array', 'min:1'],
             'category_application_id.*' => ['uuid', Rule::in($activeCategoryApplicationIds->all())],
+        ], [
+            'handphone.regex' => 'Nomor WhatsApp harus 10-14 digit angka, tanpa awalan 0 atau kode negara 62 (contoh: 81286800080).',
         ]);
 
-        $validator->after(function ($validator) use ($request, $company) {
+        $validator->after(function ($validator) use ($request, $company, $userId) {
             $role = CompanyRole::where('id', $request->input('company_role_id'))
                 ->where('company_id', $company->id)
                 ->first();
@@ -334,6 +364,7 @@ class CompanyUserController extends Controller
             }
 
             $this->validateBranchOfficeAndUnit($validator, $request, $company);
+            $this->validateUniqueHandphone($validator, $request, $userId);
         });
 
         if ($validator->fails()) {
@@ -345,6 +376,14 @@ class CompanyUserController extends Controller
 
         $validated = $validator->validated();
         $newCategoryIds = array_unique($validated['category_application_id']);
+
+        // Same normalization as store() — see that method's comment.
+        // An empty submission CLEARS the number (explicit null), rather
+        // than leaving whatever was there before untouched, so an admin
+        // can actually correct/remove a wrong number from this form.
+        $normalizedHandphone = filled($validated['handphone'] ?? null) ? '62'.$validated['handphone'] : null;
+
+        User::where('id', $userId)->update(['handphone' => $normalizedHandphone]);
 
         DB::transaction(function () use ($company, $userId, $validated, $newCategoryIds) {
             // Update (or re-create) a row for every category still/newly
@@ -553,6 +592,37 @@ class CompanyUserController extends Controller
             if (! $validUnit) {
                 $validator->errors()->add('branch_office_unit_id', 'Unit/Divisi tidak valid untuk branch office ini.');
             }
+        }
+    }
+
+    /**
+     * Shared by store()/update(): checked against the NORMALIZED
+     * ('62'-prefixed) number, not the raw form input — same reasoning
+     * as Auth\AuthController::register(), since the column actually
+     * stores the prefixed form. $ignoreUserId excludes the member's own
+     * current row on update() so re-saving their own unchanged number
+     * doesn't false-positive against itself.
+     */
+    private function validateUniqueHandphone($validator, Request $request, ?string $ignoreUserId = null): void
+    {
+        $raw = $request->input('handphone');
+
+        if (blank($raw)) {
+            return;
+        }
+
+        if ($validator->errors()->has('handphone')) {
+            return;
+        }
+
+        $normalized = '62'.$raw;
+
+        $exists = User::where('handphone', $normalized)
+            ->when($ignoreUserId, fn ($q) => $q->where('id', '!=', $ignoreUserId))
+            ->exists();
+
+        if ($exists) {
+            $validator->errors()->add('handphone', 'Nomor WhatsApp ini sudah terdaftar untuk user lain.');
         }
     }
 
