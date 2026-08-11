@@ -29,6 +29,9 @@ class Voucher extends Model
     protected $fillable = [
         'user_id',
         'company_id',
+        // Nullable — set at REDEEM time (Dashboard\VoucherRedeemController),
+        // not at purchase time. See 2026_08_11_090000's docblock for why.
+        'branch_office_id',
         'package_id',
         'subscription_id',
         'kode_voucher',
@@ -67,6 +70,15 @@ class Voucher extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    /**
+     * Null until redeemed under a specific branch (or if the company
+     * never scoped it to one at all) — see the migration's docblock.
+     */
+    public function branchOffice(): BelongsTo
+    {
+        return $this->belongsTo(BranchOffice::class);
     }
 
     public function package(): BelongsTo

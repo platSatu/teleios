@@ -88,6 +88,18 @@ class CompanyUserController extends Controller
 
     use ScopesActivePackage;
 
+    /**
+     * Reached either from the "Tambah User" entry on the Setting Users
+     * tab (no query string), or from the Applications tab's "Add User"
+     * row action on a specific company_role_menus row — which passes
+     * ?role=<company_role_id>&category=<category_application_id> so the
+     * Role/Branch/Unit/Category fields below arrive pre-selected instead
+     * of blank. Both are still plain <select>/checkbox inputs, not
+     * locked/readonly — a new hire can always be placed under a
+     * different role or an extra category before submitting; this is a
+     * convenience default, not an enforced constraint (store() re-checks
+     * everything server-side regardless).
+     */
     public function create(Request $request): RedirectResponse|View
     {
         $context = $this->companyContext($request);
@@ -110,12 +122,25 @@ class CompanyUserController extends Controller
             $branchOfficesQuery->where('id', $context->branchOffice?->id);
         }
 
+        $prefillRole = CompanyRole::where('company_id', $company->id)
+            ->where('id', $request->query('role'))
+            ->with('branchOfficeUnit')
+            ->first();
+
+        $prefillCategoryId = CategoryApplication::whereIn('id', $activeCategoryApplicationIds)
+            ->where('id', $request->query('category'))
+            ->value('id');
+
         return view('user.profile.company-users.create', [
             'company' => $company,
             'companyRoles' => $company->roles()->orderBy('name')->get(),
             'branchOffices' => $branchOfficesQuery->orderBy('name')->get(),
             'categoryApplications' => CategoryApplication::whereIn('id', $activeCategoryApplicationIds)->orderBy('name')->get(),
             'lockedBranchOffice' => $context->isOwner ? null : $context->branchOffice,
+            'prefillRoleId' => $prefillRole?->id,
+            'prefillBranchOfficeId' => $prefillRole?->branchOfficeUnit?->branch_office_id,
+            'prefillUnitId' => $prefillRole?->branch_office_unit_id,
+            'prefillCategoryId' => $prefillCategoryId,
         ]);
     }
 
@@ -235,6 +260,47 @@ class CompanyUserController extends Controller
         return redirect()
             ->route('profile.edit', ['tab' => 'users'])
             ->with('success', 'User baru berhasil dibuat dan ditambahkan ke company.');
+    }
+
+    /**
+     * "Show" row action on the Setting Users tab — full breadcrumb
+     * Company -> Branch -> Unit/Divisi -> Role -> Application(s), per
+     * the same "Show" convention as every other tab (dedicated page, not
+     * a modal). A member's rows all share one branch/unit/role (see this
+     * class's docblock), so those come from $memberRows->first(); the
+     * Application segment is plural since a member can be granted more
+     * than one CategoryApplication — rendered as a list rather than a
+     * single breadcrumb entry.
+     */
+    public function show(Request $request, string $userId): View
+    {
+        $context = $this->companyContext($request);
+        $company = $context->company;
+
+        $memberRowsQuery = CompanyToUser::where('company_id', $company->id)
+            ->where('user_id', $userId)
+            ->with(['user', 'role', 'categoryApplication', 'branchOffice', 'branchOfficeUnit']);
+
+        if (! $context->isOwner) {
+            $memberRowsQuery->where('branch_office_id', $context->branchOffice?->id);
+        }
+
+        $memberRows = $memberRowsQuery->get();
+
+        if ($memberRows->isEmpty()) {
+            abort(404);
+        }
+
+        $memberFirst = $memberRows->first();
+
+        return view('user.profile.company-users.show', [
+            'company' => $company,
+            'branchOffice' => $memberFirst->branchOffice,
+            'unit' => $memberFirst->branchOfficeUnit,
+            'role' => $memberFirst->role,
+            'member' => $memberFirst,
+            'memberRows' => $memberRows,
+        ]);
     }
 
     public function edit(Request $request, string $userId): View

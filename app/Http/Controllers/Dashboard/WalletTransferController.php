@@ -67,8 +67,25 @@ class WalletTransferController extends Controller
             return response()->json(['found' => false, 'message' => 'Masukkan nomor HP atau email.']);
         }
 
-        $recipient = User::where(function ($q) use ($identifier) {
-                $q->where('email', $identifier)->orWhere('handphone', $identifier);
+        // The form's placeholder tells people to type their number the
+        // normal Indonesian way (leading "0", e.g. 081286800080), but
+        // `users.handphone` is always stored digit-only with a "62"
+        // prefix instead (see Auth\AuthController::register() and
+        // User\Profile\CompanyUserController — both normalize to
+        // '62'.$nationalNumber before saving). Searching for the raw
+        // "0…" string the user typed against that column was a straight
+        // exact-match miss every time, even for a real, existing user —
+        // normalizeHandphone() below reproduces the exact same
+        // normalization so this lookup matches what's actually in the
+        // database.
+        $normalizedHandphone = $this->normalizeHandphone($identifier);
+
+        $recipient = User::where(function ($q) use ($identifier, $normalizedHandphone) {
+                $q->where('email', $identifier);
+
+                if ($normalizedHandphone !== null) {
+                    $q->orWhere('handphone', $normalizedHandphone);
+                }
             })
             ->first();
 
@@ -241,6 +258,39 @@ class WalletTransferController extends Controller
         );
 
         return view('dashboard.wallet-transfer.success', compact('transfer'));
+    }
+
+    /**
+     * Reproduces the same '62'-prefixed, digit-only shape every
+     * handphone column actually gets saved in (see
+     * Auth\AuthController::register() / User\Profile\CompanyUserController)
+     * so a search typed the normal Indonesian way (with a leading "0")
+     * still matches. Returns null for input with no digits at all (a
+     * plain email search), so the caller can skip the handphone branch
+     * of the query entirely instead of matching an empty/garbage value.
+     *
+     *   "081286800080"   -> "6281286800080" (leading 0 -> 62)
+     *   "6281286800080"  -> "6281286800080" (already correct)
+     *   "+6281286800080" -> "6281286800080" (strip the +)
+     *   "81286800080"    -> "6281286800080" (bare national number)
+     */
+    private function normalizeHandphone(string $identifier): ?string
+    {
+        $digits = preg_replace('/\D+/', '', $identifier);
+
+        if ($digits === null || $digits === '') {
+            return null;
+        }
+
+        if (str_starts_with($digits, '62')) {
+            return $digits;
+        }
+
+        if (str_starts_with($digits, '0')) {
+            return '62' . substr($digits, 1);
+        }
+
+        return '62' . $digits;
     }
 
     private function maskContact(string $email): string

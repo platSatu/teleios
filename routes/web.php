@@ -92,6 +92,7 @@ use App\Http\Controllers\Superadmin\WaTemplateReviewController;
 // above) — same short class names, different namespace. Follows the
 // existing precedent of Dashboard\PackageController being the one
 // aliased while Superadmin\PackageController stays plain.
+use App\Http\Controllers\User\Profile\CompanyController as UserCompanyController;
 use App\Http\Controllers\User\Profile\CompanyRoleController as UserCompanyRoleController;
 use App\Http\Controllers\User\Profile\CompanyRoleMenuController as UserCompanyRoleMenuController;
 use App\Http\Controllers\User\Profile\CompanyUserController;
@@ -100,6 +101,7 @@ use App\Http\Controllers\User\Settings\PinController;
 use App\Http\Controllers\User\Profile\BranchOfficeController as UserBranchOfficeController;
 use App\Http\Controllers\User\Profile\BranchOfficeUnitController as UserBranchOfficeUnitController;
 use App\Http\Controllers\User\History\HistoryUserController;
+
 use App\Http\Controllers\Chat\ConnectDeviceController;
 use App\Http\Controllers\Chat\WaApiKeyController;
 use App\Http\Controllers\Chat\ChatLabelController;
@@ -531,7 +533,23 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
         ->group(function () {
             Route::get('/', 'index')->name('profile.edit');
             Route::put('/', 'update')->name('profile.update');
-            Route::put('/company', 'updateCompany')->name('profile.company.update');
+        });
+
+    // "Company" tab — a user can own more than one company now. The list
+    // stays embedded on the shared profile page (ProfileController::
+    // index()); create/edit/show/delete are dedicated pages here, same
+    // "full page, not a modal" precedent as Setting Users. No {company}
+    // ownership ambiguity: every method re-checks Company::user_id ===
+    // auth id on the specific row, see User\Profile\CompanyController.
+    Route::prefix('user/profile/companies')
+        ->controller(UserCompanyController::class)
+        ->group(function () {
+            Route::get('/create', 'create')->name('profile.companies.create');
+            Route::post('/', 'store')->name('profile.companies.store');
+            Route::get('/{id}', 'show')->name('profile.companies.show');
+            Route::get('/{id}/edit', 'edit')->name('profile.companies.edit');
+            Route::put('/{id}', 'update')->name('profile.companies.update');
+            Route::delete('/{id}', 'destroy')->name('profile.companies.destroy');
         });
 
     // "Roles" tab — CRUD scoped to the company owned by the logged in
@@ -551,7 +569,9 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
         ->controller(UserCompanyRoleController::class)
         ->middleware('menu.access')
         ->group(function () {
+            Route::get('/create/{unitId}', 'create')->name('profile.company-roles.create');
             Route::post('/', 'store')->name('profile.company-roles.store');
+            Route::get('/{id}', 'show')->name('profile.company-roles.show');
             Route::put('/{id}', 'update')->name('profile.company-roles.update');
             Route::delete('/{id}', 'destroy')->name('profile.company-roles.destroy');
         });
@@ -564,7 +584,9 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
         ->controller(UserBranchOfficeController::class)
         ->middleware('menu.access')
         ->group(function () {
+            Route::get('/create/{companyId}', 'create')->name('profile.branch-offices.create');
             Route::post('/', 'store')->name('profile.branch-offices.store');
+            Route::get('/{id}', 'show')->name('profile.branch-offices.show');
             Route::put('/{id}', 'update')->name('profile.branch-offices.update');
             Route::delete('/{id}', 'destroy')->name('profile.branch-offices.destroy');
         });
@@ -577,7 +599,9 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
         ->controller(UserBranchOfficeUnitController::class)
         ->middleware('menu.access')
         ->group(function () {
+            Route::get('/create/{branchOfficeId}', 'create')->name('profile.branch-office-units.create');
             Route::post('/', 'store')->name('profile.branch-office-units.store');
+            Route::get('/{id}', 'show')->name('profile.branch-office-units.show');
             Route::put('/{id}', 'update')->name('profile.branch-office-units.update');
             Route::delete('/{id}', 'destroy')->name('profile.branch-office-units.destroy');
         });
@@ -595,14 +619,19 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
         ->group(function () {
             Route::get('/create', 'create')->name('profile.company-users.create');
             Route::post('/', 'store')->name('profile.company-users.store');
-            Route::get('/{id}/edit', 'edit')->name('profile.company-users.edit');
-            Route::put('/{id}', 'update')->name('profile.company-users.update');
-            Route::delete('/{id}', 'destroy')->name('profile.company-users.destroy');
+            // Literal-segment GETs (export/import) registered BEFORE the
+            // dynamic GET /{id} below — Laravel matches routes in
+            // registration order, so /{id} would otherwise swallow
+            // "/export" and "/import/template" as id="export" etc.
             Route::get('/export', 'export')->name('profile.company-users.export');
             Route::get('/import/template', 'importTemplate')->name('profile.company-users.import-template');
             Route::post('/import', 'import')
                 ->middleware('throttle:10,1')
                 ->name('profile.company-users.import');
+            Route::get('/{id}', 'show')->name('profile.company-users.show');
+            Route::get('/{id}/edit', 'edit')->name('profile.company-users.edit');
+            Route::put('/{id}', 'update')->name('profile.company-users.update');
+            Route::delete('/{id}', 'destroy')->name('profile.company-users.destroy');
         });
 
     // "Applications" tab — which Application Menu entries this
@@ -613,7 +642,9 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
         ->controller(UserCompanyRoleMenuController::class)
         ->middleware('menu.access')
         ->group(function () {
+            Route::get('/create/{roleId}', 'create')->name('profile.company-role-menus.create');
             Route::post('/', 'store')->name('profile.company-role-menus.store');
+            Route::get('/{id}', 'show')->name('profile.company-role-menus.show');
             Route::put('/{id}', 'update')->name('profile.company-role-menus.update');
             Route::delete('/{id}', 'destroy')->name('profile.company-role-menus.destroy');
         });

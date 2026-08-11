@@ -16,11 +16,13 @@ use App\Models\User;
 use App\Models\Voucher;
 use App\Models\VoucherUserRedemption;
 use App\Models\Wallet;
+use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -70,13 +72,39 @@ class UserController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        $validated = $request->validate([
+        $validator = Validator::make($request->all(), [
             'name' => ['required', 'string', 'max:100'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
+            // Optional, bare national number only (no leading 0, no '62'
+            // country code) — same shape as every other handphone input
+            // in this app (Auth\AuthController::register(), User\Profile\
+            // CompanyUserController), normalized to the '62'-prefixed
+            // digit-only form every other phone number here expects
+            // right after validation, below.
+            'handphone' => ['nullable', 'regex:/^[1-9][0-9]{9,13}$/'],
             'status' => ['required', 'in:active,inactive'],
             'user_type' => ['required', 'in:USER,SUPERADMIN'],
+        ], [
+            'handphone.regex' => 'Nomor WhatsApp harus 10-14 digit angka, tanpa awalan 0 atau kode negara 62 (contoh: 81286800080).',
         ]);
+
+        $validator->after(function (ValidatorContract $validator) use ($request) {
+            $this->validateUniqueHandphone($validator, $request);
+        });
+
+        if ($validator->fails()) {
+            return redirect()
+                ->route('superadmin-users.create')
+                ->withErrors($validator)
+                ->withInput();
+        }
+
+        $validated = $validator->validated();
+
+        // Same normalization as CompanyUserController::store() — see
+        // that method's comment on the field.
+        $validated['handphone'] = filled($validated['handphone'] ?? null) ? '62'.$validated['handphone'] : null;
 
         // password hashes automatically — User::casts() has
         // 'password' => 'hashed', so CrudAdmin::store's plain
@@ -208,12 +236,33 @@ class UserController extends Controller
             return back()->with('error', 'Tidak bisa mengubah status/tipe akun sendiri menjadi non-superadmin/non-aktif.');
         }
 
-        $validated = $request->validate([
+        $validator = Validator::make($request->all(), [
             'name' => ['required', 'string', 'max:100'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($id)],
+            'handphone' => ['nullable', 'regex:/^[1-9][0-9]{9,13}$/'],
             'status' => ['required', 'in:active,inactive'],
             'user_type' => ['required', 'in:USER,SUPERADMIN'],
+        ], [
+            'handphone.regex' => 'Nomor WhatsApp harus 10-14 digit angka, tanpa awalan 0 atau kode negara 62 (contoh: 81286800080).',
         ]);
+
+        $validator->after(function (ValidatorContract $validator) use ($request, $id) {
+            $this->validateUniqueHandphone($validator, $request, $id);
+        });
+
+        if ($validator->fails()) {
+            return redirect()
+                ->route('superadmin-users.edit', $id)
+                ->withErrors($validator)
+                ->withInput();
+        }
+
+        $validated = $validator->validated();
+
+        // An empty submission CLEARS the number (explicit null), rather
+        // than leaving whatever was there before untouched — same
+        // behavior as CompanyUserController::update().
+        $validated['handphone'] = filled($validated['handphone'] ?? null) ? '62'.$validated['handphone'] : null;
 
         CrudAdmin::update(User::class, $id, $validated);
 
@@ -346,5 +395,36 @@ class UserController extends Controller
                 $counts['subscriptions'],
                 $counts['deposits'],
             ));
+    }
+
+    /**
+     * Shared by store()/update(): checked against the NORMALIZED
+     * ('62'-prefixed) number, not the raw form input — same reasoning
+     * and same pattern as User\Profile\CompanyUserController::
+     * validateUniqueHandphone(). $ignoreUserId excludes the user's own
+     * current row on update() so re-saving their own unchanged number
+     * doesn't false-positive against itself.
+     */
+    private function validateUniqueHandphone(ValidatorContract $validator, Request $request, ?string $ignoreUserId = null): void
+    {
+        $raw = $request->input('handphone');
+
+        if (blank($raw)) {
+            return;
+        }
+
+        if ($validator->errors()->has('handphone')) {
+            return;
+        }
+
+        $normalized = '62'.$raw;
+
+        $exists = User::where('handphone', $normalized)
+            ->when($ignoreUserId, fn ($q) => $q->where('id', '!=', $ignoreUserId))
+            ->exists();
+
+        if ($exists) {
+            $validator->errors()->add('handphone', 'Nomor WhatsApp ini sudah terdaftar untuk user lain.');
+        }
     }
 }

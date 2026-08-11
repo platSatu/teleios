@@ -7,16 +7,11 @@ use App\Http\Controllers\User\Profile\Concerns\ScopesActivePackage;
 use App\Models\ApplicationMenu;
 use App\Models\CategoryApplication;
 use App\Models\Company;
-use App\Models\CompanyRole;
 use App\Models\CompanyRoleMenu;
-use App\Models\CompanyToUser;
 use App\Services\Company\CompanyContextResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 /**
@@ -30,12 +25,12 @@ use Illuminate\View\View;
  *      password (existing Auth\PasswordController) and PIN (existing
  *      User\Settings\PinController) forms, both still submitted to their
  *      own routes from inside this page.
- *   2. "Company" tab: one company per user, created lazily the first
- *      time this form is submitted (updateCompany()). `slug` is derived
- *      from `name` here, not stored on request input, and re-derived
- *      every save so renaming the company keeps the slug in sync.
- *      Creating a company also seeds a default "Owner" CompanyRole and
- *      links the creator to it via CompanyToUser, in the same transaction.
+ *   2. "Company" tab: a LIST of every company the user owns (a user can
+ *      own more than one) — index() loads it, the actual create/edit/
+ *      show/delete forms live in User\Profile\CompanyController. Every
+ *      other tab below is still scoped to exactly one company at a time
+ *      ("the active company" — see index()'s `active_company_id` session
+ *      handling), switched via a row action on this tab.
  *   3. "Branch Office" tab: BranchOffice CRUD scoped to the company —
  *      see User\Profile\BranchOfficeController. Requires a company to
  *      exist first.
@@ -82,6 +77,34 @@ class ProfileController extends Controller
     {
         $user = $request->user();
 
+        // A user can now own MORE THAN ONE company (see User\Profile\
+        // CompanyController), but every tab below "Company" is still one
+        // shared form/table scoped to a single company at a time — there
+        // has to be some notion of "which one" for Branch Office/Unit-
+        // Divisi/Roles/Applications/Setting Users to mean anything.
+        // That's `active_company_id` in the session: row actions on the
+        // Company tab (Show/Edit/Add Branch/...) pass ?company={id},
+        // which — after verifying it's actually one of THIS user's own
+        // companies — becomes the new active company for every tab on
+        // this page until switched again. Invisible/automatic for the
+        // common case of a user with exactly one company (it's just
+        // resolved and remembered the first time), only surfaces as a
+        // real choice once there's more than one to pick from.
+        if ($request->filled('company')) {
+            $selected = Company::where('user_id', $user->id)
+                ->where('id', $request->query('company'))
+                ->first();
+
+            if ($selected) {
+                session(['active_company_id' => $selected->id]);
+            }
+        }
+
+        $companies = Company::where('user_id', $user->id)
+            ->withCount('branchOffices')
+            ->orderBy('created_at')
+            ->get();
+
         // Resolves via App\Services\Company\CompanyContextResolver instead
         // of the old owner-only `Company::where('user_id', $user->id)`
         // lookup — a member invited through User\Profile\
@@ -89,13 +112,17 @@ class ProfileController extends Controller
         // always returned null for them and left this whole page blank.
         // Nullable here (not resolveOrFail()) since a brand new user who
         // hasn't created or joined any company yet is an expected, normal
-        // state for this page, not an error.
-        $context = app(CompanyContextResolver::class)->resolve($user);
+        // state for this page, not an error. $companyId is null unless
+        // this user owns a company AND has picked one — resolve() falls
+        // back to "first owned company" on null, same as before this
+        // change, so a single-company user never sees any of this.
+        $activeCompanyId = session('active_company_id');
+        $context = app(CompanyContextResolver::class)->resolve($user, $activeCompanyId);
         $company = $context?->company;
         $isOwner = $context?->isOwner ?? true;
 
         $companyRoles = $company
-            ? $company->roles()->orderBy('created_at')->get()
+            ? $company->roles()->with('branchOfficeUnit')->orderBy('created_at')->get()
             : collect();
 
         // Grouped by user_id (not a flat list): a member can be granted
@@ -213,6 +240,7 @@ class ProfileController extends Controller
         return view('user.profile.index', [
             'user' => $user,
             'company' => $company,
+            'companies' => $companies,
             // Company is still always owner-only (a non-owner never has
             // one to edit). Branch Office / Unit-Divisi / Roles /
             // Applications / Setting Users now go through the
@@ -299,115 +327,9 @@ class ProfileController extends Controller
         return back()->with('success', 'Profil berhasil diperbarui.');
     }
 
-    public function updateCompany(Request $request): RedirectResponse
-    {
-        $user = $request->user();
-
-        // Field is named "company_name" (not "name") specifically so it
-        // can't collide with the Profile tab's own "name" input — both
-        // tabs live in the same $errors bag, and a shared key would leak
-        // a company validation error onto the profile form's field too.
-        //
-        // Built with Validator::make() instead of $request->validate()
-        // so a failure can be redirected explicitly back to ?tab=company
-        // — plain validate()'s automatic back() follows the Referer
-        // header, which is wherever the page happened to be *before*
-        // the user clicked the Company tab (client-side, no navigation),
-        // and would silently land them back on the Profile tab with the
-        // company errors invisible on the tab underneath.
-        $validator = Validator::make($request->all(), [
-            'company_name' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string'],
-            'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
-            'address' => ['nullable', 'string', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:20'],
-            'email' => ['nullable', 'email', 'max:255'],
-            'status' => ['required', 'in:active,inactive'],
-        ]);
-
-        if ($validator->fails()) {
-            return redirect()
-                ->route('profile.edit', ['tab' => 'company'])
-                ->withErrors($validator)
-                ->withInput();
-        }
-
-        $validated = $validator->validated();
-        $validated['name'] = $validated['company_name'];
-        unset($validated['company_name']);
-
-        $company = Company::where('user_id', $user->id)->first();
-
-        // Re-derived from `name` on every save (create AND update) — the
-        // spec asks for the slug to come from the controller rather
-        // than the model, so renaming the company keeps the slug in
-        // sync instead of freezing it at whatever it was on first save.
-        $validated['slug'] = $this->uniqueSlug($validated['name'], $company?->id);
-
-        if ($request->hasFile('logo')) {
-            if ($company?->logo) {
-                Storage::disk('public')->delete($company->logo);
-            }
-
-            $validated['logo'] = $request->file('logo')->store('company-logos', 'public');
-        } else {
-            unset($validated['logo']);
-        }
-
-        if ($company) {
-            $company->update($validated);
-        } else {
-            $validated['user_id'] = $user->id;
-
-            // First-time company creation also seeds a default "Owner"
-            // role and links the creator to it — all three rows only
-            // make sense together, so one failing should roll back the
-            // rest rather than leaving a company with no roles/members.
-            DB::transaction(function () use ($validated, $user) {
-                $company = Company::create($validated);
-
-                $ownerRole = CompanyRole::create([
-                    'company_id' => $company->id,
-                    'name' => 'Owner',
-                    'description' => 'Pemilik company dengan akses penuh.',
-                    'status' => 'active',
-                ]);
-
-                CompanyToUser::create([
-                    'user_id' => $user->id,
-                    'company_id' => $company->id,
-                    'company_role_id' => $ownerRole->id,
-                    'status' => 'active',
-                ]);
-            });
-        }
-
-        return redirect()
-            ->route('profile.edit', ['tab' => 'company'])
-            ->with('success', 'Company berhasil disimpan.');
-    }
-
-    /**
-     * Str::slug($name), re-rolled with a numeric suffix (-2, -3, ...)
-     * until it doesn't collide with another company's slug. $ignoreId
-     * excludes the company currently being updated so saving without
-     * changing the name doesn't trip over its own slug.
-     */
-    private function uniqueSlug(string $name, ?string $ignoreId = null): string
-    {
-        $base = Str::slug($name) ?: 'company';
-        $slug = $base;
-        $suffix = 2;
-
-        while (
-            Company::where('slug', $slug)
-                ->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))
-                ->exists()
-        ) {
-            $slug = "{$base}-{$suffix}";
-            $suffix++;
-        }
-
-        return $slug;
-    }
+    // Company create/edit/show/delete moved to User\Profile\
+    // CompanyController — a user can own more than one company now, so
+    // "the" company create-or-update toggle that used to live here
+    // (updateCompany()) no longer makes sense. See that controller's
+    // docblock.
 }

@@ -9,8 +9,10 @@ use App\Models\BranchOffice;
 use App\Models\Company;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\View\View;
 
 /**
  * CRUD for the "Branch Office" tab on dashboard/user/profile. Always
@@ -39,6 +41,34 @@ class BranchOfficeController extends Controller
 
     use ScopesActivePackage;
 
+    /**
+     * "Add Branch" row action on the Company tab lands here — a
+     * dedicated page (not a modal, same reasoning as CompanyUserController)
+     * with Company shown read-only. Also the thing that actually sets
+     * `active_company_id` for this browsing session (see
+     * ResolvesCompanyContext::companyContext()), so store() below — and
+     * every other tab on the shared profile page — stays scoped to THIS
+     * company once the form is submitted.
+     */
+    public function create(Request $request, string $companyId): View|RedirectResponse
+    {
+        $company = Company::where('user_id', Auth::id())->where('id', $companyId)->first();
+
+        if (! $company) {
+            abort(404);
+        }
+
+        if ($this->activeCategoryApplicationIds($company->user_id)->isEmpty()) {
+            return redirect()
+                ->route('profile.edit', ['tab' => 'company'])
+                ->with('error', 'Anda belum memiliki package aktif. Beli package terlebih dahulu sebelum menambah branch office.');
+        }
+
+        session(['active_company_id' => $company->id]);
+
+        return view('user.profile.branch-offices.create', compact('company'));
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $company = $this->ownedCompanyOrFail($request);
@@ -52,9 +82,13 @@ class BranchOfficeController extends Controller
         $validator = $this->validator($request);
 
         if ($validator->fails()) {
+            // Back to the dedicated create() page above (not the tab) —
+            // this is a single-form page now, so a plain default error
+            // bag is enough, same reasoning as CompanyUserController's
+            // create()/store().
             return redirect()
-                ->route('profile.edit', ['tab' => 'branch-office'])
-                ->withErrors($validator, 'newBranchOffice')
+                ->route('profile.branch-offices.create', $company->id)
+                ->withErrors($validator)
                 ->withInput();
         }
 
@@ -66,6 +100,17 @@ class BranchOfficeController extends Controller
         return redirect()
             ->route('profile.edit', ['tab' => 'branch-office'])
             ->with('success', 'Branch office berhasil ditambahkan.');
+    }
+
+    public function show(Request $request, string $id): View
+    {
+        $company = $this->ownedCompanyOrFail($request);
+
+        $branchOffice = BranchOffice::where('company_id', $company->id)
+            ->withCount('units')
+            ->findOrFail($id);
+
+        return view('user.profile.branch-offices.show', compact('company', 'branchOffice'));
     }
 
     public function update(Request $request, string $id): RedirectResponse

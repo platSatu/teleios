@@ -34,9 +34,19 @@ use Illuminate\Http\Request;
  */
 trait ResolvesCompanyContext
 {
+    /**
+     * Passes session('active_company_id') through to the resolver so
+     * every tab past "Company" (Branch Office, Unit/Divisi, Roles,
+     * Applications, Setting Users) stays scoped to whichever company the
+     * owner picked via a row action on the Company tab — see
+     * User\Profile\ProfileController::index()'s docblock. Falls back to
+     * CompanyContextResolver's own default ("first owned company") when
+     * nothing's been picked yet, same as before a user ever had more
+     * than one company to choose from.
+     */
     protected function companyContext(Request $request): CompanyContext
     {
-        return app(CompanyContextResolver::class)->resolveOrFail($request);
+        return app(CompanyContextResolver::class)->resolveOrFail($request, session('active_company_id'));
     }
 
     protected function ownedCompanyOrFail(Request $request): Company

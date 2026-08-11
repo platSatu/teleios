@@ -23,22 +23,12 @@
 
     $autoOpenModal = null;
 
-    if ($errors->getBag('newRole')->any()) {
-        $activeTab = 'roles';
-        $autoOpenModal = 'addRoleModal';
-    }
-    if ($errors->getBag('newRoleMenu')->any()) {
-        $activeTab = 'applications';
-        $autoOpenModal = 'addRoleMenuModal';
-    }
-    if ($errors->getBag('newBranchOffice')->any()) {
-        $activeTab = 'branch-office';
-        $autoOpenModal = 'addBranchOfficeModal';
-    }
-    if ($errors->getBag('newBranchOfficeUnit')->any()) {
-        $activeTab = 'unit-divisi';
-        $autoOpenModal = 'addBranchOfficeUnitModal';
-    }
+    // "Add Branch" / "Add Unit" / "Add Role" / "Add Application" are full
+    // pages now (see BranchOfficeController::create(),
+    // BranchOfficeUnitController::create(), CompanyRoleController::
+    // create(), CompanyRoleMenuController::create()), not modals on this
+    // page, so there's no newBranchOffice/newBranchOfficeUnit/newRole/
+    // newRoleMenu bag to watch for here anymore.
     // "Tambah User" / per-member "Edit" are full pages now (see
     // CompanyUserController), not modals on this page, so there's no
     // newMember/editMember{id} bag to watch for here anymore — only the
@@ -107,19 +97,19 @@
                      a flex item. Same fix as resources/views/user/
                      history/index.blade.php's tab bar. --}}
                 <div class="mb-4" style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
-                <ul class="nav nav-tabs flex-nowrap mb-0" id="profileTabs" role="tablist" style="width: max-content;">
+                <ul class="nav nav-tabs-bordered flex-nowrap mb-0" id="profileTabs" role="tablist" style="width: max-content;">
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link text-nowrap {{ $activeTab === 'profile' ? 'active' : '' }}" id="tab-profile-btn"
-                            data-bs-toggle="tab" data-bs-target="#tab-profile" type="button">
-                            <i class="ri-user-line me-1"></i> Profile
-                        </button>
+                        <a class="nav-link text-nowrap {{ $activeTab === 'profile' ? 'active' : '' }}" id="tab-profile-btn"
+                            data-bs-toggle="tab" href="#tab-profile" role="tab" aria-selected="{{ $activeTab === 'profile' ? 'true' : 'false' }}">
+                            <i class="ri-user-line me-1"></i> <span>Profile</span>
+                        </a>
                     </li>
                     @if ($isOwner)
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link text-nowrap {{ $activeTab === 'company' ? 'active' : '' }}" id="tab-company-btn"
-                                data-bs-toggle="tab" data-bs-target="#tab-company" type="button">
-                                <i class="ri-building-line me-1"></i> Company
-                            </button>
+                            <a class="nav-link text-nowrap {{ $activeTab === 'company' ? 'active' : '' }}" id="tab-company-btn"
+                                data-bs-toggle="tab" href="#tab-company" role="tab" aria-selected="{{ $activeTab === 'company' ? 'true' : 'false' }}">
+                                <i class="ri-building-line me-1"></i> <span>Company</span>
+                            </a>
                         </li>
                     @endif
                     {{-- Each tab below now gates on its own canAccess*Tab
@@ -132,51 +122,51 @@
                          middleware actually guarding these routes). --}}
                     @if ($hasActivePackage && $canAccessBranchOfficeTab)
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link text-nowrap {{ $activeTab === 'branch-office' ? 'active' : '' }}"
-                                id="tab-branch-office-btn" data-bs-toggle="tab" data-bs-target="#tab-branch-office"
-                                type="button">
-                                <i class="ri-community-line me-1"></i> Branch Office
-                            </button>
+                            <a class="nav-link text-nowrap {{ $activeTab === 'branch-office' ? 'active' : '' }}"
+                                id="tab-branch-office-btn" data-bs-toggle="tab" href="#tab-branch-office"
+                                role="tab" aria-selected="{{ $activeTab === 'branch-office' ? 'true' : 'false' }}">
+                                <i class="ri-community-line me-1"></i> <span>Branch Office</span>
+                            </a>
                         </li>
                     @endif
                     @if ($hasActivePackage && $canAccessUnitDivisiTab)
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link text-nowrap {{ $activeTab === 'unit-divisi' ? 'active' : '' }}"
-                                id="tab-unit-divisi-btn" data-bs-toggle="tab" data-bs-target="#tab-unit-divisi"
-                                type="button">
-                                <i class="ri-organization-chart me-1"></i> Unit/Divisi
-                            </button>
+                            <a class="nav-link text-nowrap {{ $activeTab === 'unit-divisi' ? 'active' : '' }}"
+                                id="tab-unit-divisi-btn" data-bs-toggle="tab" href="#tab-unit-divisi"
+                                role="tab" aria-selected="{{ $activeTab === 'unit-divisi' ? 'true' : 'false' }}">
+                                <i class="ri-organization-chart me-1"></i> <span>Unit/Divisi</span>
+                            </a>
                         </li>
                     @endif
                     @if ($hasActivePackage && $canAccessRolesTab)
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link text-nowrap {{ $activeTab === 'roles' ? 'active' : '' }}" id="tab-roles-btn"
-                                data-bs-toggle="tab" data-bs-target="#tab-roles" type="button">
-                                <i class="ri-shield-user-line me-1"></i> Roles
-                            </button>
+                            <a class="nav-link text-nowrap {{ $activeTab === 'roles' ? 'active' : '' }}" id="tab-roles-btn"
+                                data-bs-toggle="tab" href="#tab-roles" role="tab" aria-selected="{{ $activeTab === 'roles' ? 'true' : 'false' }}">
+                                <i class="ri-shield-user-line me-1"></i> <span>Roles</span>
+                            </a>
                         </li>
                     @endif
                     @if ($hasActivePackage && $canAccessApplicationsTab)
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link text-nowrap {{ $activeTab === 'applications' ? 'active' : '' }}"
-                                id="tab-applications-btn" data-bs-toggle="tab" data-bs-target="#tab-applications"
-                                type="button">
-                                <i class="ri-apps-2-line me-1"></i> Applications
-                            </button>
+                            <a class="nav-link text-nowrap {{ $activeTab === 'applications' ? 'active' : '' }}"
+                                id="tab-applications-btn" data-bs-toggle="tab" href="#tab-applications"
+                                role="tab" aria-selected="{{ $activeTab === 'applications' ? 'true' : 'false' }}">
+                                <i class="ri-apps-2-line me-1"></i> <span>Applications</span>
+                            </a>
                         </li>
                     @endif
                     @if ($hasActivePackage && $canAccessUsersTab)
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link text-nowrap {{ $activeTab === 'users' ? 'active' : '' }}" id="tab-users-btn"
-                                data-bs-toggle="tab" data-bs-target="#tab-users" type="button">
-                                <i class="ri-group-line me-1"></i> Setting Users
-                            </button>
+                            <a class="nav-link text-nowrap {{ $activeTab === 'users' ? 'active' : '' }}" id="tab-users-btn"
+                                data-bs-toggle="tab" href="#tab-users" role="tab" aria-selected="{{ $activeTab === 'users' ? 'true' : 'false' }}">
+                                <i class="ri-group-line me-1"></i> <span>Setting Users</span>
+                            </a>
                         </li>
                     @endif
                 </ul>
                 </div>
 
-                <div class="tab-content">
+                <div class="tab-content pt-3">
                     {{-- ============================= --}}
                     {{-- TAB: PROFILE --}}
                     {{-- ============================= --}}
@@ -295,115 +285,70 @@
                     <div class="tab-pane fade {{ $activeTab === 'company' ? 'show active' : '' }}" id="tab-company"
                         role="tabpanel">
 
-                        @if ($company)
-                            <div class="row mb-4 gy-2">
-                                <div class="col-sm-6">
-                                    <div class="text-muted fs-12">Company ID</div>
-                                    <div class="fw-semibold">{{ $company->company_id }}</div>
-                                </div>
-                                <div class="col-sm-6">
-                                    <div class="text-muted fs-12">Slug</div>
-                                    <div class="fw-semibold">{{ $company->slug }}</div>
-                                </div>
+                        <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                            <p class="text-muted mb-0">Setiap company yang Anda buat punya branch, divisi, role, dan user sendiri-sendiri.</p>
+                            <a href="{{ route('profile.companies.create') }}" class="btn btn-primary btn-sm">
+                                <i class="ri-add-line"></i> Add Company
+                            </a>
+                        </div>
+
+                        @if ($companies->isEmpty())
+                            <div class="alert alert-info mb-0">
+                                Anda belum memiliki company. Klik "Add Company" untuk membuat yang pertama.
                             </div>
                         @else
-                            <div class="alert alert-info">
-                                Anda belum memiliki data company. Lengkapi form di bawah untuk membuatnya.
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Company</th>
+                                            <th>Company ID</th>
+                                            <th>Branch</th>
+                                            <th>Status</th>
+                                            <th class="text-end">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach ($companies as $row)
+                                            <tr class="{{ $company && $company->id === $row->id ? 'table-active' : '' }}">
+                                                <td>
+                                                    <div class="fw-semibold">{{ $row->name }}</div>
+                                                    <div class="text-muted fs-12">{{ $row->slug }}</div>
+                                                </td>
+                                                <td>{{ $row->company_id }}</td>
+                                                <td>{{ $row->branch_offices_count }}</td>
+                                                <td>
+                                                    <span class="badge {{ $row->status === 'active' ? 'bg-success' : 'bg-secondary' }}">
+                                                        {{ ucfirst($row->status) }}
+                                                    </span>
+                                                </td>
+                                                <td class="text-end">
+                                                    <div class="d-flex gap-1 justify-content-end flex-wrap">
+                                                        <a href="{{ route('profile.branch-offices.create', $row->id) }}" class="btn btn-light btn-sm" title="Add Branch">
+                                                            <i class="ri-add-line"></i> Add Branch
+                                                        </a>
+                                                        <a href="{{ route('profile.companies.show', $row->id) }}" class="btn btn-light btn-sm" title="Show">
+                                                            <i class="ri-eye-line"></i>
+                                                        </a>
+                                                        <a href="{{ route('profile.companies.edit', $row->id) }}" class="btn btn-light btn-sm" title="Edit">
+                                                            <i class="ri-edit-line"></i>
+                                                        </a>
+                                                        <form action="{{ route('profile.companies.destroy', $row->id) }}" method="POST"
+                                                            onsubmit="return confirm('Hapus company {{ $row->name }}? Semua branch-nya harus sudah dihapus dulu.');">
+                                                            @csrf
+                                                            @method('DELETE')
+                                                            <button type="submit" class="btn btn-light btn-sm text-danger" title="Hapus">
+                                                                <i class="ri-delete-bin-line"></i>
+                                                            </button>
+                                                        </form>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
                             </div>
                         @endif
-
-                        <form action="{{ route('profile.company.update') }}" method="POST" enctype="multipart/form-data">
-                            @csrf
-                            @method('PUT')
-
-                            <div class="d-flex align-items-center gap-3 mb-4">
-                                <img id="company-logo-preview"
-                                    src="{{ $company?->logo ? asset('storage/' . $company->logo) : asset('be') . '/assets/images/avatar/avatar-16.jpg' }}"
-                                    alt="Logo" class="rounded" style="width: 72px; height: 72px; object-fit: cover;">
-                                <div>
-                                    <label for="logo" class="btn btn-outline-secondary btn-sm mb-1">
-                                        <i class="ri-image-add-line"></i> Ubah Logo
-                                    </label>
-                                    <input type="file" name="logo" id="logo" accept="image/png,image/jpeg,image/webp"
-                                        class="d-none">
-                                    <div class="text-muted fs-12">JPG, PNG, atau WEBP. Maks 2MB.</div>
-                                </div>
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="company_name" class="form-label">Nama Company <span
-                                        class="text-danger">*</span></label>
-                                <input type="text" name="company_name" id="company_name"
-                                    class="form-control @error('company_name') is-invalid @enderror"
-                                    value="{{ old('company_name', $company->name ?? '') }}" required>
-                                @error('company_name')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="description" class="form-label">Deskripsi</label>
-                                <textarea name="description" id="description" rows="3"
-                                    class="form-control @error('description') is-invalid @enderror">{{ old('description', $company->description ?? '') }}</textarea>
-                                @error('description')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="address" class="form-label">Alamat</label>
-                                <input type="text" name="address" id="address"
-                                    class="form-control @error('address') is-invalid @enderror"
-                                    value="{{ old('address', $company->address ?? '') }}">
-                                @error('address')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-
-                            <div class="row">
-                                <div class="col-sm-6 mb-3">
-                                    <label for="phone" class="form-label">Telepon</label>
-                                    <input type="text" name="phone" id="phone"
-                                        class="form-control @error('phone') is-invalid @enderror"
-                                        value="{{ old('phone', $company->phone ?? '') }}">
-                                    @error('phone')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
-                                </div>
-
-                                <div class="col-sm-6 mb-3">
-                                    <label for="company_email" class="form-label">Email</label>
-                                    <input type="email" name="email" id="company_email"
-                                        class="form-control @error('email') is-invalid @enderror"
-                                        value="{{ old('email', $company->email ?? '') }}">
-                                    @error('email')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
-                                </div>
-                            </div>
-
-                            <div class="mb-4">
-                                <label for="status" class="form-label">Status <span class="text-danger">*</span></label>
-                                <select name="status" id="status"
-                                    class="form-select @error('status') is-invalid @enderror">
-                                    <option value="active"
-                                        {{ old('status', $company->status ?? 'active') == 'active' ? 'selected' : '' }}>
-                                        Active
-                                    </option>
-                                    <option value="inactive"
-                                        {{ old('status', $company->status ?? 'active') == 'inactive' ? 'selected' : '' }}>
-                                        Inactive
-                                    </option>
-                                </select>
-                                @error('status')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-
-                            <button type="submit" class="btn btn-primary">
-                                {{ $company ? 'Simpan Perubahan' : 'Buat Company' }}
-                            </button>
-                        </form>
                     </div>
 
                     {{-- ============================= --}}
@@ -418,12 +363,7 @@
                                 Buat data company terlebih dahulu di tab Company sebelum menambah branch office.
                             </div>
                         @else
-                            <div class="d-flex justify-content-end mb-3">
-                                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal"
-                                    data-bs-target="#addBranchOfficeModal">
-                                    <i class="ri-add-line"></i> Tambah Branch Office
-                                </button>
-                            </div>
+                            <p class="text-muted mb-3">Branch untuk {{ $company->name }}. Tambah branch baru lewat tab Company.</p>
 
                             <div class="table-responsive">
                                 <table class="table table-sm table-hover align-middle mb-0" style="min-width: 700px;">
@@ -433,7 +373,7 @@
                                             <th style="min-width: 180px;">Alamat</th>
                                             <th style="min-width: 110px;">Unit/Divisi</th>
                                             <th style="min-width: 110px;">Status</th>
-                                            <th style="min-width: 120px;" width="120">Aksi</th>
+                                            <th style="min-width: 220px;" width="220">Aksi</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -450,8 +390,16 @@
                                                     @endif
                                                 </td>
                                                 <td>
-                                                    <div class="d-flex gap-1">
-                                                        <button type="button" class="btn btn-light-primary icon-btn btn-sm"
+                                                    <div class="d-flex gap-1 flex-wrap">
+                                                        <a href="{{ route('profile.branch-office-units.create', $branchOffice->id) }}"
+                                                            class="btn btn-light btn-sm" title="Add Unit">
+                                                            <i class="ri-add-line"></i> Add Unit
+                                                        </a>
+                                                        <a href="{{ route('profile.branch-offices.show', $branchOffice->id) }}"
+                                                            class="btn btn-light btn-sm" title="Show">
+                                                            <i class="ri-eye-line"></i>
+                                                        </a>
+                                                        <button type="button" class="btn btn-light btn-sm"
                                                             data-bs-toggle="modal"
                                                             data-bs-target="#editBranchOfficeModal{{ $branchOffice->id }}"
                                                             title="Edit">
@@ -463,7 +411,7 @@
                                                             @csrf
                                                             @method('DELETE')
                                                             <button type="submit"
-                                                                class="btn btn-light-danger icon-btn btn-sm" title="Hapus">
+                                                                class="btn btn-light btn-sm text-danger" title="Hapus">
                                                                 <i class="ri-delete-bin-line"></i>
                                                             </button>
                                                         </form>
@@ -498,13 +446,6 @@
                                 Buat branch office terlebih dahulu di tab Branch Office sebelum menambah unit/divisi.
                             </div>
                         @else
-                            <div class="d-flex justify-content-end mb-3">
-                                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal"
-                                    data-bs-target="#addBranchOfficeUnitModal">
-                                    <i class="ri-add-line"></i> Tambah Unit/Divisi
-                                </button>
-                            </div>
-
                             <div class="table-responsive">
                                 <table class="table table-sm table-hover align-middle mb-0" style="min-width: 600px;">
                                     <thead class="table-light">
@@ -512,7 +453,7 @@
                                             <th style="min-width: 150px;">Nama</th>
                                             <th style="min-width: 170px;">Branch Office</th>
                                             <th style="min-width: 110px;">Status</th>
-                                            <th style="min-width: 120px;" width="120">Aksi</th>
+                                            <th style="min-width: 220px;" width="220">Aksi</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -528,8 +469,16 @@
                                                     @endif
                                                 </td>
                                                 <td>
-                                                    <div class="d-flex gap-1">
-                                                        <button type="button" class="btn btn-light-primary icon-btn btn-sm"
+                                                    <div class="d-flex gap-1 flex-wrap">
+                                                        <a href="{{ route('profile.company-roles.create', $unit->id) }}"
+                                                            class="btn btn-light btn-sm" title="Add Role">
+                                                            <i class="ri-add-line"></i> Add Role
+                                                        </a>
+                                                        <a href="{{ route('profile.branch-office-units.show', $unit->id) }}"
+                                                            class="btn btn-light btn-sm" title="Show">
+                                                            <i class="ri-eye-line"></i>
+                                                        </a>
+                                                        <button type="button" class="btn btn-light btn-sm"
                                                             data-bs-toggle="modal"
                                                             data-bs-target="#editBranchOfficeUnitModal{{ $unit->id }}"
                                                             title="Edit">
@@ -541,7 +490,7 @@
                                                             @csrf
                                                             @method('DELETE')
                                                             <button type="submit"
-                                                                class="btn btn-light-danger icon-btn btn-sm" title="Hapus">
+                                                                class="btn btn-light btn-sm text-danger" title="Hapus">
                                                                 <i class="ri-delete-bin-line"></i>
                                                             </button>
                                                         </form>
@@ -710,15 +659,13 @@
                                                     @if ($memberUserId === $company->user_id)
                                                         <span class="badge bg-secondary-subtle text-secondary">Owner</span>
                                                     @else
-                                                        <div class="d-flex gap-1">
-                                                            <button type="button" class="btn btn-light-secondary icon-btn btn-sm"
-                                                                data-bs-toggle="modal"
-                                                                data-bs-target="#showMemberModal{{ $memberUserId }}"
-                                                                title="Detail">
+                                                        <div class="d-flex gap-1 flex-wrap">
+                                                            <a href="{{ route('profile.company-users.show', $memberUserId) }}"
+                                                                class="btn btn-light btn-sm" title="Show">
                                                                 <i class="ri-eye-line"></i>
-                                                            </button>
+                                                            </a>
                                                             <a href="{{ route('profile.company-users.edit', $memberUserId) }}"
-                                                                class="btn btn-light-primary icon-btn btn-sm" title="Edit">
+                                                                class="btn btn-light btn-sm" title="Edit">
                                                                 <i class="ri-edit-2-line"></i>
                                                             </a>
                                                             <form action="{{ route('profile.company-users.destroy', $memberUserId) }}"
@@ -727,7 +674,7 @@
                                                                 @csrf
                                                                 @method('DELETE')
                                                                 <button type="submit"
-                                                                    class="btn btn-light-danger icon-btn btn-sm" title="Hapus">
+                                                                    class="btn btn-light btn-sm text-danger" title="Hapus">
                                                                     <i class="ri-delete-bin-line"></i>
                                                                 </button>
                                                             </form>
@@ -762,28 +709,21 @@
                                 Buat data company terlebih dahulu di tab Company sebelum menambah role.
                             </div>
                         @else
-                            <div class="d-flex justify-content-end mb-3">
-                                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal"
-                                    data-bs-target="#addRoleModal">
-                                    <i class="ri-add-line"></i> Tambah Role
-                                </button>
-                            </div>
-
                             <div class="table-responsive">
-                                <table class="table table-sm table-hover align-middle mb-0" style="min-width: 650px;">
+                                <table class="table table-sm table-hover align-middle mb-0" style="min-width: 750px;">
                                     <thead class="table-light">
                                         <tr>
                                             <th style="min-width: 150px;">Nama Role</th>
-                                            <th style="min-width: 200px;">Deskripsi</th>
+                                            <th style="min-width: 170px;">Unit/Divisi</th>
                                             <th style="min-width: 110px;">Status</th>
-                                            <th style="min-width: 120px;" width="120">Aksi</th>
+                                            <th style="min-width: 260px;" width="260">Aksi</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         @forelse ($companyRoles as $role)
                                             <tr>
                                                 <td>{{ $role->name }}</td>
-                                                <td>{{ $role->description ?: '-' }}</td>
+                                                <td>{{ $role->branchOfficeUnit->name ?? '-' }}</td>
                                                 <td>
                                                     @if ($role->status === 'active')
                                                         <span class="badge bg-success">Active</span>
@@ -792,8 +732,16 @@
                                                     @endif
                                                 </td>
                                                 <td>
-                                                    <div class="d-flex gap-1">
-                                                        <button type="button" class="btn btn-light-primary icon-btn btn-sm"
+                                                    <div class="d-flex gap-1 flex-wrap">
+                                                        <a href="{{ route('profile.company-role-menus.create', $role->id) }}"
+                                                            class="btn btn-light btn-sm" title="Add Application">
+                                                            <i class="ri-add-line"></i> Add Application
+                                                        </a>
+                                                        <a href="{{ route('profile.company-roles.show', $role->id) }}"
+                                                            class="btn btn-light btn-sm" title="Show">
+                                                            <i class="ri-eye-line"></i>
+                                                        </a>
+                                                        <button type="button" class="btn btn-light btn-sm"
                                                             data-bs-toggle="modal"
                                                             data-bs-target="#editRoleModal{{ $role->id }}" title="Edit">
                                                             <i class="ri-edit-2-line"></i>
@@ -805,7 +753,7 @@
                                                                 @csrf
                                                                 @method('DELETE')
                                                                 <button type="submit"
-                                                                    class="btn btn-light-danger icon-btn btn-sm" title="Hapus">
+                                                                    class="btn btn-light btn-sm text-danger" title="Hapus">
                                                                     <i class="ri-delete-bin-line"></i>
                                                                 </button>
                                                             </form>
@@ -839,25 +787,19 @@
                         @else
                             <div class="alert alert-info d-flex align-items-center gap-2 mb-3">
                                 <i class="ri-information-line fs-4"></i>
-                                <div>Menu di sini berlaku <strong>per Role</strong> — pilih role dulu saat menambah,
-                                    supaya bisa berbeda menu antara mis. Admin dan Staff.</div>
-                            </div>
-                            <div class="d-flex justify-content-end mb-3">
-                                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal"
-                                    data-bs-target="#addRoleMenuModal">
-                                    <i class="ri-add-line"></i> Tambah Menu
-                                </button>
+                                <div>Menu di sini berlaku <strong>per Role</strong> — gunakan tombol "Add Application" di
+                                    tab Roles untuk menambah, supaya bisa berbeda menu antara mis. Admin dan Staff.</div>
                             </div>
 
                             <div class="table-responsive">
-                                <table class="table table-sm table-hover align-middle mb-0" style="min-width: 800px;">
+                                <table class="table table-sm table-hover align-middle mb-0" style="min-width: 850px;">
                                     <thead class="table-light">
                                         <tr>
                                             <th style="min-width: 130px;">Role</th>
                                             <th style="min-width: 180px;">Category Application</th>
                                             <th style="min-width: 170px;">Menu</th>
                                             <th style="min-width: 110px;">Status</th>
-                                            <th style="min-width: 120px;" width="120">Aksi</th>
+                                            <th style="min-width: 220px;" width="220">Aksi</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -874,8 +816,16 @@
                                                     @endif
                                                 </td>
                                                 <td>
-                                                    <div class="d-flex gap-1">
-                                                        <button type="button" class="btn btn-light-primary icon-btn btn-sm"
+                                                    <div class="d-flex gap-1 flex-wrap">
+                                                        <a href="{{ route('profile.company-users.create', ['role' => $roleMenu->company_role_id, 'category' => $roleMenu->category_application_id]) }}"
+                                                            class="btn btn-light btn-sm" title="Add User">
+                                                            <i class="ri-add-line"></i> Add User
+                                                        </a>
+                                                        <a href="{{ route('profile.company-role-menus.show', $roleMenu->id) }}"
+                                                            class="btn btn-light btn-sm" title="Show">
+                                                            <i class="ri-eye-line"></i>
+                                                        </a>
+                                                        <button type="button" class="btn btn-light btn-sm"
                                                             data-bs-toggle="modal"
                                                             data-bs-target="#editRoleMenuModal{{ $roleMenu->id }}"
                                                             title="Edit">
@@ -887,7 +837,7 @@
                                                             @csrf
                                                             @method('DELETE')
                                                             <button type="submit"
-                                                                class="btn btn-light-danger icon-btn btn-sm" title="Hapus">
+                                                                class="btn btn-light btn-sm text-danger" title="Hapus">
                                                                 <i class="ri-delete-bin-line"></i>
                                                             </button>
                                                         </form>
@@ -918,73 +868,6 @@
         {{-- display:none ancestor). Gated the same as the tabs --}}
         {{-- themselves: hidden until the company has an active package. --}}
         {{-- ============================================================ --}}
-
-        {{-- Tambah Branch Office --}}
-        <div class="modal fade" id="addBranchOfficeModal" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <form action="{{ route('profile.branch-offices.store') }}" method="POST">
-                        @csrf
-                        <div class="modal-header">
-                            <h5 class="modal-title">Tambah Branch Office</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="mb-3">
-                                <label for="branchoffice_name" class="form-label">Nama <span
-                                        class="text-danger">*</span></label>
-                                <input type="text" name="name" id="branchoffice_name"
-                                    class="form-control @error('name', 'newBranchOffice') is-invalid @enderror"
-                                    value="{{ old('name') }}" required>
-                                @error('name', 'newBranchOffice')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="branchoffice_address" class="form-label">Alamat</label>
-                                <input type="text" name="address" id="branchoffice_address"
-                                    class="form-control @error('address', 'newBranchOffice') is-invalid @enderror"
-                                    value="{{ old('address') }}">
-                                @error('address', 'newBranchOffice')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="branchoffice_description" class="form-label">Deskripsi</label>
-                                <textarea name="description" id="branchoffice_description" rows="2"
-                                    class="form-control @error('description', 'newBranchOffice') is-invalid @enderror">{{ old('description') }}</textarea>
-                                @error('description', 'newBranchOffice')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-
-                            <div class="mb-1">
-                                <label for="branchoffice_status" class="form-label">Status <span
-                                        class="text-danger">*</span></label>
-                                <select name="status" id="branchoffice_status"
-                                    class="form-select @error('status', 'newBranchOffice') is-invalid @enderror">
-                                    <option value="active" {{ old('status', 'active') == 'active' ? 'selected' : '' }}>
-                                        Active
-                                    </option>
-                                    <option value="inactive" {{ old('status') == 'inactive' ? 'selected' : '' }}>
-                                        Inactive
-                                    </option>
-                                </select>
-                                @error('status', 'newBranchOffice')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
-                            <button type="submit" class="btn btn-primary">Tambah</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
 
         {{-- Edit Branch Office per baris --}}
         @foreach ($branchOffices as $branchOffice)
@@ -1055,82 +938,6 @@
                 </div>
             </div>
         @endforeach
-
-        {{-- Tambah Unit/Divisi --}}
-        <div class="modal fade" id="addBranchOfficeUnitModal" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <form action="{{ route('profile.branch-office-units.store') }}" method="POST">
-                        @csrf
-                        <div class="modal-header">
-                            <h5 class="modal-title">Tambah Unit/Divisi</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="mb-3">
-                                <label for="unit_branch_office_id" class="form-label">Branch Office <span
-                                        class="text-danger">*</span></label>
-                                <select name="branch_office_id" id="unit_branch_office_id"
-                                    class="form-select @error('branch_office_id', 'newBranchOfficeUnit') is-invalid @enderror"
-                                    required>
-                                    <option value="">-- Pilih Branch Office --</option>
-                                    @foreach ($branchOffices as $branchOffice)
-                                        <option value="{{ $branchOffice->id }}"
-                                            {{ old('branch_office_id') == $branchOffice->id ? 'selected' : '' }}>
-                                            {{ $branchOffice->name }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                @error('branch_office_id', 'newBranchOfficeUnit')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="unit_name" class="form-label">Nama <span
-                                        class="text-danger">*</span></label>
-                                <input type="text" name="name" id="unit_name"
-                                    class="form-control @error('name', 'newBranchOfficeUnit') is-invalid @enderror"
-                                    value="{{ old('name') }}" required>
-                                @error('name', 'newBranchOfficeUnit')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="unit_description" class="form-label">Deskripsi</label>
-                                <textarea name="description" id="unit_description" rows="2"
-                                    class="form-control @error('description', 'newBranchOfficeUnit') is-invalid @enderror">{{ old('description') }}</textarea>
-                                @error('description', 'newBranchOfficeUnit')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-
-                            <div class="mb-1">
-                                <label for="unit_status" class="form-label">Status <span
-                                        class="text-danger">*</span></label>
-                                <select name="status" id="unit_status"
-                                    class="form-select @error('status', 'newBranchOfficeUnit') is-invalid @enderror">
-                                    <option value="active" {{ old('status', 'active') == 'active' ? 'selected' : '' }}>
-                                        Active
-                                    </option>
-                                    <option value="inactive" {{ old('status') == 'inactive' ? 'selected' : '' }}>
-                                        Inactive
-                                    </option>
-                                </select>
-                                @error('status', 'newBranchOfficeUnit')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
-                            <button type="submit" class="btn btn-primary">Tambah</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
 
         {{-- Edit Unit/Divisi per baris --}}
         @foreach ($branchOfficeUnits as $unit)
@@ -1277,126 +1084,6 @@
             </div>
         </div>
 
-        {{-- Detail — grouped per user_id, since one member can have several
-             company_to_users rows (one per category application). --}}
-        @foreach ($companyMembers as $memberUserId => $memberRows)
-            @continue($memberUserId === $company->user_id)
-            @php
-                $memberFirst = $memberRows->first();
-            @endphp
-
-            <div class="modal fade" id="showMemberModal{{ $memberUserId }}" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">Detail User: {{ $memberFirst->user->name ?? '-' }}</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <table class="table table-sm table-borderless mb-0">
-                                <tr>
-                                    <td class="text-muted" style="width: 40%">Nama</td>
-                                    <td>{{ $memberFirst->user->name ?? '-' }}</td>
-                                </tr>
-                                <tr>
-                                    <td class="text-muted">Email</td>
-                                    <td>{{ $memberFirst->user->email ?? '-' }}</td>
-                                </tr>
-                                <tr>
-                                    <td class="text-muted">Role</td>
-                                    <td>{{ $memberFirst->role->name ?? '-' }}</td>
-                                </tr>
-                                <tr>
-                                    <td class="text-muted">Status</td>
-                                    <td>
-                                        @if ($memberFirst->status === 'active')
-                                            <span class="badge bg-success">Active</span>
-                                        @else
-                                            <span class="badge bg-danger">Inactive</span>
-                                        @endif
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td class="text-muted">Category Aplikasi</td>
-                                    <td>
-                                        @forelse ($memberRows->filter(fn ($row) => $row->categoryApplication) as $memberRow)
-                                            <span class="badge bg-info-subtle text-info me-1 mb-1">{{ $memberRow->categoryApplication->name }}</span>
-                                        @empty
-                                            <span class="badge bg-secondary-subtle text-secondary">Semua Akses</span>
-                                        @endforelse
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td class="text-muted">Ditambahkan</td>
-                                    <td>{{ optional($memberFirst->created_at)->format('d M Y H:i') }}</td>
-                                </tr>
-                            </table>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Tutup</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        @endforeach
-
-        {{-- Tambah Role --}}
-        <div class="modal fade" id="addRoleModal" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <form action="{{ route('profile.company-roles.store') }}" method="POST">
-                        @csrf
-                        <div class="modal-header">
-                            <h5 class="modal-title">Tambah Role</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="mb-3">
-                                <label for="role_name" class="form-label">Nama Role <span
-                                        class="text-danger">*</span></label>
-                                <input type="text" name="name" id="role_name"
-                                    class="form-control @error('name', 'newRole') is-invalid @enderror"
-                                    value="{{ old('name') }}" required>
-                                @error('name', 'newRole')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="role_description" class="form-label">Deskripsi</label>
-                                <textarea name="description" id="role_description" rows="2"
-                                    class="form-control @error('description', 'newRole') is-invalid @enderror">{{ old('description') }}</textarea>
-                                @error('description', 'newRole')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-
-                            <div class="mb-1">
-                                <label for="role_status" class="form-label">Status <span
-                                        class="text-danger">*</span></label>
-                                <select name="status" id="role_status"
-                                    class="form-select @error('status', 'newRole') is-invalid @enderror">
-                                    <option value="active" {{ old('status', 'active') == 'active' ? 'selected' : '' }}>
-                                        Active
-                                    </option>
-                                    <option value="inactive" {{ old('status') == 'inactive' ? 'selected' : '' }}>
-                                        Inactive
-                                    </option>
-                                </select>
-                                @error('status', 'newRole')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
-                            <button type="submit" class="btn btn-primary">Tambah</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-
         {{-- Edit Role per baris --}}
         @foreach ($companyRoles as $role)
             <div class="modal fade" id="editRoleModal{{ $role->id }}" tabindex="-1" aria-hidden="true">
@@ -1456,102 +1143,6 @@
                 </div>
             </div>
         @endforeach
-
-        {{-- Tambah Menu Aplikasi --}}
-        <div class="modal fade" id="addRoleMenuModal" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <form action="{{ route('profile.company-role-menus.store') }}" method="POST">
-                        @csrf
-                        <div class="modal-header">
-                            <h5 class="modal-title">Tambah Menu Aplikasi</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="mb-3">
-                                <label for="rolemenu_role" class="form-label">Role <span
-                                        class="text-danger">*</span></label>
-                                <select name="company_role_id" id="rolemenu_role"
-                                    class="form-select @error('company_role_id', 'newRoleMenu') is-invalid @enderror"
-                                    required>
-                                    <option value="">-- Pilih Role --</option>
-                                    @foreach ($companyRoles as $role)
-                                        <option value="{{ $role->id }}"
-                                            {{ old('company_role_id') == $role->id ? 'selected' : '' }}>
-                                            {{ $role->name }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                @error('company_role_id', 'newRoleMenu')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                                <div class="form-text">Menu yang dicentang di bawah hanya berlaku untuk role ini.</div>
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="rolemenu_category" class="form-label">Category Application <span
-                                        class="text-danger">*</span></label>
-                                <select name="category_application_id" id="rolemenu_category"
-                                    class="form-select @error('category_application_id', 'newRoleMenu') is-invalid @enderror"
-                                    required>
-                                    <option value="">-- Pilih Category Application --</option>
-                                    @foreach ($categoryApplications as $category)
-                                        <option value="{{ $category->id }}"
-                                            {{ old('category_application_id') == $category->id ? 'selected' : '' }}>
-                                            {{ $category->name }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                @error('category_application_id', 'newRoleMenu')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="rolemenu_menu" class="form-label">Menu <span
-                                        class="text-danger">*</span></label>
-                                <select name="application_menu_id" id="rolemenu_menu"
-                                    class="form-select @error('application_menu_id', 'newRoleMenu') is-invalid @enderror"
-                                    required>
-                                    <option value="">-- Pilih Category dulu --</option>
-                                    @foreach ($applicationMenus as $menu)
-                                        <option value="{{ $menu->id }}" data-category="{{ $menu->category_application_id }}"
-                                            {{ old('application_menu_id') == $menu->id ? 'selected' : '' }}>
-                                            {{ $menu->name }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                @error('application_menu_id', 'newRoleMenu')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                                <div class="form-text">Daftar menu otomatis mengikuti Category Application yang dipilih.</div>
-                            </div>
-
-                            <div class="mb-1">
-                                <label for="rolemenu_status" class="form-label">Status <span
-                                        class="text-danger">*</span></label>
-                                <select name="status" id="rolemenu_status"
-                                    class="form-select @error('status', 'newRoleMenu') is-invalid @enderror">
-                                    <option value="active" {{ old('status', 'active') == 'active' ? 'selected' : '' }}>
-                                        Active
-                                    </option>
-                                    <option value="inactive" {{ old('status') == 'inactive' ? 'selected' : '' }}>
-                                        Inactive
-                                    </option>
-                                </select>
-                                @error('status', 'newRoleMenu')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
-                            <button type="submit" class="btn btn-primary">Tambah</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
 
         {{-- Edit Menu Aplikasi per baris (hanya status — ganti menu berarti hapus lalu tambah baru) --}}
         @foreach ($companyRoleMenus as $roleMenu)
@@ -1631,32 +1222,11 @@
                 });
             }
 
-            // Applications tab: filter the Menu <select> down to whatever
-            // belongs to the chosen Category Application (same pattern as
-            // superadmin's company-to-user create page).
-            var rolemenuCategory = document.getElementById('rolemenu_category');
-            var rolemenuMenu = document.getElementById('rolemenu_menu');
-            if (rolemenuCategory && rolemenuMenu) {
-                var allMenuOptions = Array.prototype.slice.call(rolemenuMenu.querySelectorAll('option[data-category]'));
-
-                var filterMenus = function () {
-                    var categoryId = rolemenuCategory.value;
-
-                    allMenuOptions.forEach(function (opt) {
-                        var matches = opt.getAttribute('data-category') === categoryId;
-                        opt.hidden = !matches;
-                        opt.disabled = !matches;
-                    });
-
-                    var selected = rolemenuMenu.querySelector('option:checked');
-                    if (selected && selected.hasAttribute('data-category') && selected.getAttribute('data-category') !== categoryId) {
-                        rolemenuMenu.value = '';
-                    }
-                };
-
-                rolemenuCategory.addEventListener('change', filterMenus);
-                filterMenus();
-            }
+            // "Add Application" is a full page now (see
+            // resources/views/user/profile/company-role-menus/create.blade.php,
+            // CompanyRoleMenuController::create()), not a modal on this
+            // page, so the Category -> Menu filter JS that used to live
+            // here moved there too.
 
             // Setting Users tab: real-time search (name/email) + category
             // + status filter — plain client-side row show/hide, no

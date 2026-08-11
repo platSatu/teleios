@@ -38,4 +38,13 @@ class BranchOfficeUnit extends Model
     {
         return $this->belongsTo(BranchOffice::class);
     }
+
+    /**
+     * CompanyRole(s) locked to this division — see
+     * database/migrations/2026_08_11_100000_add_branch_office_unit_id_to_company_roles_table.
+     */
+    public function roles()
+    {
+        return $this->hasMany(CompanyRole::class, 'branch_office_unit_id');
+    }
 }

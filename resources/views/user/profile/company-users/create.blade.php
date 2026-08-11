@@ -93,7 +93,7 @@
                                     <option value="">-- Pilih Role --</option>
                                     @foreach ($companyRoles as $role)
                                         <option value="{{ $role->id }}"
-                                            {{ old('company_role_id') == $role->id ? 'selected' : '' }}>
+                                            {{ old('company_role_id', $prefillRoleId ?? '') == $role->id ? 'selected' : '' }}>
                                             {{ $role->name }}
                                         </option>
                                     @endforeach
@@ -122,7 +122,7 @@
                                             <option value="">-- Tidak ditempatkan --</option>
                                             @foreach ($branchOffices as $branchOffice)
                                                 <option value="{{ $branchOffice->id }}"
-                                                    {{ old('branch_office_id') == $branchOffice->id ? 'selected' : '' }}>
+                                                    {{ old('branch_office_id', $prefillBranchOfficeId ?? '') == $branchOffice->id ? 'selected' : '' }}>
                                                     {{ $branchOffice->name }}
                                                 </option>
                                             @endforeach
@@ -145,7 +145,7 @@
                                         @foreach ($branchOffices as $branchOffice)
                                             @foreach ($branchOffice->units as $unit)
                                                 <option value="{{ $unit->id }}" data-branch-office="{{ $branchOffice->id }}"
-                                                    {{ old('branch_office_unit_id') == $unit->id ? 'selected' : '' }}>
+                                                    {{ old('branch_office_unit_id', $prefillUnitId ?? '') == $unit->id ? 'selected' : '' }}>
                                                     {{ $unit->name }}
                                                 </option>
                                             @endforeach
@@ -169,7 +169,7 @@
                                             <input class="form-check-input" type="checkbox"
                                                 name="category_application_id[]"
                                                 id="member_category_{{ $category->id }}" value="{{ $category->id }}"
-                                                {{ in_array($category->id, old('category_application_id', [])) ? 'checked' : '' }}>
+                                                {{ in_array($category->id, old('category_application_id', array_filter([$prefillCategoryId ?? null]))) ? 'checked' : '' }}>
                                             <label class="form-check-label" for="member_category_{{ $category->id }}">
                                                 {{ $category->name }}
                                             </label>

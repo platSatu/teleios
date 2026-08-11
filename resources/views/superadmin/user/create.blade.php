@@ -41,6 +41,20 @@
                             </div>
                         </div>
 
+                        <div class="mb-3">
+                            <label for="handphone" class="form-label">Handphone (WhatsApp)</label>
+                            <div class="input-group">
+                                <span class="input-group-text">+62</span>
+                                <input type="text" inputmode="numeric" name="handphone" id="handphone"
+                                    class="form-control @error('handphone') is-invalid @enderror"
+                                    value="{{ old('handphone') }}" placeholder="81234567890" maxlength="14">
+                                @error('handphone')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+                            <div class="form-text">Tanpa awalan 0 atau kode negara 62 — cukup 10-14 digit setelahnya.</div>
+                        </div>
+
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="status" class="form-label">Status <span class="text-danger">*</span></label>

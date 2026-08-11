@@ -6,13 +6,16 @@ use App\Http\Controllers\Concerns\ResolvesCompanyContext;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\User\Profile\Concerns\ScopesActivePackage;
 use App\Models\ApplicationMenu;
+use App\Models\CategoryApplication;
 use App\Models\Company;
 use App\Models\CompanyRole;
 use App\Models\CompanyRoleMenu;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\View\View;
 
 /**
  * CRUD for the "Applications" tab on dashboard/user/profile — which
@@ -53,6 +56,51 @@ class CompanyRoleMenuController extends Controller
 
     use ScopesActivePackage;
 
+    /**
+     * "Add Application" row action on the Roles tab — dedicated page,
+     * Company/Branch/Unit/Role shown read-only, same pattern as
+     * CompanyRoleController::create(). Also sets `active_company_id` for
+     * this browsing session, same reasoning as that method.
+     */
+    public function create(Request $request, string $roleId): View
+    {
+        $role = CompanyRole::whereHas('company', function ($q) {
+            $q->where('user_id', Auth::id());
+        })->with(['company', 'branchOfficeUnit.branchOffice'])->findOrFail($roleId);
+
+        $company = $role->company;
+
+        $activeCategoryApplicationIds = $this->activeCategoryApplicationIds($company->user_id);
+
+        if ($activeCategoryApplicationIds->isEmpty()) {
+            abort(403, 'Anda belum memiliki package aktif.');
+        }
+
+        session(['active_company_id' => $company->id]);
+
+        $branchOffice = $role->branchOfficeUnit?->branchOffice;
+        $unit = $role->branchOfficeUnit;
+
+        $categoryApplications = CategoryApplication::where('status', 'active')
+            ->whereIn('id', $activeCategoryApplicationIds)
+            ->orderBy('name')
+            ->get();
+
+        $applicationMenus = ApplicationMenu::where('status', 'active')
+            ->whereIn('category_application_id', $activeCategoryApplicationIds)
+            ->orderBy('name')
+            ->get();
+
+        return view('user.profile.company-role-menus.create', compact(
+            'company',
+            'branchOffice',
+            'unit',
+            'role',
+            'categoryApplications',
+            'applicationMenus'
+        ));
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $company = $this->ownedCompanyOrFail($request);
@@ -91,8 +139,8 @@ class CompanyRoleMenuController extends Controller
 
         if ($validator->fails()) {
             return redirect()
-                ->route('profile.edit', ['tab' => 'applications'])
-                ->withErrors($validator, 'newRoleMenu')
+                ->route('profile.company-role-menus.create', $request->input('company_role_id'))
+                ->withErrors($validator)
                 ->withInput();
         }
 
@@ -105,7 +153,7 @@ class CompanyRoleMenuController extends Controller
 
         if ($alreadyAdded) {
             return redirect()
-                ->route('profile.edit', ['tab' => 'applications'])
+                ->route('profile.company-role-menus.create', $validated['company_role_id'])
                 ->with('error', 'Menu ini sudah ditambahkan untuk role tersebut.');
         }
 
@@ -120,6 +168,21 @@ class CompanyRoleMenuController extends Controller
         return redirect()
             ->route('profile.edit', ['tab' => 'applications'])
             ->with('success', 'Menu aplikasi berhasil ditambahkan untuk role tersebut.');
+    }
+
+    public function show(Request $request, string $id): View
+    {
+        $company = $this->ownedCompanyOrFail($request);
+
+        $roleMenu = CompanyRoleMenu::where('company_id', $company->id)
+            ->with(['companyRole.branchOfficeUnit.branchOffice', 'categoryApplication', 'applicationMenu'])
+            ->findOrFail($id);
+
+        $role = $roleMenu->companyRole;
+        $unit = $role?->branchOfficeUnit;
+        $branchOffice = $unit?->branchOffice;
+
+        return view('user.profile.company-role-menus.show', compact('company', 'branchOffice', 'unit', 'role', 'roleMenu'));
     }
 
     public function update(Request $request, string $id): RedirectResponse

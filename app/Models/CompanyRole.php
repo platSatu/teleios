@@ -21,6 +21,12 @@ class CompanyRole extends Model
     protected $fillable = [
         'company_id',
         'branch_office_id',
+        // Nullable, like branch_office_id — locks this role to one
+        // Division within that branch. See migration
+        // 2026_08_11_100000_add_branch_office_unit_id_to_company_roles_table's
+        // docblock for why roles are locked to a division rather than
+        // reusable across several.
+        'branch_office_unit_id',
         'name',
         'description',
         'status',
@@ -54,5 +60,26 @@ class CompanyRole extends Model
     public function members()
     {
         return $this->hasMany(CompanyToUser::class);
+    }
+
+    /**
+     * The one Division this role belongs to — null for legacy
+     * company-wide/branch-wide roles created before this column existed.
+     */
+    public function branchOfficeUnit()
+    {
+        return $this->belongsTo(BranchOfficeUnit::class);
+    }
+
+    /**
+     * Every company_role_menus row for this role — see
+     * App\Models\CompanyRoleMenu. A role's allowed CategoryApplication(s)
+     * are derived from this (distinct category_application_id across
+     * these rows), not a separate pivot — see 2026_08_11_100100's
+     * docblock for why a dedicated pivot was dropped in favor of this.
+     */
+    public function roleMenus()
+    {
+        return $this->hasMany(CompanyRoleMenu::class);
     }
 }
