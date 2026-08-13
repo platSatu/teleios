@@ -23,13 +23,22 @@ use Illuminate\Support\Facades\Schema;
  * limit_metric_id, subscription_id) and have it actually block a
  * duplicate "whole-company aggregate" row, because both nullable columns
  * can hold multiple NULLs that a unique index treats as distinct values
- * — so `usage_key` below is a NOT NULL stored/generated column that
- * substitutes a literal placeholder for NULL, and the real uniqueness
- * guarantee lives on IT instead. This is what actually stops two
- * simultaneous first-time reservations for the same combination from
- * both slipping through App\Services\PackageLimitService::reserve()'s
- * `lockForUpdate()` (which only locks rows that already exist — it can't
- * protect the very first INSERT for a combination on its own).
+ * — so `usage_key` below is a NOT NULL column that substitutes a literal
+ * placeholder for NULL, and the real uniqueness guarantee lives on IT
+ * instead. This is what actually stops two simultaneous first-time
+ * reservations for the same combination from both slipping through
+ * App\Services\PackageLimitService::reserve()'s `lockForUpdate()` (which
+ * only locks rows that already exist — it can't protect the very first
+ * INSERT for a combination on its own).
+ *
+ * `usage_key` is computed in App\Models\CompanyLimitUsage's `saving`
+ * event, NOT as a DB-level GENERATED ALWAYS AS column — MySQL/MariaDB
+ * reject a generated column whose expression depends on a base column
+ * that has a foreign key with an ON DELETE/UPDATE action of CASCADE,
+ * SET NULL, or SET DEFAULT (error 1901), and both `branch_office_id`
+ * and `subscription_id` below use ->nullOnDelete(). Computing it in PHP
+ * sidesteps that restriction entirely while keeping the same NOT NULL +
+ * UNIQUE guarantee at the database level.
  *
  * Only meaningful for 'consumable' metrics (see limit_metrics.metric_type)
  * — 'stock' metrics are measured live against the real resource count
@@ -57,15 +66,10 @@ return new class extends Migration
 
             // NULL-safe uniqueness guarantee — see the class docblock.
             // "-" can never collide with a real uuid, so this is safe as
-            // a stand-in for "no branch"/"no subscription".
-            //
-            // COALESCE (not IFNULL) on purpose: functionally identical
-            // here, but some MariaDB versions reject IFNULL() specifically
-            // inside a GENERATED ALWAYS AS expression (MySQL error 1901)
-            // while COALESCE() with the same two arguments is accepted.
-            $table->string('usage_key', 150)->storedAs(
-                "CONCAT(company_id, ':', COALESCE(branch_office_id, '-'), ':', limit_metric_id, ':', COALESCE(subscription_id, '-'))"
-            )->unique();
+            // a stand-in for "no branch"/"no subscription". Value is
+            // written by App\Models\CompanyLimitUsage's `saving` event,
+            // not by the database (see the class docblock for why).
+            $table->string('usage_key', 150)->unique();
         });
     }
 

@@ -41,6 +41,22 @@ class CompanyLimitUsage extends Model
         'notified_at' => 'datetime',
     ];
 
+    protected static function booted(): void
+    {
+        // Recomputes usage_key on every save (not just creating) so the
+        // NULL-safe uniqueness guarantee stays correct even if a row's
+        // scoping columns ever change — see the migration's docblock for
+        // why this lives in PHP instead of a DB generated column.
+        static::saving(function (self $model) {
+            $model->usage_key = implode(':', [
+                $model->company_id,
+                $model->branch_office_id ?: '-',
+                $model->limit_metric_id,
+                $model->subscription_id ?: '-',
+            ]);
+        });
+    }
+
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
