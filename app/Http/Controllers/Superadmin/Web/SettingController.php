@@ -49,6 +49,16 @@ class SettingController extends Controller
             'google_tag' => ['nullable', 'string', 'max:50'],
             'google_analytics' => ['nullable', 'string', 'max:50'],
             'gmaps' => ['nullable', 'string', 'max:2000'],
+            'instagram_url' => ['nullable', 'url', 'max:255'],
+            'facebook_url' => ['nullable', 'url', 'max:255'],
+            'twitter_url' => ['nullable', 'url', 'max:255'],
+            'icon_instagram' => ['nullable', 'image', 'max:1024'],
+            'icon_facebook' => ['nullable', 'image', 'max:1024'],
+            'icon_youtube' => ['nullable', 'image', 'max:1024'],
+            'youtube_url' => ['nullable', 'url', 'max:255'],
+            'icon_tiktok' => ['nullable', 'image', 'max:1024'],
+            'tiktok_url' => ['nullable', 'url', 'max:255'],
+            'running_text' => ['nullable', 'string', 'max:500'],
         ]);
 
         if ($request->hasFile('favicon')) {
@@ -61,6 +71,22 @@ class SettingController extends Controller
 
         if ($request->hasFile('meta_images')) {
             $validated['meta_images'] = WebImageUploader::upload($request->file('meta_images'), self::IMAGE_SUBDIRECTORY);
+        }
+
+        if ($request->hasFile('icon_instagram')) {
+            $validated['icon_instagram'] = WebImageUploader::upload($request->file('icon_instagram'), self::IMAGE_SUBDIRECTORY);
+        }
+
+        if ($request->hasFile('icon_facebook')) {
+            $validated['icon_facebook'] = WebImageUploader::upload($request->file('icon_facebook'), self::IMAGE_SUBDIRECTORY);
+        }
+
+        if ($request->hasFile('icon_youtube')) {
+            $validated['icon_youtube'] = WebImageUploader::upload($request->file('icon_youtube'), self::IMAGE_SUBDIRECTORY);
+        }
+
+        if ($request->hasFile('icon_tiktok')) {
+            $validated['icon_tiktok'] = WebImageUploader::upload($request->file('icon_tiktok'), self::IMAGE_SUBDIRECTORY);
         }
 
         CrudAdmin::update(
@@ -78,6 +104,12 @@ class SettingController extends Controller
 
                 if (array_key_exists('meta_images', $data) && $model->meta_images && $model->meta_images !== $data['meta_images']) {
                     WebImageUploader::delete($model->meta_images);
+                }
+
+                foreach (['icon_instagram', 'icon_facebook', 'icon_youtube', 'icon_tiktok'] as $iconField) {
+                    if (array_key_exists($iconField, $data) && $model->$iconField && $model->$iconField !== $data[$iconField]) {
+                        WebImageUploader::delete($model->$iconField);
+                    }
                 }
 
                 return $data;

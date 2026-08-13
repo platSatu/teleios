@@ -32,6 +32,7 @@ class FooterController extends Controller
                 'background_color',
                 'column_width',
                 'name',
+                'group_name',
                 'link',
                 'target_blank',
                 'sort_order',

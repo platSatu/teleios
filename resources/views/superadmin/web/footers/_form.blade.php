@@ -16,6 +16,17 @@
 <div class="mb-3">
     <label for="name" class="form-label">Nama <span class="text-danger">*</span></label>
     <input type="text" name="name" id="name" class="form-control" value="{{ old('name', $footer->name ?? '') }}" required>
+    <div class="form-text">Teks link yang ditampilkan, misal: "Help Center".</div>
+</div>
+
+<div class="mb-3">
+    <label for="group_name" class="form-label">Nama Grup / Kolom</label>
+    <input type="text" name="group_name" id="group_name" class="form-control" value="{{ old('group_name', $footer->group_name ?? '') }}" placeholder="Contoh: Support, About, Sales, Explore">
+    <div class="form-text">
+        Baris-baris dengan Nama Grup yang SAMA PERSIS akan ditampilkan bersama sebagai satu kolom di footer, dengan Nama Grup sebagai judulnya —
+        contoh: buat 5 baris dengan Nama Grup "Support" (Help Center, Shipping, Returns, dst) untuk jadi satu kolom "Support" berisi 5 link.
+        Kosongkan kalau link ini berdiri sendiri (tidak ikut kolom manapun).
+    </div>
 </div>
 
 <div class="mb-3">
@@ -33,9 +44,10 @@
     <div class="col-md-6 mb-3">
         <label for="column_width" class="form-label">Lebar Kolom <span class="text-danger">*</span></label>
         <select name="column_width" id="column_width" class="form-select" required>
-            <option value="col-md-3" @selected(old('column_width', $footer->column_width ?? 'col-md-3') === 'col-md-3')>col-md-3 (4 blok per baris)</option>
-            <option value="col-md-4" @selected(old('column_width', $footer->column_width ?? '') === 'col-md-4')>col-md-4 (3 blok per baris)</option>
+            <option value="col-md-3" @selected(old('column_width', $footer->column_width ?? 'col-md-3') === 'col-md-3')>col-md-3 (4 kolom per baris)</option>
+            <option value="col-md-4" @selected(old('column_width', $footer->column_width ?? '') === 'col-md-4')>col-md-4 (3 kolom per baris)</option>
         </select>
+        <div class="form-text">Kalau baris ini punya Nama Grup, lebar yang dipakai adalah milik baris PERTAMA dalam grup itu — isi sama di semua baris satu grup supaya konsisten.</div>
     </div>
     <div class="col-md-6 mb-3">
         <label for="sort_order" class="form-label">Urutan Tampil</label>

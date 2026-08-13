@@ -111,6 +111,7 @@ class FooterController extends Controller
             'background_color' => ['nullable', 'string', 'max:20'],
             'column_width' => ['required', 'in:col-md-3,col-md-4'],
             'name' => ['required', 'string', 'max:255'],
+            'group_name' => ['nullable', 'string', 'max:100'],
             'link' => ['required', 'string', 'max:255'],
             'target_blank' => ['nullable', 'boolean'],
             'sort_order' => ['nullable', 'integer', 'min:0'],

@@ -29,6 +29,7 @@
                     <thead class="table-light">
                         <tr>
                             <th>Nama</th>
+                            <th>Grup</th>
                             <th>Link</th>
                             <th>Tab Baru</th>
                             <th>Lebar Kolom</th>
@@ -41,6 +42,13 @@
                         @forelse ($footers as $item)
                             <tr>
                                 <td class="fw-semibold">{{ $item->name }}</td>
+                                <td>
+                                    @if ($item->group_name)
+                                        <span class="badge bg-info-subtle text-info">{{ $item->group_name }}</span>
+                                    @else
+                                        <span class="text-muted">—</span>
+                                    @endif
+                                </td>
                                 <td class="text-muted">{{ \Illuminate\Support\Str::limit($item->link, 40) }}</td>
                                 <td>{{ $item->target_blank ? 'Ya' : 'Tidak' }}</td>
                                 <td><code>{{ $item->column_width }}</code></td>
@@ -67,7 +75,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="text-center text-muted py-4">Belum ada footer.</td>
+                                <td colspan="8" class="text-center text-muted py-4">Belum ada footer.</td>
                             </tr>
                         @endforelse
                     </tbody>

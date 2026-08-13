@@ -17,15 +17,23 @@ use Illuminate\Http\JsonResponse;
  * Singleton, like App\Models\AiModerationSetting — WebSetting::current()
  * always returns (creating if missing) the one row this table ever
  * needs, so this never 404s even before anyone has filled it in.
- * favicon_url/logo_url/meta_images_url are appended since none of
- * WebSetting's accessors are in $appends by default.
+ * favicon_url/logo_url/meta_images_url/icon_*_url are appended since
+ * none of WebSetting's accessors are in $appends by default.
  */
 class WebSettingController extends Controller
 {
     public function show(): JsonResponse
     {
         $webSetting = WebSetting::current();
-        $webSetting->append(['favicon_url', 'logo_url', 'meta_images_url']);
+        $webSetting->append([
+            'favicon_url',
+            'logo_url',
+            'meta_images_url',
+            'icon_instagram_url',
+            'icon_facebook_url',
+            'icon_youtube_url',
+            'icon_tiktok_url',
+        ]);
 
         return response()->json(['data' => $webSetting]);
     }

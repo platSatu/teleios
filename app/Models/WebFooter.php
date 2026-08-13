@@ -9,12 +9,17 @@ use Illuminate\Support\Str;
 
 /**
  * One footer link/block for the public web site (fe-konexa) — flat
- * list, same shape as App\Models\WebHeader/WebFeature. See the
- * create_web_footers_table migration for the full field rundown.
- * Superadmin-managed — App\Http\Controllers\Superadmin\Web\
- * FooterController. Exposed publicly (status = active only, ordered by
- * sort_order) via GET /api/frontend/footers — see
- * App\Http\Controllers\Api\Frontend\FooterController.
+ * list, same shape as App\Models\WebHeader/WebFeature, EXCEPT several
+ * rows can share the same `group_name` (nullable) so fe-konexa can
+ * render them together under one column header (e.g. "Support", "About")
+ * instead of one flat row of links — see App\View\Composers\
+ * FooterComposer on the fe-konexa side for the actual grouping. See the
+ * create_web_footers_table / add_group_name_to_web_footers_table
+ * migrations for the full field rundown. Superadmin-managed —
+ * App\Http\Controllers\Superadmin\Web\FooterController. Exposed publicly
+ * (status = active only, ordered by sort_order) via GET
+ * /api/frontend/footers — see App\Http\Controllers\Api\Frontend\
+ * FooterController.
  */
 class WebFooter extends Model
 {
@@ -30,6 +35,7 @@ class WebFooter extends Model
         'background_color',
         'column_width',
         'name',
+        'group_name',
         'link',
         'target_blank',
         'sort_order',

@@ -34,6 +34,16 @@ class WebSetting extends Model
         'google_tag',
         'google_analytics',
         'gmaps',
+        'instagram_url',
+        'facebook_url',
+        'twitter_url',
+        'icon_instagram',
+        'icon_facebook',
+        'icon_youtube',
+        'youtube_url',
+        'icon_tiktok',
+        'tiktok_url',
+        'running_text',
     ];
 
     protected static function boot()
@@ -60,6 +70,26 @@ class WebSetting extends Model
     public function getMetaImagesUrlAttribute(): ?string
     {
         return WebImageUploader::url($this->meta_images);
+    }
+
+    public function getIconInstagramUrlAttribute(): ?string
+    {
+        return WebImageUploader::url($this->icon_instagram);
+    }
+
+    public function getIconFacebookUrlAttribute(): ?string
+    {
+        return WebImageUploader::url($this->icon_facebook);
+    }
+
+    public function getIconYoutubeUrlAttribute(): ?string
+    {
+        return WebImageUploader::url($this->icon_youtube);
+    }
+
+    public function getIconTiktokUrlAttribute(): ?string
+    {
+        return WebImageUploader::url($this->icon_tiktok);
     }
 
     /**
