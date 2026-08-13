@@ -53,6 +53,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Frontend (fe-konexa) — inbound
+    |--------------------------------------------------------------------------
+    |
+    | Shared secret that gates /api/frontend/* (see routes/api.php's
+    | `frontend.api-key` group and App\Http\Middleware\
+    | VerifyFrontendApiKey). Must match TELEIOS_API_KEY in fe-konexa's
+    | own .env exactly — that app calls these routes server-to-server via
+    | its App\Services\TeleiosApiService.
+    |
+    */
+
+    'frontend' => [
+        'url' => env('FRONTEND_API_URL', 'http://localhost:8001'),
+        'key' => env('FRONTEND_API_KEY'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Google OAuth (Sign in / Sign up with Google)
     |--------------------------------------------------------------------------
     |

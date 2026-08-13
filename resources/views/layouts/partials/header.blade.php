@@ -234,6 +234,14 @@
                                     </a>
                                 </li>
                                 <li class="profile-item">
+                                    <a href="{{ route('dashboard.package.usage') }}"
+                                        class="text-body d-flex align-items-center justify-content-between">
+                                        <span>
+                                            <i class="ri-pie-chart-2-line me-3"></i>Sisa Kuota Saya
+                                        </span>
+                                    </a>
+                                </li>
+                                <li class="profile-item">
                                     <a href="{{ route('dashboard.voucher-redeem.index') }}"
                                         class="text-body d-flex align-items-center justify-content-between">
                                         <span>

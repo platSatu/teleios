@@ -36,6 +36,7 @@ class WaAiBotProvider extends Model
         'gemini' => 'Google Gemini',
         'openai' => 'OpenAI (ChatGPT)',
         'anthropic' => 'Anthropic (Claude)',
+        'deepseek' => 'DeepSeek',
     ];
 
     protected static function boot()

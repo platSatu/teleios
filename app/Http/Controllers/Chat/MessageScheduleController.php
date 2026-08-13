@@ -7,10 +7,12 @@ use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\CompanyToUser;
 use App\Models\User;
+use App\Models\WaCategoryPhoneBook;
 use App\Models\WaMessageSchedule;
 use App\Models\WaMessageScheduleLog;
 use App\Models\WaMessageScheduleStep;
 use App\Models\WaMessageTemplate;
+use App\Models\WaPhoneBook;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -309,6 +311,8 @@ class MessageScheduleController extends Controller
             'group_jids.*' => ['string'],
             'user_ids' => ['nullable', 'array'],
             'user_ids.*' => ['uuid'],
+            'phonebook_ids' => ['nullable', 'array'],
+            'phonebook_ids.*' => ['uuid'],
             'steps' => ['required_if:type,drip', 'array', 'min:1'],
             'steps.*.delay_days' => ['required_if:type,drip', 'integer', 'min:0'],
             'steps.*.use_template' => ['nullable', 'boolean'],
@@ -405,9 +409,10 @@ class MessageScheduleController extends Controller
                 $hasPhone = trim((string) $request->input('phone_numbers')) !== '';
                 $hasGroup = ! empty(array_filter((array) $request->input('group_jids', [])));
                 $hasUser = ! empty(array_filter((array) $request->input('user_ids', [])));
+                $hasPhonebook = ! empty(array_filter((array) $request->input('phonebook_ids', [])));
 
-                if (! $hasPhone && ! $hasGroup && ! $hasUser) {
-                    $validator->errors()->add('recipients', 'Pilih minimal satu tujuan: nomor WhatsApp, grup, atau user company.');
+                if (! $hasPhone && ! $hasGroup && ! $hasUser && ! $hasPhonebook) {
+                    $validator->errors()->add('recipients', 'Pilih minimal satu tujuan: nomor WhatsApp, grup, user company, atau kontak buku telepon.');
                 }
             }
 
@@ -424,6 +429,21 @@ class MessageScheduleController extends Controller
 
                 if ($validUserIds->count() < count($userIds)) {
                     $validator->errors()->add('user_ids', 'Salah satu user yang dipilih tidak valid untuk company ini.');
+                }
+            }
+
+            // Same company-scoping guard as user_ids above, for the "Grup
+            // Buku Telepon" tab's checked contacts.
+            $phonebookIds = array_unique(array_filter((array) $request->input('phonebook_ids', [])));
+
+            if ($phonebookIds) {
+                $validPhonebookIds = WaPhoneBook::where('company_id', $company->id)
+                    ->whereIn('id', $phonebookIds)
+                    ->pluck('id')
+                    ->unique();
+
+                if ($validPhonebookIds->count() < count($phonebookIds)) {
+                    $validator->errors()->add('phonebook_ids', 'Salah satu kontak buku telepon yang dipilih tidak valid untuk company ini.');
                 }
             }
         });
@@ -483,7 +503,7 @@ class MessageScheduleController extends Controller
 
             $validated['recipients'] = $template->recipients ?? [];
         } else {
-            $validated['recipients'] = $this->collectRecipients($request);
+            $validated['recipients'] = $this->collectRecipients($request, $company);
         }
 
         unset($validated['steps']);
@@ -590,16 +610,33 @@ class MessageScheduleController extends Controller
 
     /**
      * Merges phone numbers (split on `;`, `,`, or newline — whatever the
-     * user typed), checked WA groups, and checked company users into the
-     * JSON shape WaMessageSchedule::recipients expects. Deduplicated so
-     * the same target checked/typed twice never causes a double send.
+     * user typed), checked "Grup Buku Telepon" contacts (resolved here to
+     * their saved phone number — same recipient type as a manually-typed
+     * number, so they get the exact same opt-out/JID handling downstream
+     * in SendScheduledWaMessage), checked WA groups, and checked company
+     * users into the JSON shape WaMessageSchedule::recipients expects.
+     * Deduplicated so the same target checked/typed twice — or typed
+     * manually AND picked from the phone book — never causes a double
+     * send.
      */
-    private function collectRecipients(Request $request): array
+    private function collectRecipients(Request $request, Company $company): array
     {
         $recipients = [];
 
-        collect(preg_split('/[;,\r\n]+/', (string) $request->input('phone_numbers', '')))
+        $typedNumbers = collect(preg_split('/[;,\r\n]+/', (string) $request->input('phone_numbers', '')))
             ->map(fn ($n) => trim($n))
+            ->filter();
+
+        $phonebookIds = array_unique(array_filter((array) $request->input('phonebook_ids', [])));
+        $phonebookNumbers = $phonebookIds
+            ? WaPhoneBook::where('company_id', $company->id)
+                ->whereIn('id', $phonebookIds)
+                ->whereNotNull('phone')
+                ->where('is_blacklisted', false)
+                ->pluck('phone')
+            : collect();
+
+        $typedNumbers->merge($phonebookNumbers)
             ->filter()
             ->unique()
             ->each(function (string $number) use (&$recipients) {
@@ -649,6 +686,14 @@ class MessageScheduleController extends Controller
                 ->get()
                 ->unique('user_id')
                 ->values(),
+            // "Grup Buku Telepon" tab — Kelompok (WaCategoryPhoneBook) with
+            // their contacts eager-loaded, same shape as branchOffices/
+            // units above so the Blade/JS side can filter client-side
+            // instead of another round trip per category.
+            'phoneBookCategories' => WaCategoryPhoneBook::where('company_id', $company->id)
+                ->with(['phoneBooks' => fn ($q) => $q->orderBy('name')])
+                ->orderBy('name')
+                ->get(),
         ];
     }
 

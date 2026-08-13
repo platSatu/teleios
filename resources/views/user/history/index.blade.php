@@ -100,7 +100,7 @@
                                 </table>
                             </div>
                             <div class="mt-3">
-                                    
+                                    {{ $deposits->links('pagination::bootstrap-5') }}
                             </div>
                         </div>
 
@@ -179,7 +179,9 @@
                                     </tbody>
                                 </table>
                             </div>
-                            <div class="mt-3">{{ $subscriptions->links() }}</div>
+                            <div class="mt-3">
+                                {{ $subscriptions->links('pagination::bootstrap-5') }}
+                            </div>
                         </div>
 
                         {{-- Kode Referral Saya --}}

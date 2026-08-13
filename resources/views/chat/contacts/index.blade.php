@@ -47,11 +47,12 @@
                                     @endif
                                     <th>Ditugaskan ke</th>
                                     <th>Terakhir Dihubungi</th>
+                                    <th class="text-end">Aksi</th>
                                 </tr>
                             </thead>
                             <tbody id="wa-contact-table-body">
                                 <tr id="wa-contact-table-empty">
-                                    <td colspan="6" class="text-center text-muted py-4">Memuat kontak...</td>
+                                    <td colspan="7" class="text-center text-muted py-4">Memuat kontak...</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -66,6 +67,7 @@
         (function () {
             const listUrl = @json(route('chat.contacts.list'));
             const updateUrlTemplate = @json(route('chat.contacts.update', ['contact' => '__ID__']));
+            const showUrlTemplate = @json(route('chat.contacts.show', ['customer' => '__ID__']));
             const csrfToken = @json(csrf_token());
             const showBranchColumn = @json(! $lockedBranchId);
             const branches = @json($branches->map(fn ($b) => ['id' => $b->id, 'name' => $b->name]));
@@ -185,6 +187,18 @@
                 lastContactedCell.className = 'text-muted small';
                 row.appendChild(lastContactedCell);
 
+                const actionCell = document.createElement('td');
+                actionCell.className = 'text-end';
+                if (contact.wa_customer_id) {
+                    const link = document.createElement('a');
+                    link.href = urlFor(showUrlTemplate, contact.wa_customer_id);
+                    link.className = 'btn btn-sm btn-light';
+                    link.title = 'Lihat Customer 360';
+                    link.innerHTML = '<i class="ri-user-3-line"></i> 360';
+                    actionCell.appendChild(link);
+                }
+                row.appendChild(actionCell);
+
                 return row;
             }
 
@@ -195,7 +209,7 @@
 
                     if (contacts.length === 0) {
                         const row = document.createElement('tr');
-                        const colspan = showBranchColumn ? 6 : 5;
+                        const colspan = showBranchColumn ? 7 : 6;
                         row.innerHTML = '<td colspan="' + colspan + '" class="text-center text-muted py-4">Belum ada kontak. Kontak muncul otomatis begitu chat dibuka di Inbox.</td>';
                         tableBody.appendChild(row);
                         return;

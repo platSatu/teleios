@@ -7,13 +7,16 @@
         @if(session('success'))
             <div class="alert alert-success">{{ session('success') }}</div>
         @endif
+        @if(session('error'))
+            <div class="alert alert-danger">{{ session('error') }}</div>
+        @endif
 
         <div class="card">
             <div class="card-body">
                 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
                     <div>
                         <h4 class="mb-1">Kategori Template</h4>
-                        <p class="text-muted mb-0">Kelompokkan WA Template kamu. Kategori baru perlu di-approve superadmin dulu.</p>
+                        <p class="text-muted mb-0">Kelompokkan WA Template kamu. Kategori baru langsung diperiksa AI moderasi — otomatis lolos, diperbaiki, atau ditolak.</p>
                     </div>
                     <a href="{{ route('chat.category-templates.create') }}" class="btn btn-primary">
                         <i class="ri-add-line"></i> Tambah Kategori

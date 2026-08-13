@@ -44,9 +44,8 @@
 </div>
 
 {{-- SweetAlert2 for the "Terima kasih atas deposit Anda" success
-     popup — same asset pair already used by resources/views/superadmin/
-     wa-templates/_reject-script.blade.php, loaded here rather than
-     globally since this is the only place on this page that needs it. --}}
+     popup, loaded here rather than globally since this is the only
+     place on this page that needs it. --}}
 <link rel="stylesheet" href="{{ asset('be') }}/assets/libs/sweetalert2/sweetalert2.min.css">
 <script src="{{ asset('be') }}/assets/libs/sweetalert2/sweetalert2.min.js"></script>
 

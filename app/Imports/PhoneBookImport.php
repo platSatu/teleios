@@ -6,6 +6,7 @@ use App\Models\BranchOffice;
 use App\Models\Company;
 use App\Models\WaCategoryPhoneBook;
 use App\Models\WaPhoneBook;
+use App\Services\Crm\CustomerIdentityService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Concerns\ToCollection;
@@ -40,7 +41,14 @@ class PhoneBookImport implements ToCollection, WithHeadingRow
         private Collection $categories,
         private Collection $branchOffices,
         private ?string $createdBy,
+        private ?CustomerIdentityService $customerIdentity = null,
     ) {
+        // Nullable + defaulted (rather than a required constructor arg)
+        // so this stays constructible without reaching into the
+        // container from anywhere that doesn't care about CRM linking
+        // (e.g. a future unit test) — resolve() below just skips the
+        // link step when it's not provided.
+        $this->customerIdentity ??= app(CustomerIdentityService::class);
     }
 
     public function collection(Collection $rows): void
@@ -128,7 +136,18 @@ class PhoneBookImport implements ToCollection, WithHeadingRow
             $seenPhones[$normalizedPhone] = $rowNumber;
 
             try {
+                // CRM Roadmap Fase 0: same identity-resolve step
+                // PhoneBookController::store() does for a single manual
+                // add — a bulk import must link its rows exactly the
+                // same way a one-off add would, not bypass it.
+                $customer = $this->customerIdentity->resolve($this->company->id, $normalizedPhone, [
+                    'name' => $data['name'],
+                    'branch_office_id' => $branchOfficeId,
+                    'created_by' => $this->createdBy,
+                ]);
+
                 WaPhoneBook::create([
+                    'wa_customer_id' => $customer->id,
                     'company_id' => $this->company->id,
                     'branch_office_id' => $branchOfficeId,
                     'wa_category_phone_book_id' => $category->id,

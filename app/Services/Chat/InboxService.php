@@ -33,20 +33,23 @@ class InboxService
     }
 
     /**
-     * @param  int  $afterId  When 0 (default), returns the most recent
-     *                        page of history (used when a chat is first
-     *                        opened). When > 0, returns only messages
-     *                        newer than that message ID — a small delta
-     *                        the caller can append, used by polling so it
-     *                        doesn't have to re-fetch the whole thread
-     *                        every few seconds.
+     * @param  int  $afterSeq  When 0 (default), returns the most recent
+     *                         page of history (used when a chat is first
+     *                         opened). When > 0, returns only messages
+     *                         with a higher Seq than that — a small delta
+     *                         the caller can append, used by polling so it
+     *                         doesn't have to re-fetch the whole thread
+     *                         every few seconds. Seq (a plain
+     *                         auto-increment counter), not id (a random
+     *                         UUID with no natural order) — see
+     *                         g_backend's models.WaMessage.
      * @return array<int, array<string, mixed>>
      */
-    public function messages(string $jwt, string $deviceId, string $chatJid, int $afterId = 0): array
+    public function messages(string $jwt, string $deviceId, string $chatJid, int $afterSeq = 0): array
     {
         $path = "/api/wa/devices/{$deviceId}/chats/".rawurlencode($chatJid).'/messages';
-        if ($afterId > 0) {
-            $path .= '?after_id='.$afterId;
+        if ($afterSeq > 0) {
+            $path .= '?after_seq='.$afterSeq;
         }
 
         return $this->request('get', $path, $jwt)['messages'] ?? [];
@@ -60,6 +63,45 @@ class InboxService
         return $this->request('post', "/api/wa/devices/{$deviceId}/chats/".rawurlencode($chatJid).'/messages', $jwt, [
             'body' => $body,
         ])['message'] ?? [];
+    }
+
+    /**
+     * Sends a native WhatsApp poll (survey) to a chat — the anti-ban-safe
+     * "interactive message" this app supports (see WaMessageTypePoll's
+     * docblock on the Go side for why buttons/list messages are
+     * deliberately not offered: WhatsApp actively blocks/deprioritizes
+     * those from unofficial connections like this one's, but a poll is
+     * an ordinary consumer-app feature with no such restriction).
+     *
+     * @param  array<int, string>  $options  At least 2 option strings.
+     * @param  int  $selectableCount  How many options a voter may pick at
+     *                                once; 1 for an ordinary single-choice
+     *                                survey (the common case).
+     * @return array<string, mixed>
+     */
+    public function sendPoll(string $jwt, string $deviceId, string $chatJid, string $question, array $options, int $selectableCount = 1): array
+    {
+        return $this->request('post', "/api/wa/devices/{$deviceId}/chats/".rawurlencode($chatJid).'/polls', $jwt, [
+            'question' => $question,
+            'options' => $options,
+            'selectable_count' => $selectableCount,
+        ])['message'] ?? [];
+    }
+
+    /**
+     * Fetches a poll's current tally: the question/options it was sent
+     * with, plus every voter's current selection. $chatJid is only used
+     * to build the URL (Go's route nests polls under a chat for
+     * consistency with its other endpoints) — the poll itself is looked
+     * up by $pollMessageId within $deviceId regardless.
+     *
+     * @return array{poll: array<string, mixed>, votes: array<int, array<string, mixed>>}
+     */
+    public function pollResults(string $jwt, string $deviceId, string $chatJid, string $pollMessageId): array
+    {
+        $path = "/api/wa/devices/{$deviceId}/chats/".rawurlencode($chatJid)."/polls/{$pollMessageId}/results";
+
+        return $this->request('get', $path, $jwt);
     }
 
     /**
@@ -139,7 +181,7 @@ class InboxService
      *
      * @return array{body: string, content_type: string, content_disposition: string}
      */
-    public function media(string $jwt, string $deviceId, int $messageId): array
+    public function media(string $jwt, string $deviceId, string $messageId): array
     {
         $response = Http::withHeaders([
             'X-API-KEY' => $this->apiKey,

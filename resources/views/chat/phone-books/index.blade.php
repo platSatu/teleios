@@ -110,6 +110,11 @@
                                     </td>
                                     <td class="text-end" style="white-space: nowrap;">
                                         <div class="d-flex flex-nowrap justify-content-end gap-1">
+                                            @if ($phoneBook->wa_customer_id)
+                                                <a href="{{ route('chat.contacts.show', ['customer' => $phoneBook->wa_customer_id]) }}" class="btn btn-sm btn-light" title="Lihat Customer 360">
+                                                    <i class="ri-user-3-line"></i>
+                                                </a>
+                                            @endif
                                             <a href="{{ route('chat.phone-books.edit', $phoneBook->id) }}" class="btn btn-sm btn-light" title="Edit">
                                                 <i class="ri-edit-line"></i>
                                             </a>

@@ -7,19 +7,16 @@ use RuntimeException;
 
 /**
  * Single entry point the rest of the app calls to get an AI reply for
- * one WaAiBot config — picks the right App\Services\AiBot\Contracts\
- * AiProviderClient based on the bot's provider->driver
- * (App\Models\WaAiBotProvider::DRIVERS) and forwards the call. This is
- * the only class that needs to change if a new provider is ever added:
- * add the driver key to WaAiBotProvider::DRIVERS, write one more
- * *Client implementing AiProviderClient, wire it into the match() below.
+ * one WaAiBot config — validates the bot's driver/model/api key are all
+ * present, then delegates the actual App\Services\AiBot\Contracts\
+ * AiProviderClient lookup to App\Services\AiBot\AiProviderClientResolver
+ * (shared with App\Services\Moderation\TemplateModerationService, the
+ * other caller that needs "driver string -> working client").
  */
 class AiReplyGenerator
 {
     public function __construct(
-        protected GeminiClient $gemini,
-        protected OpenAiClient $openAi,
-        protected AnthropicClient $anthropic,
+        protected AiProviderClientResolver $clients,
     ) {
     }
 
@@ -48,12 +45,7 @@ class AiReplyGenerator
             throw new RuntimeException('AI Bot ini belum diisi API key.');
         }
 
-        $client = match ($driver) {
-            'gemini' => $this->gemini,
-            'openai' => $this->openAi,
-            'anthropic' => $this->anthropic,
-            default => throw new RuntimeException("Driver AI '{$driver}' belum didukung oleh mesin."),
-        };
+        $client = $this->clients->resolve($driver);
 
         return $client->generateReply($apiKey, $model, $this->buildSystemPrompt($bot), $userMessage, $history);
     }

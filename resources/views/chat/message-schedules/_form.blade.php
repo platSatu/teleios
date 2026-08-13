@@ -8,9 +8,21 @@
 @php
     $existingRecipients = collect($schedule->recipients ?? []);
     $existingPhones = $existingRecipients->where('type', 'phone')->pluck('value')->implode("\n");
+    $existingPhoneValues = $existingRecipients->where('type', 'phone')->pluck('value')->all();
     $existingGroups = $existingRecipients->where('type', 'group')->pluck('value')->all();
     $existingUsers = $existingRecipients->where('type', 'user')->pluck('value')->all();
     $currentType = old('type', $schedule->type ?? 'recurring');
+
+    // "Grup Buku Telepon" tab pre-check on edit: recipients only ever
+    // store a plain phone number (type=phone), not which WaPhoneBook it
+    // came from, so a contact is shown as checked if its saved number is
+    // already among this schedule's phone-type recipients. Best-effort —
+    // if the number was retyped in a different format it won't match —
+    // but keeps this tab from needing its own storage just to remember
+    // which contacts were originally picked here vs typed in Tab 1.
+    $oldPhonebookIds = old('phonebook_ids');
+    $checkedPhonebookByPhone = is_array($oldPhonebookIds) ? [] : $existingPhoneValues;
+    $hasAnyPhoneBookContact = $phoneBookCategories->contains(fn ($c) => $c->phoneBooks->isNotEmpty());
 
     // Pre-built here as plain PHP so the JS block below only ever has
     // to embed a single already-computed variable — keeps every raw
@@ -47,44 +59,46 @@
      mengisi apa pun yang lain — sesuai referensi tampilan yang
      diminta.
 ============================================================ --}}
-<div class="mb-4">
-    <label class="form-label d-block mb-2">Jenis Pengiriman</label>
-    <div class="row g-2" id="scheduleTypeCards">
-        <div class="col-sm-4">
-            <input type="radio" class="btn-check schedule-type-radio" name="type" id="scheduleType-once"
-                value="once" autocomplete="off" @checked($currentType == 'once')>
-            <label class="btn btn-outline-primary w-100 h-100 text-start p-3 schedule-type-card" for="scheduleType-once">
-                <div class="d-flex align-items-center gap-2 mb-1">
-                    <i class="ri-send-plane-line fs-4"></i>
-                    <span class="fw-semibold">Sekali Kirim</span>
-                </div>
-                <div class="small text-body-secondary">Broadcast langsung atau terjadwal, satu kali di satu tanggal &amp; jam.</div>
-            </label>
+<div class="card border mb-3">
+    <div class="card-body">
+        <label class="form-label d-block mb-2">Jenis Pengiriman</label>
+        <div class="row g-2" id="scheduleTypeCards">
+            <div class="col-sm-4">
+                <input type="radio" class="btn-check schedule-type-radio" name="type" id="scheduleType-once"
+                    value="once" autocomplete="off" @checked($currentType == 'once')>
+                <label class="btn btn-outline-primary w-100 h-100 text-start p-3 schedule-type-card" for="scheduleType-once">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <i class="ri-send-plane-line fs-4"></i>
+                        <span class="fw-semibold">Sekali Kirim</span>
+                    </div>
+                    <div class="small text-body-secondary">Broadcast langsung atau terjadwal, satu kali di satu tanggal &amp; jam.</div>
+                </label>
+            </div>
+            <div class="col-sm-4">
+                <input type="radio" class="btn-check schedule-type-radio" name="type" id="scheduleType-recurring"
+                    value="recurring" autocomplete="off" @checked($currentType == 'recurring')>
+                <label class="btn btn-outline-primary w-100 h-100 text-start p-3 schedule-type-card" for="scheduleType-recurring">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <i class="ri-repeat-line fs-4"></i>
+                        <span class="fw-semibold">Berulang</span>
+                    </div>
+                    <div class="small text-body-secondary">Terkirim otomatis setiap hari, dalam rentang tanggal yang dipilih.</div>
+                </label>
+            </div>
+            <div class="col-sm-4">
+                <input type="radio" class="btn-check schedule-type-radio" name="type" id="scheduleType-drip"
+                    value="drip" autocomplete="off" @checked($currentType == 'drip')>
+                <label class="btn btn-outline-primary w-100 h-100 text-start p-3 schedule-type-card" for="scheduleType-drip">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <i class="ri-flow-chart fs-4"></i>
+                        <span class="fw-semibold">Bertahap per Kontak</span>
+                    </div>
+                    <div class="small text-body-secondary">Beberapa pesan berjarak hari (drip), sama untuk semua tujuan.</div>
+                </label>
+            </div>
         </div>
-        <div class="col-sm-4">
-            <input type="radio" class="btn-check schedule-type-radio" name="type" id="scheduleType-recurring"
-                value="recurring" autocomplete="off" @checked($currentType == 'recurring')>
-            <label class="btn btn-outline-primary w-100 h-100 text-start p-3 schedule-type-card" for="scheduleType-recurring">
-                <div class="d-flex align-items-center gap-2 mb-1">
-                    <i class="ri-repeat-line fs-4"></i>
-                    <span class="fw-semibold">Berulang</span>
-                </div>
-                <div class="small text-body-secondary">Terkirim otomatis setiap hari, dalam rentang tanggal yang dipilih.</div>
-            </label>
-        </div>
-        <div class="col-sm-4">
-            <input type="radio" class="btn-check schedule-type-radio" name="type" id="scheduleType-drip"
-                value="drip" autocomplete="off" @checked($currentType == 'drip')>
-            <label class="btn btn-outline-primary w-100 h-100 text-start p-3 schedule-type-card" for="scheduleType-drip">
-                <div class="d-flex align-items-center gap-2 mb-1">
-                    <i class="ri-flow-chart fs-4"></i>
-                    <span class="fw-semibold">Bertahap per Kontak</span>
-                </div>
-                <div class="small text-body-secondary">Beberapa pesan berjarak hari (drip), sama untuk semua tujuan.</div>
-            </label>
-        </div>
+        @error('type')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
     </div>
-    @error('type')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
 </div>
 
 <style>
@@ -101,21 +115,25 @@
     }
 </style>
 
-<div class="row">
-    <div class="col-md-6 mb-3">
-        <label class="form-label">Device</label>
-        <select name="device_id" id="scheduleDeviceSelect" class="wa-device-select form-select @error('device_id') is-invalid @enderror"
-            data-selected="{{ old('device_id', $schedule->device_id ?? '') }}" required>
-            <option value="">Memuat device...</option>
-        </select>
-        @error('device_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
-    </div>
+<div class="card border mb-3">
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6 mb-3 mb-md-0">
+                <label class="form-label">Device</label>
+                <select name="device_id" id="scheduleDeviceSelect" class="wa-device-select form-select @error('device_id') is-invalid @enderror"
+                    data-selected="{{ old('device_id', $schedule->device_id ?? '') }}" required>
+                    <option value="">Memuat device...</option>
+                </select>
+                @error('device_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+            </div>
 
-    <div class="col-md-6 mb-3">
-        <label class="form-label">Nama / Judul</label>
-        <input type="text" name="title" value="{{ old('title', $schedule->title ?? '') }}"
-            class="form-control @error('title') is-invalid @enderror" placeholder="Contoh: Reminder Tagihan Bulanan" required>
-        @error('title')<div class="invalid-feedback">{{ $message }}</div>@enderror
+            <div class="col-md-6">
+                <label class="form-label">Nama / Judul</label>
+                <input type="text" name="title" value="{{ old('title', $schedule->title ?? '') }}"
+                    class="form-control @error('title') is-invalid @enderror" placeholder="Contoh: Reminder Tagihan Bulanan" required>
+                @error('title')<div class="invalid-feedback">{{ $message }}</div>@enderror
+            </div>
+        </div>
     </div>
 </div>
 
@@ -213,27 +231,32 @@
      Jadwal: tanggal + jam. Label & kolom "Tanggal Berakhir"
      menyesuaikan Jenis Pengiriman lewat JS di bawah.
 ============================================================ --}}
-<div class="row" id="dateFieldsRow">
-    <div class="col-md-4 mb-3">
-        <label class="form-label" id="dateStartLabel">Tanggal Mulai</label>
-        <input type="date" name="date_start"
-            value="{{ old('date_start', isset($schedule->date_start) ? $schedule->date_start->format('Y-m-d') : '') }}"
-            class="form-control @error('date_start') is-invalid @enderror" required>
-        @error('date_start')<div class="invalid-feedback">{{ $message }}</div>@enderror
-    </div>
-    <div class="col-md-4 mb-3" id="dateEndCol">
-        <label class="form-label">Tanggal Berakhir</label>
-        <input type="date" name="date_end"
-            value="{{ old('date_end', isset($schedule->date_end) ? $schedule->date_end->format('Y-m-d') : '') }}"
-            class="form-control @error('date_end') is-invalid @enderror">
-        <div class="form-text">Kosongkan kalau pesan cuma dikirim 1 hari. Isi untuk kirim berulang setiap hari sampai tanggal ini.</div>
-        @error('date_end')<div class="invalid-feedback">{{ $message }}</div>@enderror
-    </div>
-    <div class="col-md-4 mb-3">
-        <label class="form-label" id="scheduleTimeLabel">Jam Kirim</label>
-        <input type="time" name="schedule_time" value="{{ old('schedule_time', isset($schedule->schedule_time) ? \Illuminate\Support\Carbon::parse($schedule->schedule_time)->format('H:i') : '') }}"
-            class="form-control @error('schedule_time') is-invalid @enderror" required>
-        @error('schedule_time')<div class="invalid-feedback">{{ $message }}</div>@enderror
+<div class="card border mb-3">
+    <div class="card-body">
+        <label class="form-label d-block mb-2">Jadwal</label>
+        <div class="row" id="dateFieldsRow">
+            <div class="col-md-4 mb-3 mb-md-0">
+                <label class="form-label" id="dateStartLabel">Tanggal Mulai</label>
+                <input type="date" name="date_start"
+                    value="{{ old('date_start', isset($schedule->date_start) ? $schedule->date_start->format('Y-m-d') : '') }}"
+                    class="form-control @error('date_start') is-invalid @enderror" required>
+                @error('date_start')<div class="invalid-feedback">{{ $message }}</div>@enderror
+            </div>
+            <div class="col-md-4 mb-3 mb-md-0" id="dateEndCol">
+                <label class="form-label">Tanggal Berakhir</label>
+                <input type="date" name="date_end"
+                    value="{{ old('date_end', isset($schedule->date_end) ? $schedule->date_end->format('Y-m-d') : '') }}"
+                    class="form-control @error('date_end') is-invalid @enderror">
+                <div class="form-text">Kosongkan kalau pesan cuma dikirim 1 hari. Isi untuk kirim berulang setiap hari sampai tanggal ini.</div>
+                @error('date_end')<div class="invalid-feedback">{{ $message }}</div>@enderror
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" id="scheduleTimeLabel">Jam Kirim</label>
+                <input type="time" name="schedule_time" value="{{ old('schedule_time', isset($schedule->schedule_time) ? \Illuminate\Support\Carbon::parse($schedule->schedule_time)->format('H:i') : '') }}"
+                    class="form-control @error('schedule_time') is-invalid @enderror" required>
+                @error('schedule_time')<div class="invalid-feedback">{{ $message }}</div>@enderror
+            </div>
+        </div>
     </div>
 </div>
 
@@ -262,119 +285,201 @@
      read-only supaya tidak terlihat seperti input yang harus diisi
      ulang.
 ============================================================ --}}
-<div class="alert alert-light border d-none" id="recipientFromTemplateNotice">
-    <div class="fw-semibold mb-1"><i class="ri-file-list-3-line"></i> Tujuan dari Template</div>
-    <div id="recipientFromTemplateSummary" class="small text-muted">Pilih template di atas untuk melihat tujuannya.</div>
-    <div class="small mt-1">Mau ubah tujuan? <a href="{{ route('chat.message-templates.index') }}" target="_blank">Edit di halaman WA Template</a>.</div>
-</div>
-
-<div class="mb-3" id="recipientSection">
-    <label class="form-label d-block">Tujuan Pengiriman</label>
-    @error('recipients')<div class="text-danger small mb-2">{{ $message }}</div>@enderror
-
-    <ul class="nav nav-tabs" id="recipientTabs" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="tab-phone-btn" data-bs-toggle="tab" data-bs-target="#tab-phone" type="button" role="tab">
-                <i class="ri-smartphone-line"></i> Nomor Tujuan
-                <span class="badge rounded-pill bg-primary-subtle text-primary ms-1" id="countPhone">0</span>
-            </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="tab-group-btn" data-bs-toggle="tab" data-bs-target="#tab-group" type="button" role="tab">
-                <i class="ri-group-line"></i> Grup WhatsApp
-                <span class="badge rounded-pill bg-primary-subtle text-primary ms-1" id="countGroup">0</span>
-            </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="tab-user-btn" data-bs-toggle="tab" data-bs-target="#tab-user" type="button" role="tab">
-                <i class="ri-team-line"></i> User Company
-                <span class="badge rounded-pill bg-primary-subtle text-primary ms-1" id="countUser">0</span>
-            </button>
-        </li>
-    </ul>
-
-    <div class="tab-content border border-top-0 rounded-bottom-3 p-3">
-        {{-- Tab 1: Nomor WhatsApp --}}
-        <div class="tab-pane fade show active" id="tab-phone" role="tabpanel">
-            <label class="form-label">Nomor WhatsApp Tujuan</label>
-            <textarea name="phone_numbers" id="phoneNumbersInput" rows="4" class="form-control"
-                placeholder="6281234567890; 6281298765432&#10;atau satu nomor per baris">{{ old('phone_numbers', $existingPhones) }}</textarea>
-            <div class="form-text">Pisahkan tiap nomor dengan titik-koma (;), koma, atau baris baru.</div>
+<div class="card border mb-3">
+    <div class="card-body">
+        <div class="alert alert-light border d-none mb-3" id="recipientFromTemplateNotice">
+            <div class="fw-semibold mb-1"><i class="ri-file-list-3-line"></i> Tujuan dari Template</div>
+            <div id="recipientFromTemplateSummary" class="small text-muted">Pilih template di atas untuk melihat tujuannya.</div>
+            <div class="small mt-1">Mau ubah tujuan? <a href="{{ route('chat.message-templates.index') }}" target="_blank">Edit di halaman WA Template</a>.</div>
         </div>
 
-        {{-- Tab 2: Grup WhatsApp --}}
-        <div class="tab-pane fade" id="tab-group" role="tabpanel">
-            <label class="form-label">Pilih Grup WhatsApp</label>
-            <div id="groupChecklist" class="border rounded p-2" style="max-height:260px;overflow-y:auto;"
-                data-selected='{!! json_encode($existingGroups) !!}'>
-                <p class="text-muted small mb-0">Pilih device terlebih dahulu untuk memuat daftar grup.</p>
-            </div>
-        </div>
+        <div id="recipientSection">
+            <label class="form-label d-block">Tujuan Pengiriman</label>
+            @error('recipients')<div class="text-danger small mb-2">{{ $message }}</div>@enderror
+            @error('phonebook_ids')<div class="text-danger small mb-2">{{ $message }}</div>@enderror
 
-        {{-- Tab 3: User Company (Branch -> Unit -> checklist) --}}
-        <div class="tab-pane fade" id="tab-user" role="tabpanel">
-            <div class="row">
-                <div class="col-md-6 mb-2">
-                    <label class="form-label">Branch Office</label>
-                    <select id="userBranchFilter" class="form-select form-select-sm">
-                        <option value="">-- Semua Branch --</option>
-                        @foreach($branchOffices as $branchOffice)
-                            <option value="{{ $branchOffice->id }}">{{ $branchOffice->name }}</option>
-                        @endforeach
-                    </select>
+            <ul class="nav nav-tabs flex-wrap" id="recipientTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="tab-phone-btn" data-bs-toggle="tab" data-bs-target="#tab-phone" type="button" role="tab">
+                        <i class="ri-smartphone-line"></i> Nomor Tujuan
+                        <span class="badge rounded-pill bg-primary-subtle text-primary ms-1" id="countPhone">0</span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="tab-group-btn" data-bs-toggle="tab" data-bs-target="#tab-group" type="button" role="tab">
+                        <i class="ri-group-line"></i> Grup WhatsApp
+                        <span class="badge rounded-pill bg-primary-subtle text-primary ms-1" id="countGroup">0</span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="tab-user-btn" data-bs-toggle="tab" data-bs-target="#tab-user" type="button" role="tab">
+                        <i class="ri-team-line"></i> User Company
+                        <span class="badge rounded-pill bg-primary-subtle text-primary ms-1" id="countUser">0</span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="tab-phonebook-btn" data-bs-toggle="tab" data-bs-target="#tab-phonebook" type="button" role="tab">
+                        <i class="ri-contacts-book-2-line"></i> Grup Buku Telepon
+                        <span class="badge rounded-pill bg-primary-subtle text-primary ms-1" id="countPhonebook">0</span>
+                    </button>
+                </li>
+            </ul>
+
+            <div class="tab-content border border-top-0 rounded-bottom-3 p-3">
+                {{-- Tab 1: Nomor WhatsApp --}}
+                <div class="tab-pane fade show active" id="tab-phone" role="tabpanel">
+                    <label class="form-label">Nomor WhatsApp Tujuan</label>
+                    <textarea name="phone_numbers" id="phoneNumbersInput" rows="4" class="form-control"
+                        placeholder="6281234567890; 6281298765432&#10;atau satu nomor per baris">{{ old('phone_numbers', $existingPhones) }}</textarea>
+                    <div class="form-text">Pisahkan tiap nomor dengan titik-koma (;), koma, atau baris baru.</div>
                 </div>
-                <div class="col-md-6 mb-2">
-                    <label class="form-label">Unit / Divisi</label>
-                    <select id="userUnitFilter" class="form-select form-select-sm">
-                        <option value="">-- Semua Unit --</option>
-                        @foreach($branchOffices as $branchOffice)
-                            @foreach($branchOffice->units as $unit)
-                                <option value="{{ $unit->id }}" data-branch-office="{{ $branchOffice->id }}">{{ $unit->name }}</option>
-                            @endforeach
-                        @endforeach
-                    </select>
-                </div>
-            </div>
 
-            <div class="form-check mb-2">
-                <input class="form-check-input" type="checkbox" id="userSelectAll">
-                <label class="form-check-label" for="userSelectAll">Pilih Semua (yang tampil)</label>
-            </div>
-
-            <div id="userChecklist" class="border rounded p-2" style="max-height:260px;overflow-y:auto;">
-                @forelse($companyMembers as $member)
-                    @continue(! $member->user)
-                    <div class="form-check user-checklist-item"
-                        data-branch-office="{{ $member->branch_office_id ?? '' }}"
-                        data-branch-office-unit="{{ $member->branch_office_unit_id ?? '' }}">
-                        <input class="form-check-input user-checkbox" type="checkbox" name="user_ids[]"
-                            id="member_{{ $member->user->id }}" value="{{ $member->user->id }}"
-                            @checked(in_array($member->user->id, old('user_ids', $existingUsers)))
-                            {{ ! $member->user->handphone ? 'disabled' : '' }}>
-                        <label class="form-check-label" for="member_{{ $member->user->id }}">
-                            {{ $member->user->name }}
-                            <span class="text-muted small">
-                                — {{ $member->branchOffice->name ?? 'Tanpa Branch' }}{{ $member->branchOfficeUnit ? ' / '.$member->branchOfficeUnit->name : '' }}
-                                {{ ! $member->user->handphone ? '(belum ada no. WA)' : '' }}
-                            </span>
-                        </label>
+                {{-- Tab 2: Grup WhatsApp --}}
+                <div class="tab-pane fade" id="tab-group" role="tabpanel">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+                        <label class="form-label mb-0">Pilih Grup WhatsApp</label>
+                        <div class="position-relative" style="max-width:260px; width:100%;">
+                            <i class="ri-search-line position-absolute top-50 start-0 translate-middle-y ms-2 text-muted small"></i>
+                            <input type="text" id="groupSearchInput" class="form-control form-control-sm ps-4" placeholder="Cari grup...">
+                        </div>
                     </div>
-                @empty
-                    <p class="text-muted small mb-0">Belum ada user company. Tambahkan dari Setting Users di halaman Profile.</p>
-                @endforelse
+                    <div id="groupChecklist" class="border rounded p-2" style="max-height:260px;overflow-y:auto;"
+                        data-selected='{!! json_encode($existingGroups) !!}'>
+                        <p class="text-muted small mb-0">Pilih device terlebih dahulu untuk memuat daftar grup.</p>
+                    </div>
+                    <p class="text-muted small mb-0 mt-1 d-none" id="groupSearchEmpty">Tidak ada grup yang cocok dengan pencarian.</p>
+                </div>
+
+                {{-- Tab 3: User Company (Branch -> Unit -> search -> checklist) --}}
+                <div class="tab-pane fade" id="tab-user" role="tabpanel">
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <label class="form-label">Branch Office</label>
+                            <select id="userBranchFilter" class="form-select form-select-sm">
+                                <option value="">-- Semua Branch --</option>
+                                @foreach($branchOffices as $branchOffice)
+                                    <option value="{{ $branchOffice->id }}">{{ $branchOffice->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Unit / Divisi</label>
+                            <select id="userUnitFilter" class="form-select form-select-sm">
+                                <option value="">-- Semua Unit --</option>
+                                @foreach($branchOffices as $branchOffice)
+                                    @foreach($branchOffice->units as $unit)
+                                        <option value="{{ $unit->id }}" data-branch-office="{{ $branchOffice->id }}">{{ $unit->name }}</option>
+                                    @endforeach
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Cari User</label>
+                            <input type="text" id="userSearchInput" class="form-control form-control-sm" placeholder="Cari nama...">
+                        </div>
+                    </div>
+
+                    <div class="form-check my-2">
+                        <input class="form-check-input" type="checkbox" id="userSelectAll">
+                        <label class="form-check-label" for="userSelectAll">Pilih Semua (yang tampil)</label>
+                    </div>
+
+                    <div id="userChecklist" class="border rounded p-2" style="max-height:260px;overflow-y:auto;">
+                        @forelse($companyMembers as $member)
+                            @continue(! $member->user)
+                            <div class="form-check user-checklist-item"
+                                data-branch-office="{{ $member->branch_office_id ?? '' }}"
+                                data-branch-office-unit="{{ $member->branch_office_unit_id ?? '' }}"
+                                data-search="{{ \Illuminate\Support\Str::lower($member->user->name) }}">
+                                <input class="form-check-input user-checkbox" type="checkbox" name="user_ids[]"
+                                    id="member_{{ $member->user->id }}" value="{{ $member->user->id }}"
+                                    @checked(in_array($member->user->id, old('user_ids', $existingUsers)))
+                                    {{ ! $member->user->handphone ? 'disabled' : '' }}>
+                                <label class="form-check-label" for="member_{{ $member->user->id }}">
+                                    {{ $member->user->name }}
+                                    <span class="text-muted small">
+                                        — {{ $member->branchOffice->name ?? 'Tanpa Branch' }}{{ $member->branchOfficeUnit ? ' / '.$member->branchOfficeUnit->name : '' }}
+                                        {{ ! $member->user->handphone ? '(belum ada no. WA)' : '' }}
+                                    </span>
+                                </label>
+                            </div>
+                        @empty
+                            <p class="text-muted small mb-0">Belum ada user company. Tambahkan dari Setting Users di halaman Profile.</p>
+                        @endforelse
+                    </div>
+                    <p class="text-muted small mb-0 mt-1 d-none" id="userSearchEmpty">Tidak ada user yang cocok dengan pencarian.</p>
+                    @error('user_ids')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                </div>
+
+                {{-- Tab 4: Grup Buku Telepon (Kelompok -> search -> checklist) --}}
+                <div class="tab-pane fade" id="tab-phonebook" role="tabpanel">
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label">Kelompok</label>
+                            <select id="phonebookCategoryFilter" class="form-select form-select-sm">
+                                <option value="">-- Semua Kelompok --</option>
+                                @foreach($phoneBookCategories as $category)
+                                    <option value="{{ $category->id }}">{{ $category->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Cari Kontak</label>
+                            <input type="text" id="phonebookSearchInput" class="form-control form-control-sm" placeholder="Cari nama atau nomor...">
+                        </div>
+                    </div>
+
+                    <div class="form-check my-2">
+                        <input class="form-check-input" type="checkbox" id="phonebookSelectAll">
+                        <label class="form-check-label" for="phonebookSelectAll">Pilih Semua (yang tampil)</label>
+                    </div>
+
+                    <div id="phonebookChecklist" class="border rounded p-2" style="max-height:260px;overflow-y:auto;">
+                        {{-- Nested per-category (not a flatMap'd single loop) so
+                             $category->name is already in hand from
+                             formData()'s eager load — reading $contact->category
+                             instead would lazy-load a query per contact. --}}
+                        @if($hasAnyPhoneBookContact)
+                            @foreach($phoneBookCategories as $category)
+                                @foreach($category->phoneBooks as $contact)
+                                    <div class="form-check phonebook-checklist-item"
+                                        data-category="{{ $category->id }}"
+                                        data-search="{{ \Illuminate\Support\Str::lower($contact->name.' '.$contact->phone) }}">
+                                        <input class="form-check-input phonebook-checkbox" type="checkbox" name="phonebook_ids[]"
+                                            id="phonebook_{{ $contact->id }}" value="{{ $contact->id }}"
+                                            @checked(in_array($contact->id, (array) $oldPhonebookIds) || in_array($contact->phone, $checkedPhonebookByPhone))
+                                            {{ ($contact->is_blacklisted || ! $contact->phone) ? 'disabled' : '' }}>
+                                        <label class="form-check-label" for="phonebook_{{ $contact->id }}">
+                                            {{ $contact->name }}
+                                            <span class="text-muted small">
+                                                — {{ $category->name }}
+                                                {{ $contact->is_blacklisted ? '(blacklist)' : (! $contact->phone ? '(tanpa nomor)' : '') }}
+                                            </span>
+                                        </label>
+                                    </div>
+                                @endforeach
+                            @endforeach
+                        @else
+                            <p class="text-muted small mb-0">Belum ada kontak di Buku Telepon. Tambahkan dari menu <a href="{{ route('chat.phone-books.index') }}" target="_blank">Buku Telepon</a>.</p>
+                        @endif
+                    </div>
+                    <p class="text-muted small mb-0 mt-1 d-none" id="phonebookSearchEmpty">Tidak ada kontak yang cocok dengan pencarian.</p>
+                    <div class="form-text">Kontak yang dicentang otomatis dikirim sebagai nomor WhatsApp tujuan — digabung &amp; tidak diduplikasi dengan tab "Nomor Tujuan".</div>
+                </div>
             </div>
-            @error('user_ids')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
         </div>
     </div>
 </div>
 
-<div class="mb-4">
-    <label class="form-label">Status</label>
-    <select name="status" class="form-select @error('status') is-invalid @enderror">
-        <option value="active" @selected(old('status', $schedule->status ?? 'active') == 'active')>Active</option>
-        <option value="inactive" @selected(old('status', $schedule->status ?? '') == 'inactive')>Inactive</option>
-    </select>
-    @error('status')<div class="invalid-feedback">{{ $message }}</div>@enderror
+<div class="card border mb-3">
+    <div class="card-body">
+        <label class="form-label">Status</label>
+        <select name="status" class="form-select @error('status') is-invalid @enderror">
+            <option value="active" @selected(old('status', $schedule->status ?? 'active') == 'active')>Active</option>
+            <option value="inactive" @selected(old('status', $schedule->status ?? '') == 'inactive')>Inactive</option>
+        </select>
+        @error('status')<div class="invalid-feedback">{{ $message }}</div>@enderror
+    </div>
 </div>
 
 {{-- Data step yang sudah ada (edit) — dibaca oleh JS untuk mengisi
@@ -657,6 +762,7 @@
     var countPhone = document.getElementById('countPhone');
     var countGroup = document.getElementById('countGroup');
     var countUser = document.getElementById('countUser');
+    var countPhonebook = document.getElementById('countPhonebook');
 
     function updatePhoneCount() {
         var items = phoneInput.value.split(/[;,\r\n]+/).map(function (s) { return s.trim(); }).filter(Boolean);
@@ -668,10 +774,34 @@
     function updateUserCount() {
         countUser.textContent = document.querySelectorAll('#userChecklist input.user-checkbox:checked').length;
     }
+    function updatePhonebookCount() {
+        countPhonebook.textContent = document.querySelectorAll('#phonebookChecklist input.phonebook-checkbox:checked').length;
+    }
+
+    // Generic live-search: toggles each item's visibility based on
+    // whether its data-search attribute contains the typed term, and
+    // shows/hides a shared "nothing found" message. Reused for the Grup
+    // WhatsApp, User Company, and Grup Buku Telepon tabs below instead of
+    // three near-identical filter functions.
+    function applySearchFilter(items, term, extraMatches, emptyEl) {
+        term = (term || '').trim().toLowerCase();
+        var anyVisible = false;
+
+        items.forEach(function (item) {
+            var matchesSearch = !term || (item.getAttribute('data-search') || '').indexOf(term) !== -1;
+            var matchesExtra = !extraMatches || extraMatches(item);
+            var visible = matchesSearch && matchesExtra;
+            item.style.display = visible ? '' : 'none';
+            if (visible) anyVisible = true;
+        });
+
+        if (emptyEl) emptyEl.classList.toggle('d-none', anyVisible || items.length === 0);
+    }
 
     phoneInput.addEventListener('input', updatePhoneCount);
     updatePhoneCount();
     updateUserCount();
+    updatePhonebookCount();
 
     // --- Tab 2: Grup WhatsApp, loaded per selected device ---
     var deviceSelect = document.getElementById('scheduleDeviceSelect');
@@ -711,9 +841,11 @@
                 groups.forEach(function (group, idx) {
                     var checked = preSelected.indexOf(group.chat_jid) !== -1;
                     var inputId = 'group_' + idx;
+                    var groupLabel = group.name || group.chat_jid;
 
                     var wrap = document.createElement('div');
                     wrap.className = 'form-check';
+                    wrap.setAttribute('data-search', groupLabel.toLowerCase());
 
                     var input = document.createElement('input');
                     input.className = 'form-check-input';
@@ -727,13 +859,17 @@
                     var label = document.createElement('label');
                     label.className = 'form-check-label';
                     label.setAttribute('for', inputId);
-                    label.textContent = group.name || group.chat_jid;
+                    label.textContent = groupLabel;
 
                     wrap.appendChild(input);
                     wrap.appendChild(label);
                     groupChecklist.appendChild(wrap);
                 });
                 updateGroupCount();
+                // Re-apply whatever search term is already typed — groups
+                // just got (re)loaded for a newly selected device, so the
+                // previous DOM nodes (and their visibility) are gone.
+                filterGroups();
             })
             .catch(function () {
                 groupChecklist.innerHTML = '<p class="text-danger small mb-0">Gagal memuat grup WhatsApp.</p>';
@@ -745,9 +881,22 @@
     var initialDeviceId = deviceSelect.getAttribute('data-selected');
     if (initialDeviceId) loadGroupsFor(initialDeviceId);
 
-    // --- Tab 3: Company Users — branch -> unit filter + select all ---
+    // --- Tab 2 search: Grup WhatsApp ---
+    var groupSearchInput = document.getElementById('groupSearchInput');
+    var groupSearchEmpty = document.getElementById('groupSearchEmpty');
+
+    function filterGroups() {
+        var items = Array.prototype.slice.call(groupChecklist.querySelectorAll('.form-check'));
+        applySearchFilter(items, groupSearchInput.value, null, groupSearchEmpty);
+    }
+
+    groupSearchInput.addEventListener('input', filterGroups);
+
+    // --- Tab 3: Company Users — branch -> unit filter + search + select all ---
     var branchFilter = document.getElementById('userBranchFilter');
     var unitFilter = document.getElementById('userUnitFilter');
+    var userSearchInput = document.getElementById('userSearchInput');
+    var userSearchEmpty = document.getElementById('userSearchEmpty');
     var selectAll = document.getElementById('userSelectAll');
     var allUnitOptions = Array.prototype.slice.call(unitFilter.querySelectorAll('option[data-branch-office]'));
     var userItems = Array.prototype.slice.call(document.querySelectorAll('.user-checklist-item'));
@@ -769,17 +918,18 @@
         var branchId = branchFilter.value;
         var unitId = unitFilter.value;
 
-        userItems.forEach(function (item) {
+        applySearchFilter(userItems, userSearchInput.value, function (item) {
             var matchesBranch = !branchId || item.getAttribute('data-branch-office') === branchId;
             var matchesUnit = !unitId || item.getAttribute('data-branch-office-unit') === unitId;
-            item.style.display = (matchesBranch && matchesUnit) ? '' : 'none';
-        });
+            return matchesBranch && matchesUnit;
+        }, userSearchEmpty);
 
         selectAll.checked = false;
     }
 
     branchFilter.addEventListener('change', function () { filterUnitsByBranch(); applyUserFilter(); });
     unitFilter.addEventListener('change', applyUserFilter);
+    userSearchInput.addEventListener('input', applyUserFilter);
 
     selectAll.addEventListener('change', function () {
         userItems.forEach(function (item) {
@@ -792,6 +942,39 @@
 
     document.querySelectorAll('.user-checkbox').forEach(function (cb) {
         cb.addEventListener('change', updateUserCount);
+    });
+
+    // --- Tab 4: Grup Buku Telepon — kelompok filter + search + select all ---
+    var phonebookCategoryFilter = document.getElementById('phonebookCategoryFilter');
+    var phonebookSearchInput = document.getElementById('phonebookSearchInput');
+    var phonebookSearchEmpty = document.getElementById('phonebookSearchEmpty');
+    var phonebookSelectAll = document.getElementById('phonebookSelectAll');
+    var phonebookItems = Array.prototype.slice.call(document.querySelectorAll('.phonebook-checklist-item'));
+
+    function applyPhonebookFilter() {
+        var categoryId = phonebookCategoryFilter.value;
+
+        applySearchFilter(phonebookItems, phonebookSearchInput.value, function (item) {
+            return !categoryId || item.getAttribute('data-category') === categoryId;
+        }, phonebookSearchEmpty);
+
+        phonebookSelectAll.checked = false;
+    }
+
+    phonebookCategoryFilter.addEventListener('change', applyPhonebookFilter);
+    phonebookSearchInput.addEventListener('input', applyPhonebookFilter);
+
+    phonebookSelectAll.addEventListener('change', function () {
+        phonebookItems.forEach(function (item) {
+            if (item.style.display === 'none') return;
+            var checkbox = item.querySelector('.phonebook-checkbox');
+            if (checkbox && !checkbox.disabled) checkbox.checked = phonebookSelectAll.checked;
+        });
+        updatePhonebookCount();
+    });
+
+    document.querySelectorAll('.phonebook-checkbox').forEach(function (cb) {
+        cb.addEventListener('change', updatePhonebookCount);
     });
 })();
 </script>

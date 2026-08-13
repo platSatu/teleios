@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Chat;
 
+use App\Exceptions\PackageLimitExceededException;
 use App\Exports\PhoneBookImportTemplateExport;
 use App\Exports\PhoneBooksExport;
 use App\Http\Controllers\Concerns\ResolvesCompanyContext;
@@ -11,6 +12,8 @@ use App\Models\BranchOffice;
 use App\Models\Company;
 use App\Models\WaCategoryPhoneBook;
 use App\Models\WaPhoneBook;
+use App\Services\Crm\CustomerIdentityService;
+use App\Services\PackageLimitService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -32,6 +35,12 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 class PhoneBookController extends Controller
 {
     use ResolvesCompanyContext;
+
+    public function __construct(
+        protected CustomerIdentityService $customerIdentity,
+        protected PackageLimitService $packageLimits,
+    ) {
+    }
 
     public function index(Request $request): View
     {
@@ -113,15 +122,49 @@ class PhoneBookController extends Controller
                 ->withInput();
         }
 
+        // Package quota guard: "contact_count" is a 'stock' metric (see
+        // App\Models\LimitMetric) — measured live against the real
+        // current count rather than a separately-tracked counter, so it
+        // can't drift if rows get deleted/imported outside this method.
+        // Fails open if there's no active package or the package doesn't
+        // cap this metric.
+        try {
+            $this->packageLimits->assertWithinLimit(
+                $company,
+                'contact_count',
+                1,
+                null,
+                fn () => WaPhoneBook::where('company_id', $company->id)->count(),
+            );
+        } catch (PackageLimitExceededException $e) {
+            return redirect()
+                ->route('chat.phone-books.create')
+                ->withErrors(['limit' => $e->getMessage()])
+                ->withInput();
+        }
+
         $validated = $validator->validated();
+        $phone = WaPhoneBook::normalizePhone($validated['phone']);
+
+        // CRM Roadmap Fase 0: resolve (or create) the one WaCustomer
+        // identity this phone belongs to before creating the phone book
+        // row, so it links from the moment it's created — same pattern
+        // InboxController::contact() uses for WaContact. See
+        // App\Services\Crm\CustomerIdentityService's docblock.
+        $customer = $this->customerIdentity->resolve($company->id, $phone, [
+            'name' => $validated['name'],
+            'branch_office_id' => $validated['branch_office_id'] ?? null,
+            'created_by' => $request->user()?->id,
+        ]);
 
         WaPhoneBook::create([
+            'wa_customer_id' => $customer->id,
             'company_id' => $company->id,
             'branch_office_id' => $validated['branch_office_id'] ?? null,
             'wa_category_phone_book_id' => $validated['wa_category_phone_book_id'],
             'created_by' => $request->user()?->id,
             'name' => $validated['name'],
-            'phone' => WaPhoneBook::normalizePhone($validated['phone']),
+            'phone' => $phone,
             'email' => $validated['email'] ?? null,
             'status' => $validated['status'] ?? 'active',
         ]);
@@ -165,12 +208,23 @@ class PhoneBookController extends Controller
         }
 
         $validated = $validator->validated();
+        $phone = WaPhoneBook::normalizePhone($validated['phone']);
+
+        // Phone is editable here (unlike WaContact, which never lets its
+        // phone change) — re-resolve in case it changed, so this row
+        // stays linked to the customer identity matching whatever phone
+        // it ends up with. A no-op find when the phone didn't change.
+        $customer = $this->customerIdentity->resolve($company->id, $phone, [
+            'name' => $validated['name'],
+            'branch_office_id' => $validated['branch_office_id'] ?? null,
+        ]);
 
         $phoneBook->update([
+            'wa_customer_id' => $customer->id,
             'branch_office_id' => $validated['branch_office_id'] ?? null,
             'wa_category_phone_book_id' => $validated['wa_category_phone_book_id'],
             'name' => $validated['name'],
-            'phone' => WaPhoneBook::normalizePhone($validated['phone']),
+            'phone' => $phone,
             'email' => $validated['email'] ?? null,
             'status' => $validated['status'] ?? 'active',
         ]);
@@ -287,6 +341,7 @@ class PhoneBookController extends Controller
             $this->categoriesFor($company, $context),
             $this->branchOfficesFor($company, $context),
             $request->user()?->id,
+            $this->customerIdentity,
         );
 
         Excel::import($import, $request->file('file'));

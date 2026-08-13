@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Package extends Model
 {
@@ -40,5 +41,15 @@ class Package extends Model
     public function categoryApplication(): BelongsTo
     {
         return $this->belongsTo(CategoryApplication::class);
+    }
+
+    /**
+     * Numeric usage ceilings this package sets (see App\Models\
+     * PackageLimit / App\Services\PackageLimitService) — a package with
+     * no rows here is unlimited on every metric.
+     */
+    public function limits(): HasMany
+    {
+        return $this->hasMany(PackageLimit::class);
     }
 }

@@ -5,8 +5,8 @@
         <div class="card-body">
             <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
                 <div>
-                    <h4 class="mb-1">Review Kategori Template WA</h4>
-                    <p class="text-muted mb-0">Klik sebuah kategori untuk melihat &amp; me-review template di dalamnya.</p>
+                    <h4 class="mb-1">Log Kategori Template WA</h4>
+                    <p class="text-muted mb-0">Kategori &amp; template disetujui/ditolak otomatis oleh AI moderasi — halaman ini untuk memantau hasilnya. Klik sebuah kategori untuk melihat template di dalamnya.</p>
                 </div>
                 <a href="{{ route('wa-templates.uncategorized') }}" class="btn btn-light">
                     Template Tanpa Kategori
@@ -45,7 +45,7 @@
                             <th style="min-width: 140px;">Jumlah Template</th>
                             <th style="min-width: 110px;">Status</th>
                             <th style="min-width: 110px;">Review</th>
-                            <th class="text-end" style="min-width: 260px;">Aksi</th>
+                            <th class="text-end" style="min-width: 100px;">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -71,42 +71,9 @@
                                     @endif
                                 </td>
                                 <td class="text-end">
-                                    {{-- Buttons live as DIRECT children of .btn-group (not
-                                         nested inside a <form>) — Bootstrap's btn-group CSS
-                                         only fuses/aligns .btn elements that are immediate
-                                         children, so a <button> wrapped in its own <form>
-                                         breaks that fusing and renders as a mismatched,
-                                         unaligned pill instead. The approve/reject <form>s
-                                         are moved out here (hidden) and linked back via the
-                                         HTML5 form="..." attribute, which submits them
-                                         exactly the same way as if the button were nested
-                                         inside. --}}
-                                    <div class="btn-group btn-group-sm">
-                                        <a href="{{ route('wa-templates.categories.show', $category->id) }}" class="btn btn-outline-secondary">
-                                            <i class="ri-eye-line"></i> Lihat
-                                        </a>
-                                        @if ($category->review_status !== 'approved')
-                                            <button type="submit" form="approve-category-{{ $category->id }}" class="btn btn-outline-success">
-                                                <i class="ri-check-line"></i> Setujui
-                                            </button>
-                                        @endif
-                                        @if ($category->review_status !== 'rejected')
-                                            <button type="submit" form="reject-category-{{ $category->id }}" class="btn btn-outline-danger">
-                                                <i class="ri-close-line"></i> Tolak
-                                            </button>
-                                        @endif
-                                    </div>
-                                    @if ($category->review_status !== 'approved')
-                                        <form id="approve-category-{{ $category->id }}" action="{{ route('wa-templates.categories.approve', $category->id) }}" method="POST" class="d-none js-approve-form" data-confirm-text="Setujui kategori &quot;{{ $category->name }}&quot;?">
-                                            @csrf
-                                        </form>
-                                    @endif
-                                    @if ($category->review_status !== 'rejected')
-                                        <form id="reject-category-{{ $category->id }}" action="{{ route('wa-templates.categories.reject', $category->id) }}" method="POST" class="d-none js-reject-form" data-reject-title="Tolak kategori &quot;{{ $category->name }}&quot;?">
-                                            @csrf
-                                            <input type="hidden" name="reason">
-                                        </form>
-                                    @endif
+                                    <a href="{{ route('wa-templates.categories.show', $category->id) }}" class="btn btn-sm btn-outline-secondary">
+                                        <i class="ri-eye-line"></i> Lihat
+                                    </a>
                                 </td>
                             </tr>
                         @empty
@@ -121,6 +88,4 @@
             <div class="mt-3">{{ $categories->links('pagination::bootstrap-5') }}</div>
         </div>
     </div>
-
-    @include('superadmin.wa-templates._reject-script')
 @endsection

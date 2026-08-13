@@ -40,7 +40,9 @@
     <div class="min-vh-200 d-flex align-items-center justify-content-center px-5 py-10 auth-bg">
         <div
             class="main-wrapper border bg-white rounded-4 d-flex flex-column flex-lg-row gap-xl-5 position-relative overflow-hidden w-100 shadow">
-            <div class="decoration-section m-5 bg-dark-subtle rounded-3 me-0 mb-0 mb-lg-5"></div>
+            <div class="decoration-section m-5 bg-dark-subtle rounded-3 me-0 mb-0 mb-lg-5 overflow-hidden">
+                <img src="{{ asset('be') }}/images/login.jpg" alt="Konexa" class="w-100 h-100" style="object-fit: cover;">
+            </div>
             <div class="login-section bg-white rounded-4 p-6 px-xl-12">
                 {{-- <a href="{{ route('login') }}"
                     class="d-flex justify-content-end align-items-center gap-2 logo-main mt-lg-2 mb-3">

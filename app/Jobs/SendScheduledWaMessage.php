@@ -2,13 +2,17 @@
 
 namespace App\Jobs;
 
+use App\Exceptions\PackageLimitExceededException;
 use App\Jobs\Concerns\NormalizesWhatsAppJid;
 use App\Models\User;
 use App\Models\WaMessageSchedule;
 use App\Models\WaMessageScheduleLog;
 use App\Models\WaMessageScheduleStep;
+use App\Services\Chat\BroadcastOptOutService;
+use App\Services\Chat\BroadcastThrottleService;
 use App\Services\Chat\InboxService;
 use App\Services\Chat\SystemJwtService;
+use App\Services\PackageLimitService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -58,6 +62,14 @@ use Throwable;
  * columns of its own (only a plain `message` textarea, see the create/
  * edit form), so that's marked failed with an explanatory reason instead
  * of silently never firing.
+ *
+ * Two anti-ban guards run here, right before anything actually goes out
+ * over WhatsApp: an opt-out check (App\Services\Chat\
+ * BroadcastOptOutService — never message a number that replied STOP)
+ * and a hard per-device sends-per-minute ceiling (App\Services\Chat\
+ * BroadcastThrottleService — on top of, not instead of, the randomized
+ * dispatch-time stagger in App\Console\Commands\
+ * DispatchDueWaMessageSchedules).
  */
 class SendScheduledWaMessage implements ShouldQueue
 {
@@ -68,11 +80,23 @@ class SendScheduledWaMessage implements ShouldQueue
     /** Give a flaky/reconnecting device a bit of room between retries. */
     public array $backoff = [30, 120, 300];
 
+    /**
+     * How many times this job may re-dispatch ITSELF because
+     * App\Services\Chat\BroadcastThrottleService had no free send slot
+     * for this device — deliberately tracked and bounded separately from
+     * $tries/$backoff above. Being rate-limited isn't a failure (nothing
+     * is broken, the device is just busy), so it must never eat into the
+     * same retry budget genuine send errors use, and must never spin
+     * forever either — see the throttle check in handle() below.
+     */
+    private const MAX_THROTTLE_REDISPATCHES = 30;
+
     public function __construct(
         protected string $scheduleId,
         protected string $recipientKey,
         protected string $sendDate,
         protected int $stepOrder = 0,
+        protected int $throttleAttempts = 0,
     ) {
     }
 
@@ -91,7 +115,7 @@ class SendScheduledWaMessage implements ShouldQueue
         ];
     }
 
-    public function handle(SystemJwtService $jwtService, InboxService $inbox): void
+    public function handle(SystemJwtService $jwtService, InboxService $inbox, BroadcastOptOutService $optOuts, BroadcastThrottleService $throttle, PackageLimitService $packageLimits): void
     {
         $log = $this->findLog();
 
@@ -115,6 +139,54 @@ class SendScheduledWaMessage implements ShouldQueue
 
         if (! $owner) {
             $this->markFailed($log, 'Perusahaan pemilik jadwal ini tidak memiliki user pemilik yang valid.');
+
+            return;
+        }
+
+        // Anti-ban/compliance guard: never broadcast to a number that has
+        // opted out (see App\Services\Chat\BroadcastOptOutService), even
+        // if it's still sitting in the schedule's recipient list — a
+        // customer's STOP reply must take effect immediately for every
+        // future send, not just the schedule they happened to reply to.
+        // Deliberately checked before content resolution/attachment
+        // validation below: an opted-out recipient shouldn't get flagged
+        // over an unrelated content problem it will never actually hit.
+        // Not applicable to 'group' recipients — a WhatsApp group isn't
+        // an individual who can opt out.
+        $recipientType = $log->recipientType();
+        $recipientValue = $log->recipientValue();
+
+        if (in_array($recipientType, ['phone', 'user'], true)) {
+            $recipientPhone = $this->resolveRecipientPhone($recipientType, $recipientValue);
+
+            if ($recipientPhone && $schedule->company_id && $optOuts->isOptedOut($schedule->company_id, $recipientPhone)) {
+                $log->forceFill([
+                    'status' => WaMessageScheduleLog::STATUS_SKIPPED,
+                    'error' => 'Nomor ini telah berhenti berlangganan (opt-out) dan dilewati demi mencegah pelaporan spam.',
+                    'attempts' => $log->attempts + 1,
+                ])->save();
+
+                return;
+            }
+        }
+
+        // Package quota guard: a company on a package that caps
+        // "broadcast_send" (see App\Services\PackageLimitService,
+        // App\Models\LimitMetric) is checked here, cheaply and
+        // non-authoritatively, before doing any of the more expensive
+        // content/attachment/JID resolution below — a company that's
+        // visibly out of quota shouldn't pay for that work. This is
+        // deliberately just a heads-up early exit: the REAL, concurrency
+        // -safe check-and-consume happens once via reserve() right
+        // before the network send further down (see the comment there
+        // for why a separate check-then-consume pair isn't safe enough
+        // for something this job runs highly concurrently).
+        if ($schedule->company && $packageLimits->remaining($schedule->company, 'broadcast_send') === 0) {
+            $log->forceFill([
+                'status' => WaMessageScheduleLog::STATUS_SKIPPED,
+                'error' => 'Kuota pengiriman broadcast paket Anda untuk periode ini sudah habis. Beli/upgrade paket untuk melanjutkan.',
+                'attempts' => $log->attempts + 1,
+            ])->save();
 
             return;
         }
@@ -149,14 +221,71 @@ class SendScheduledWaMessage implements ShouldQueue
             return;
         }
 
-        $recipientType = $log->recipientType();
-        $recipientValue = $log->recipientValue();
         $chatJid = $this->resolveChatJid($recipientType, $recipientValue);
 
         if (! $chatJid) {
             $this->markFailed($log, $this->unresolvedReason($recipientType));
 
             return;
+        }
+
+        // Anti-ban guard #2: a hard per-device ceiling on sends-per-minute
+        // (see App\Services\Chat\BroadcastThrottleService), enforced here
+        // — right before the network call, once every other reason this
+        // send might not happen has already been ruled out — so a slot
+        // is never wasted "reserving" a send that was going to be
+        // skipped/failed anyway. Not a failure: if the device is simply
+        // busy, this job re-dispatches itself with a delay instead of
+        // touching $log at all, up to MAX_THROTTLE_REDISPATCHES times
+        // before finally giving up — see the constant's docblock for why
+        // this is tracked separately from $tries/$backoff.
+        if (! $throttle->attempt($schedule->device_id, $schedule->company_id)) {
+            if ($this->throttleAttempts >= self::MAX_THROTTLE_REDISPATCHES) {
+                $this->markFailed($log, 'Perangkat pengirim terlalu sibuk (batas kirim per menit tercapai berulang kali) — pesan tidak jadi terkirim. Coba kirim ulang nanti.');
+
+                return;
+            }
+
+            $delaySeconds = max(5, $throttle->availableInSeconds($schedule->device_id));
+
+            Log::info('SendScheduledWaMessage: device at broadcast rate limit, re-queueing', [
+                'schedule_id' => $schedule->id,
+                'device_id' => $schedule->device_id,
+                'recipient_key' => $this->recipientKey,
+                'throttle_attempt' => $this->throttleAttempts + 1,
+                'retry_in_seconds' => $delaySeconds,
+            ]);
+
+            self::dispatch($this->scheduleId, $this->recipientKey, $this->sendDate, $this->stepOrder, $this->throttleAttempts + 1)
+                ->delay(now()->addSeconds($delaySeconds));
+
+            return;
+        }
+
+        // The real, concurrency-safe quota check-and-consume: atomic
+        // (locked, single-transaction) so many of this exact job running
+        // across several queue workers for the same company at once
+        // can't all read "still room" before any of them writes back —
+        // see App\Services\PackageLimitService::reserve()'s docblock.
+        // Placed here, right before the network call, once every other
+        // reason this send might not happen has already been ruled out
+        // (same reasoning as the throttle guard above it) — a slot is
+        // never reserved for a send that was going to be skipped/failed
+        // anyway. If the send below then fails, release() gives the
+        // reservation back in the catch block so a retried/failed
+        // attempt never permanently burns quota it never actually used.
+        if ($schedule->company) {
+            try {
+                $packageLimits->reserve($schedule->company, 'broadcast_send');
+            } catch (PackageLimitExceededException $e) {
+                $log->forceFill([
+                    'status' => WaMessageScheduleLog::STATUS_SKIPPED,
+                    'error' => $e->getMessage(),
+                    'attempts' => $log->attempts + 1,
+                ])->save();
+
+                return;
+            }
         }
 
         try {
@@ -211,6 +340,14 @@ class SendScheduledWaMessage implements ShouldQueue
                 'error' => null,
             ])->save();
         } catch (Throwable $e) {
+            // The reservation made above didn't correspond to a real
+            // send after all — give it back before retrying/failing, so
+            // quota is only ever permanently spent on a message that
+            // genuinely went out.
+            if ($schedule->company) {
+                $packageLimits->release($schedule->company, 'broadcast_send');
+            }
+
             Log::warning('SendScheduledWaMessage: send failed', [
                 'schedule_id' => $schedule->id,
                 'recipient_key' => $this->recipientKey,
@@ -441,6 +578,23 @@ class SendScheduledWaMessage implements ShouldQueue
             'phone' => 'Nomor WhatsApp tujuan kosong atau tidak valid.',
             'user' => 'User tidak ditemukan atau belum mengatur nomor WhatsApp (handphone) di profilnya.',
             default => 'Tujuan pengiriman tidak dikenali.',
+        };
+    }
+
+    /**
+     * Raw phone digits for the App\Services\Chat\BroadcastOptOutService
+     * check in handle() above — deliberately separate from
+     * resolveChatJid()/resolveUserJid(), which return a WhatsApp JID
+     * (phone digits wrapped in "@s.whatsapp.net"), not a bare phone
+     * number. Only meaningful for 'phone'/'user' recipients; callers
+     * don't invoke this for 'group'.
+     */
+    protected function resolveRecipientPhone(string $type, string $value): ?string
+    {
+        return match ($type) {
+            'phone' => $value !== '' ? $value : null,
+            'user' => User::find($value)?->handphone,
+            default => null,
         };
     }
 }

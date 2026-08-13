@@ -61,6 +61,8 @@
                                         <span class="badge bg-success-subtle text-success"><i class="ri-check-double-line"></i> Terkirim</span>
                                     @elseif($log->status === 'failed')
                                         <span class="badge bg-danger-subtle text-danger"><i class="ri-error-warning-line"></i> Gagal</span>
+                                    @elseif($log->status === 'skipped')
+                                        <span class="badge bg-secondary-subtle text-secondary"><i class="ri-forbid-line"></i> Dilewati</span>
                                     @else
                                         <span class="badge bg-warning-subtle text-warning"><i class="ri-time-line"></i> Menunggu</span>
                                     @endif

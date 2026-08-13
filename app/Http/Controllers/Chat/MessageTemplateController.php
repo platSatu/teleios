@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers\Chat;
 
+use App\Http\Controllers\Concerns\AppliesTemplateModeration;
 use App\Http\Controllers\Concerns\ResolvesCompanyContext;
 use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\CompanyToUser;
 use App\Models\WaCategoryTemplate;
 use App\Models\WaMessageTemplate;
+use App\Services\Moderation\ModerationResult;
+use App\Services\Moderation\TemplateModerationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -36,16 +39,27 @@ use Illuminate\View\View;
  *
  * Builder fields (category, language, header/footer, buttons, variables,
  * content_type, link, attachment) mirror WhatsApp Business's own template
- * shape. Any edit to content that a superadmin actually reviews resets
- * review_status back to "in_review" — see contentFieldsChanged() below —
- * so an approved template can never be silently swapped for different
- * content without going back through review. Recipients are NOT in that
- * reviewable list: who a message goes to isn't something superadmin
+ * shape. Any edit to a reviewable field re-runs App\Services\Moderation\
+ * TemplateModerationService — see contentFieldsChanged() below — so an
+ * approved template can never be silently swapped for different content
+ * without going back through moderation. Recipients are NOT in that
+ * reviewable list: who a message goes to isn't something the AI
  * moderates, only what it says.
+ *
+ * The AI only ever judges/corrects the free-text header/body/footer
+ * (see moderateContent()) — buttons, link, category, and language still
+ * trigger a fresh moderation pass when changed, but aren't themselves
+ * rewritten by it. There is no more manual superadmin approve/reject
+ * queue for this resource (see Superadmin\WaTemplateReviewController,
+ * now read-only oversight).
  */
 class MessageTemplateController extends Controller
 {
-    use ResolvesCompanyContext;
+    use ResolvesCompanyContext, AppliesTemplateModeration;
+
+    public function __construct(protected TemplateModerationService $moderation)
+    {
+    }
 
     /**
      * Fields that require a fresh superadmin review whenever they change.
@@ -106,11 +120,20 @@ class MessageTemplateController extends Controller
 
         $validated = $this->sanitize($validator->validated(), $request);
         $validated['company_id'] = $company->id;
-        $validated['review_status'] = 'in_review';
-        $validated['rejection_reason'] = null;
-        $validated['reviewed_by'] = null;
-        $validated['reviewed_at'] = null;
         $validated['recipients'] = $this->collectRecipients($request);
+
+        $moderation = $this->moderateContent($validated);
+
+        // AI correction can change header/template/footer text — re-run
+        // the strip_tags + "only keep variables that still appear in the
+        // text" pass so variables_example never drifts from what the AI
+        // actually left behind. No-op (safe to repeat) when nothing was
+        // corrected.
+        if ($moderation->isCorrected()) {
+            $validated = $this->sanitize($validated, $request);
+        }
+
+        $validated = array_merge($validated, $this->reviewFieldsFor($moderation));
 
         $this->applyAttachment($request, $validated, null);
 
@@ -120,9 +143,11 @@ class MessageTemplateController extends Controller
             return $this->failedSave($e, 'chat.message-templates.create');
         }
 
+        [$flashType, $flashMessage] = $this->flashFor($moderation, 'Template WA berhasil dibuat');
+
         return redirect()
             ->route('chat.message-templates.index')
-            ->with('success', 'Template WA berhasil dibuat dan menunggu review superadmin.');
+            ->with($flashType, $flashMessage);
     }
 
     public function edit(Request $request, string $id): View
@@ -156,11 +181,18 @@ class MessageTemplateController extends Controller
         $validated = $this->sanitize($validator->validated(), $request);
         $validated['recipients'] = $this->collectRecipients($request);
 
+        $flashType = 'success';
+        $flashMessage = 'Template WA berhasil diperbarui.';
+
         if ($this->contentFieldsChanged($template, $validated)) {
-            $validated['review_status'] = 'in_review';
-            $validated['rejection_reason'] = null;
-            $validated['reviewed_by'] = null;
-            $validated['reviewed_at'] = null;
+            $moderation = $this->moderateContent($validated);
+
+            if ($moderation->isCorrected()) {
+                $validated = $this->sanitize($validated, $request);
+            }
+
+            $validated = array_merge($validated, $this->reviewFieldsFor($moderation));
+            [$flashType, $flashMessage] = $this->flashFor($moderation, 'Template WA berhasil diperbarui');
         }
 
         $this->applyAttachment($request, $validated, $template);
@@ -173,7 +205,7 @@ class MessageTemplateController extends Controller
 
         return redirect()
             ->route('chat.message-templates.index')
-            ->with('success', 'Template WA berhasil diperbarui.');
+            ->with($flashType, $flashMessage);
     }
 
     public function destroy(Request $request, string $id): RedirectResponse
@@ -223,9 +255,10 @@ class MessageTemplateController extends Controller
 
     /**
      * Categories this company may actually pick from the select — active
-     * AND already approved by a superadmin. Company-scoped in addition to
-     * WaCategoryTemplate::usable() since that scope alone doesn't filter
-     * by owner.
+     * AND already approved (review_status=approved, via AI moderation —
+     * see App\Services\Moderation\TemplateModerationService). Company-
+     * scoped in addition to WaCategoryTemplate::usable() since that scope
+     * alone doesn't filter by owner.
      */
     private function usableCategories(string $companyId)
     {
@@ -233,6 +266,40 @@ class MessageTemplateController extends Controller
             ->where('company_id', $companyId)
             ->orderBy('name')
             ->get();
+    }
+
+    /**
+     * Runs header/template(body)/footer through App\Services\Moderation\
+     * TemplateModerationService, and — only when the AI actually
+     * corrected something — writes the corrected text straight back
+     * into $validated (by reference) before it's saved. Buttons/link/
+     * category/language are deliberately NOT included here (see the
+     * class docblock): they still trigger this call via
+     * contentFieldsChanged(), but aren't themselves rewritten by it.
+     */
+    private function moderateContent(array &$validated): ModerationResult
+    {
+        $fields = [
+            'header' => (string) ($validated['header'] ?? ''),
+            'body' => (string) ($validated['template'] ?? ''),
+            'footer' => (string) ($validated['footer'] ?? ''),
+        ];
+
+        $moderation = $this->moderation->moderate($fields);
+
+        if ($moderation->isCorrected()) {
+            if (array_key_exists('header', $moderation->fields)) {
+                $validated['header'] = $moderation->fields['header'] !== '' ? $moderation->fields['header'] : null;
+            }
+            if (array_key_exists('body', $moderation->fields)) {
+                $validated['template'] = $moderation->fields['body'];
+            }
+            if (array_key_exists('footer', $moderation->fields)) {
+                $validated['footer'] = $moderation->fields['footer'] !== '' ? $moderation->fields['footer'] : null;
+            }
+        }
+
+        return $moderation;
     }
 
     private function contentFieldsChanged(WaMessageTemplate $template, array $validated): bool

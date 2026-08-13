@@ -7,6 +7,10 @@ use App\Http\Controllers\Superadmin\CategoryApplicationController;
 
 use App\Http\Controllers\Superadmin\PackageController;
 
+use App\Http\Controllers\Superadmin\LimitMetricController;
+
+use App\Http\Controllers\Superadmin\PackageLimitController;
+
 use App\Http\Controllers\Superadmin\VoucherController;
 
 use App\Http\Controllers\Superadmin\VoucherUserController;
@@ -57,6 +61,7 @@ use App\Http\Controllers\Superadmin\CompanyRoleMenuController;
 use App\Http\Controllers\Superadmin\BranchOfficeController;
 
 use App\Http\Controllers\Superadmin\BranchOfficeUnitController;
+use App\Http\Controllers\Superadmin\AiModerationSettingController;
 use App\Http\Controllers\Superadmin\WaAiBotProviderController;
 use App\Http\Controllers\Superadmin\WaAiBotModelController;
 
@@ -84,6 +89,10 @@ use App\Http\Controllers\Superadmin\Web\CategoryVideoController as WebCategoryVi
 
 use App\Http\Controllers\Superadmin\Web\VideoController as WebVideoController;
 use App\Http\Controllers\Superadmin\Web\TermConditionController as WebTermConditionController;
+use App\Http\Controllers\Superadmin\Web\HeaderController as WebHeaderController;
+use App\Http\Controllers\Superadmin\Web\SettingController as WebSettingController;
+use App\Http\Controllers\Superadmin\Web\FeatureController as WebFeatureController;
+use App\Http\Controllers\Superadmin\Web\FooterController as WebFooterController;
 use App\Http\Controllers\Superadmin\WaTemplateReviewController;
 
 
@@ -106,13 +115,24 @@ use App\Http\Controllers\Chat\ConnectDeviceController;
 use App\Http\Controllers\Chat\WaApiKeyController;
 use App\Http\Controllers\Chat\ChatLabelController;
 use App\Http\Controllers\Chat\ContactController;
+use App\Http\Controllers\Crm\CustomerAutomationRuleController;
+use App\Http\Controllers\Crm\CustomerController;
+use App\Http\Controllers\Crm\CustomerSegmentController;
+use App\Http\Controllers\Crm\CustomerTagController;
+use App\Http\Controllers\Crm\CustomerTaskController;
+use App\Http\Controllers\Crm\DealController;
 use App\Http\Controllers\Chat\CategoryPhoneBookController;
 use App\Http\Controllers\Chat\PhoneBookController;
 use App\Http\Controllers\Chat\WaGroupController;
 use App\Http\Controllers\Chat\GoogleContactController;
 use App\Http\Controllers\Chat\GoogleFormIntegrationController;
 use App\Http\Controllers\Chat\InboxController;
+use App\Http\Controllers\Chat\ChatbotFlowController;
+use App\Http\Controllers\Chat\ChatSettingController;
+use App\Http\Controllers\Chat\ConversationController;
+use App\Http\Controllers\Chat\DeviceHealthController;
 use App\Http\Controllers\Chat\NotificationController;
+use App\Http\Controllers\Chat\OptOutController;
 use App\Http\Controllers\Chat\MessageScheduleController;
 use App\Http\Controllers\Chat\MessageTemplateController;
 use App\Http\Controllers\Chat\CategoryTemplateController;
@@ -155,6 +175,15 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
 
 Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () {
 
+    // Moved from Chat > Laporan (used to be ChatReportController /
+    // views/chat/reports/index.blade.php, gated behind 'active.package'
+    // + 'menu.access') straight onto the main Dashboard — see
+    // DashboardController::summary(). Sits at this group's top level
+    // (not under the 'chat' prefix below) so every logged-in user sees
+    // it regardless of package/menu-access status, same as the rest of
+    // the Dashboard shell.
+    Route::get('/summary', [DashboardController::class, 'summary'])->name('dashboard.summary');
+
     // Gated behind an active package: once every voucher this user holds
     // has expired (or none was ever redeemed), 'active.package' blocks
     // every route below — including any added here later, since it's
@@ -173,6 +202,8 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::get('/chats/{jid}/messages', 'messages')->name('inbox.messages');
                 Route::post('/chats/{jid}/messages', 'send')->name('inbox.send');
                 Route::post('/chats/{jid}/media', 'sendMedia')->name('inbox.send-media');
+                Route::post('/chats/{jid}/polls', 'sendPoll')->name('inbox.send-poll');
+                Route::get('/chats/{jid}/polls/{messageId}/results', 'pollResults')->name('inbox.poll-results');
                 Route::get('/media/{messageId}', 'media')->name('inbox.media');
                 Route::get('/chats/{jid}/presence', 'presence')->name('inbox.presence');
                 Route::get('/chats/{jid}/labels', 'labels')->name('inbox.labels');
@@ -190,6 +221,50 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::get('/templates', 'templates')->name('inbox.templates');
             });
 
+        // Chat ops (status/SLA/assignment) for one thread — see
+        // App\Http\Controllers\Chat\ConversationController's docblock
+        // for why this is a separate controller from InboxController
+        // even though it shares the exact same inbox/{device}/chats/{jid}
+        // URL shape as labels/notes/contact above.
+        Route::prefix('inbox/{device}')
+            ->controller(ConversationController::class)
+            ->group(function () {
+                Route::get('/chats/{jid}/conversation', 'show')->name('inbox.conversation.show');
+                Route::post('/chats/{jid}/conversation/status', 'updateStatus')->name('inbox.conversation.status');
+                Route::post('/chats/{jid}/conversation/assign', 'assign')->name('inbox.conversation.assign');
+            });
+
+        // Company-wide conversation queue (every device at once) — the
+        // "ops dashboard" view, not scoped to one device the way
+        // everything under inbox/{device} above is. '/' renders the page
+        // shell (index()), '/data' is the JSON it polls (queue()) — same
+        // page/data split as chat.connect-device.index vs .list.
+        Route::prefix('conversations')
+            ->controller(ConversationController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('chat.conversations.index');
+                Route::get('/data', 'queue')->name('chat.conversations.queue');
+            });
+
+        // Fitur #6 — multi-step chatbot flow builder. JSON CRUD for
+        // App\Models\WaChatbotFlow/WaChatbotFlowStep; the actual
+        // execution engine (App\Services\Chat\ChatbotFlowService) is
+        // driven entirely from the incoming-message webhook, not from
+        // any route here.
+        Route::prefix('inbox/{device}/chatbot-flows')
+            ->controller(ChatbotFlowController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('chatbot-flows.index');
+                Route::get('/data', 'list')->name('chatbot-flows.list');
+                Route::post('/', 'store')->name('chatbot-flows.store');
+                Route::get('/{flow}', 'show')->name('chatbot-flows.show');
+                Route::put('/{flow}', 'update')->name('chatbot-flows.update');
+                Route::delete('/{flow}', 'destroy')->name('chatbot-flows.destroy');
+                Route::post('/{flow}/steps', 'storeStep')->name('chatbot-flows.steps.store');
+                Route::put('/{flow}/steps/{step}', 'updateStep')->name('chatbot-flows.steps.update');
+                Route::delete('/{flow}/steps/{step}', 'destroyStep')->name('chatbot-flows.steps.destroy');
+            });
+
         Route::prefix('connect-device')
             ->controller(ConnectDeviceController::class)
             ->group(function () {
@@ -200,6 +275,18 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::post('/{device}/reconnect', 'reconnect')->name('chat.connect-device.reconnect');
                 Route::post('/{device}/disconnect', 'disconnect')->name('chat.connect-device.disconnect');
                 Route::get('/{device}/history', 'history')->name('chat.connect-device.history');
+            });
+
+        // Device health scoring (anti-ban risk signal) — see
+        // App\Http\Controllers\Chat\DeviceHealthController. Nested under
+        // 'connect-device' for the single-device view (same page as
+        // history above), plus one company-wide ranking endpoint for the
+        // "which number should I use for this broadcast" recommendation.
+        Route::prefix('connect-device')
+            ->controller(DeviceHealthController::class)
+            ->group(function () {
+                Route::get('/{device}/health', 'show')->name('chat.connect-device.health');
+                Route::get('/health-ranking', 'ranking')->name('chat.connect-device.health-ranking');
             });
 
         // Powers the header bell's real "pesan baru masuk" dropdown (see
@@ -271,6 +358,27 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::delete('/{id}', 'destroy')->name('chat.category-templates.destroy');
             });
 
+        // Broadcast opt-out list — see App\Http\Controllers\Chat\
+        // OptOutController's docblock.
+        Route::prefix('opt-outs')
+            ->controller(OptOutController::class)
+            ->group(function () {
+                Route::get('/', 'page')->name('chat.opt-outs.index');
+                Route::get('/data', 'list')->name('chat.opt-outs.list');
+                Route::post('/', 'store')->name('chat.opt-outs.store');
+                Route::delete('/{optOut}', 'destroy')->name('chat.opt-outs.destroy');
+            });
+
+        // Company-wide Chat settings (SLA minutes, broadcast throttle,
+        // CSAT toggle/question) — see App\Http\Controllers\Chat\
+        // ChatSettingController.
+        Route::prefix('settings')
+            ->controller(ChatSettingController::class)
+            ->group(function () {
+                Route::get('/', 'edit')->name('chat.settings.edit');
+                Route::put('/', 'update')->name('chat.settings.update');
+            });
+
         Route::prefix('chat-labels')
             ->controller(ChatLabelController::class)
             ->group(function () {
@@ -290,6 +398,85 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::get('/', 'index')->name('chat.contacts.index');
                 Route::get('/list', 'list')->name('chat.contacts.list');
                 Route::put('/{contact}', 'update')->name('chat.contacts.update');
+
+                // CRM Roadmap Fase 1 "Customer 360" — named under the
+                // chat.contacts.* group (rather than its own prefix) on
+                // purpose so App\Http\Middleware\EnsureMenuAccess gates it
+                // with the exact same ApplicationMenu entry as the Kontak
+                // page itself. Served by a different controller
+                // (App\Http\Controllers\Crm\CustomerController) since it
+                // reads across WaCustomer/WaConversation/WaChatNote, not
+                // just WaContact — the route *name* is what the
+                // permission check keys on, not which controller handles
+                // it.
+                Route::get('/customer/{customer}', [CustomerController::class, 'show'])->name('chat.contacts.show');
+            });
+
+        // "Tugas & Follow-up" — CRM Roadmap Fase 2. Its own top-level
+        // menu entry (see 2026_08_12_210100_seed_chat_tasks_application_
+        // menu.php), unlike chat.contacts.show above which deliberately
+        // rides the Kontak page's permission group instead of getting
+        // its own catalog entry.
+        Route::prefix('tasks')
+            ->controller(CustomerTaskController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('chat.tasks.index');
+                Route::post('/', 'store')->name('chat.tasks.store');
+                Route::put('/{task}', 'update')->name('chat.tasks.update');
+                Route::post('/{task}/complete', 'complete')->name('chat.tasks.complete');
+                Route::post('/{task}/reopen', 'reopen')->name('chat.tasks.reopen');
+                Route::delete('/{task}', 'destroy')->name('chat.tasks.destroy');
+            });
+
+        // "Sales Pipeline" — CRM Roadmap Fase 3. Own top-level menu
+        // entry, same reasoning as chat.tasks.* above.
+        Route::prefix('deals')
+            ->controller(DealController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('chat.deals.index');
+                Route::post('/', 'store')->name('chat.deals.store');
+                Route::get('/{deal}/edit', 'edit')->name('chat.deals.edit');
+                Route::put('/{deal}', 'update')->name('chat.deals.update');
+                Route::post('/{deal}/stage', 'moveStage')->name('chat.deals.move-stage');
+                Route::delete('/{deal}', 'destroy')->name('chat.deals.destroy');
+            });
+
+        // CRM Roadmap Fase 4 "Segmentasi & Automation" — tag catalog +
+        // per-customer attach/detach.
+        Route::prefix('customer-tags')
+            ->controller(CustomerTagController::class)
+            ->group(function () {
+                Route::post('/', 'store')->name('chat.customer-tags.store');
+                Route::put('/{tag}', 'update')->name('chat.customer-tags.update');
+                Route::delete('/{tag}', 'destroy')->name('chat.customer-tags.destroy');
+                Route::post('/{customer}/attach', 'attach')->name('chat.customer-tags.attach');
+                Route::delete('/{customer}/{tag}', 'detach')->name('chat.customer-tags.detach');
+            });
+
+        // CRM Roadmap Fase 4 — dynamic segments (saved filters, see
+        // App\Models\WaCustomerSegment). Own top-level menu entry.
+        Route::prefix('segments')
+            ->controller(CustomerSegmentController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('chat.segments.index');
+                Route::post('/', 'store')->name('chat.segments.store');
+                Route::get('/{segment}/edit', 'edit')->name('chat.segments.edit');
+                Route::put('/{segment}', 'update')->name('chat.segments.update');
+                Route::delete('/{segment}', 'destroy')->name('chat.segments.destroy');
+                Route::get('/{segment}', 'show')->name('chat.segments.show');
+            });
+
+        // CRM Roadmap Fase 4 — trigger-based follow-up automation. Own
+        // top-level menu entry.
+        Route::prefix('automation-rules')
+            ->controller(CustomerAutomationRuleController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('chat.automation-rules.index');
+                Route::post('/', 'store')->name('chat.automation-rules.store');
+                Route::get('/{rule}/edit', 'edit')->name('chat.automation-rules.edit');
+                Route::put('/{rule}', 'update')->name('chat.automation-rules.update');
+                Route::post('/{rule}/toggle-active', 'toggleActive')->name('chat.automation-rules.toggle-active');
+                Route::delete('/{rule}', 'destroy')->name('chat.automation-rules.destroy');
             });
 
         // "Kelompok" — Buku Telepon groups. See
@@ -718,6 +905,13 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
     Route::get('/package/invoice/{subscription}', [PackageCheckoutController::class, 'invoice'])
         ->name('dashboard.package.invoice');
 
+    // "Sisa kuota saya" — purchased vs used vs remaining for every
+    // metric the company's active package caps (see App\Services\
+    // PackageLimitService::usageReport()). Linked from the "Kuota Habis"
+    // notification email as well as the sidebar.
+    Route::get('/package/usage', [DashboardPackageController::class, 'usage'])
+        ->name('dashboard.package.usage');
+
     // "Redeem Voucher" in the profile dropdown (resources/views/layouts/
     // partials/header.blade.php) — activates the voucher generated by a
     // package purchase (see PackageCheckoutController::store()).
@@ -799,6 +993,35 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
                 Route::get('/{id}/edit', 'edit')->name('voucher.edit');
                 Route::put('/{id}', 'update')->name('voucher.update');
                 Route::delete('/{id}', 'destroy')->name('voucher.destroy');
+            });
+
+        // Catalog of things a Package can cap a number on (see
+        // App\Models\LimitMetric's migration docblock) — deliberately
+        // separate from the packages themselves so it's reusable across
+        // future applications, not just Chat/Konexa.
+        Route::prefix('limit-metric')
+            ->controller(LimitMetricController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('limit-metric.index');
+                Route::get('/create', 'create')->name('limit-metric.create');
+                Route::post('/create', 'store')->name('limit-metric.store');
+                Route::get('/{id}/edit', 'edit')->name('limit-metric.edit');
+                Route::put('/{id}', 'update')->name('limit-metric.update');
+                Route::delete('/{id}', 'destroy')->name('limit-metric.destroy');
+            });
+
+        // Assigns a numeric ceiling (App\Models\PackageLimit) to one
+        // limit-metric on one package — e.g. "Paket A" + "broadcast_send"
+        // -> 10000.
+        Route::prefix('package-limit')
+            ->controller(PackageLimitController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('package-limit.index');
+                Route::get('/create', 'create')->name('package-limit.create');
+                Route::post('/create', 'store')->name('package-limit.store');
+                Route::get('/{id}/edit', 'edit')->name('package-limit.edit');
+                Route::put('/{id}', 'update')->name('package-limit.update');
+                Route::delete('/{id}', 'destroy')->name('package-limit.destroy');
             });
 
         // Purchase cashback/point rule — see App\Models\Setting /
@@ -1060,6 +1283,17 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
                 Route::delete('/{id}', 'destroy')->name('wa-ai-bot-model.destroy');
             });
 
+        // "Moderasi AI" — singleton settings for App\Models\
+        // AiModerationSetting, the AI that now moderates Kategori
+        // Template & WA Template in place of manual superadmin approve/
+        // reject. See Superadmin\AiModerationSettingController.
+        Route::prefix('ai-moderation-setting')
+            ->controller(AiModerationSettingController::class)
+            ->group(function () {
+                Route::get('/', 'edit')->name('ai-moderation-setting.edit');
+                Route::put('/', 'update')->name('ai-moderation-setting.update');
+            });
+
         // Public WhatsApp API documentation (GET /dokumentasi, no login —
         // see PublicDocumentationController) content management: two
         // catalogs, Category Documentation (sections) and Api Documentation
@@ -1173,6 +1407,58 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
                     Route::put('/{id}', 'update')->name('web.videos.update');
                     Route::delete('/{id}', 'destroy')->name('web.videos.destroy');
                 });
+
+            Route::prefix('headers')
+                ->controller(WebHeaderController::class)
+                ->group(function () {
+                    Route::get('/', 'index')->name('web.headers.index');
+                    Route::get('/create', 'create')->name('web.headers.create');
+                    Route::post('/create', 'store')->name('web.headers.store');
+                    Route::get('/{id}/edit', 'edit')->name('web.headers.edit');
+                    Route::put('/{id}', 'update')->name('web.headers.update');
+                    Route::delete('/{id}', 'destroy')->name('web.headers.destroy');
+                });
+
+            // Singleton settings row (favicon, logo, meta tags, kontak,
+            // GTM/GA, Google Maps) — see App\Models\WebSetting. Cuma
+            // edit()/update(), tidak ada index/create/destroy karena
+            // cuma ada satu baris (WebSetting::current()), sama seperti
+            // Superadmin\AiModerationSettingController.
+            Route::prefix('setting')
+                ->controller(WebSettingController::class)
+                ->group(function () {
+                    Route::get('/', 'edit')->name('web.setting.edit');
+                    Route::put('/', 'update')->name('web.setting.update');
+                });
+
+            // Fitur unggulan (App\Models\WebFeature) — flat list + 1
+            // gambar per baris. Baris awalnya sudah diisi lewat
+            // database/seeders/WebFeatureSeeder.php (images masih
+            // kosong), CRUD ini yang dipakai untuk upload gambarnya.
+            Route::prefix('features')
+                ->controller(WebFeatureController::class)
+                ->group(function () {
+                    Route::get('/', 'index')->name('web.features.index');
+                    Route::get('/create', 'create')->name('web.features.create');
+                    Route::post('/create', 'store')->name('web.features.store');
+                    Route::get('/{id}/edit', 'edit')->name('web.features.edit');
+                    Route::put('/{id}', 'update')->name('web.features.update');
+                    Route::delete('/{id}', 'destroy')->name('web.features.destroy');
+                });
+
+            // Blok link footer (App\Models\WebFooter) — flat list, hanya
+            // status = active yang tampil publik (lihat App\Http\
+            // Controllers\Api\Frontend\FooterController).
+            Route::prefix('footers')
+                ->controller(WebFooterController::class)
+                ->group(function () {
+                    Route::get('/', 'index')->name('web.footers.index');
+                    Route::get('/create', 'create')->name('web.footers.create');
+                    Route::post('/create', 'store')->name('web.footers.store');
+                    Route::get('/{id}/edit', 'edit')->name('web.footers.edit');
+                    Route::put('/{id}', 'update')->name('web.footers.update');
+                    Route::delete('/{id}', 'destroy')->name('web.footers.destroy');
+                });
         });
 
         // "Company Role Menus" in the sidebar — every company_role_menus
@@ -1251,20 +1537,19 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
 
         // WA Template/Broadcast review — category list -> drill into that
         // category's templates. See Superadmin\WaTemplateReviewController.
-        // "/uncategorized" is defined before "/categories/{id}" segments
-        // are unambiguous by path shape here, but kept first regardless
-        // for readability (list -> uncategorized bucket -> single
-        // category drill-down -> approve/reject actions).
+        // Read-only oversight — categories/templates are approved/rejected
+        // automatically by AI moderation now (see Chat\
+        // CategoryTemplateController / Chat\MessageTemplateController),
+        // so there are no more approve/reject actions here, only listing.
+        // "/uncategorized" is defined before "/categories/{id}" for
+        // readability (list -> uncategorized bucket -> single category
+        // drill-down).
         Route::prefix('wa-templates')
             ->controller(WaTemplateReviewController::class)
             ->group(function () {
                 Route::get('/', 'index')->name('wa-templates.index');
                 Route::get('/uncategorized', 'uncategorized')->name('wa-templates.uncategorized');
                 Route::get('/categories/{id}', 'show')->name('wa-templates.categories.show');
-                Route::post('/categories/{id}/approve', 'approveCategory')->name('wa-templates.categories.approve');
-                Route::post('/categories/{id}/reject', 'rejectCategory')->name('wa-templates.categories.reject');
-                Route::post('/templates/{id}/approve', 'approveTemplate')->name('wa-templates.templates.approve');
-                Route::post('/templates/{id}/reject', 'rejectTemplate')->name('wa-templates.templates.reject');
             });
 
     });

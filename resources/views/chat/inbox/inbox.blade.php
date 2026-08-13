@@ -83,6 +83,7 @@
                         <button type="button" id="wa-emoji-btn" class="wa-icon-btn" title="Emoji"><i class="ri-emotion-line"></i></button>
                         <button type="button" id="wa-quick-reply-btn" class="wa-icon-btn" title="Balasan cepat"><i class="ri-flashlight-line"></i></button>
                         <button type="button" id="wa-template-btn" class="wa-icon-btn" title="Template pesan"><i class="ri-apps-2-line"></i></button>
+                        <button type="button" id="wa-poll-btn" class="wa-icon-btn" title="Buat survei/poll" data-bs-toggle="modal" data-bs-target="#wa-poll-modal"><i class="ri-bar-chart-box-line"></i></button>
                         <button type="button" id="wa-attach-btn" class="wa-icon-btn" title="Lampirkan file"><i class="ri-attachment-2"></i></button>
                     </div>
                     <textarea id="wa-send-input" class="wa-send-input" placeholder="Type a message... ( / for quick reply)" autocomplete="off" rows="1"></textarea>
@@ -98,8 +99,62 @@
                 </div>
             </div>
 
+            {{-- Poll/survey compose modal — Fitur #5. Sent as a native
+                 WhatsApp poll (App\Services\Chat\InboxService::sendPoll()),
+                 the anti-ban-safe "interactive message" this app offers
+                 (see that method's docblock for why buttons/list messages
+                 are deliberately not exposed here). --}}
+            <div class="modal fade" id="wa-poll-modal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Buat Survei / Poll</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label class="form-label">Pertanyaan</label>
+                                <input type="text" id="wa-poll-question" class="form-control" placeholder="Contoh: Pilih jadwal yang Anda inginkan" maxlength="255">
+                            </div>
+                            <label class="form-label">Pilihan Jawaban</label>
+                            <div id="wa-poll-options-list" class="d-flex flex-column gap-2 mb-2"></div>
+                            <button type="button" class="btn btn-sm btn-light" id="wa-poll-option-add"><i class="ri-add-line"></i> Tambah Pilihan</button>
+                            <div class="text-danger fs-12 mt-2" id="wa-poll-error" style="display:none;"></div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+                            <button type="button" class="btn btn-primary" id="wa-poll-send-btn"><i class="ri-send-plane-2-line"></i> Kirim Survei</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Poll results modal — "Lihat Hasil" button on a poll bubble
+                 (see renderPollResults() in the script below). --}}
+            <div class="modal fade" id="wa-poll-results-modal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Hasil Survei</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="fw-semibold mb-3" id="wa-poll-results-question"></p>
+                            <div id="wa-poll-results-body"></div>
+                            <p class="text-muted fs-12 mt-3 mb-0" id="wa-poll-results-count"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {{-- ============ RIGHT: detail panel ============ --}}
+            {{-- Below 1200px this becomes a slide-in overlay (see the CSS
+                 media query) instead of an in-flow column — the backdrop
+                 dims the rest of the screen and closes it on click/tap,
+                 same as the New Chat modal above. --}}
+            <div class="wa-detail-backdrop" id="wa-detail-backdrop"></div>
             <div class="wa-col wa-col-detail" id="wa-detail-panel">
+                <button type="button" class="wa-detail-close-btn" id="wa-detail-close-btn" title="Tutup detail"><i class="ri-close-line"></i></button>
                 <div id="wa-detail-empty" class="wa-detail-empty text-muted">
                     Pilih percakapan untuk melihat detail.
                 </div>
@@ -193,6 +248,15 @@
         </div>
     </div>
 
+    {{-- Media lightbox — clicking a chat-bubble image/video or a "Media &
+         Files" panel thumbnail opens the full-size version here instead
+         of doing nothing (images) or navigating away to a raw,
+         un-proxied backend URL in a new tab (the old panel behavior). --}}
+    <div class="wa-modal-overlay d-none wa-lightbox-overlay" id="wa-media-lightbox-overlay">
+        <button type="button" class="wa-lightbox-close" id="wa-media-lightbox-close" title="Tutup"><i class="ri-close-line"></i></button>
+        <div class="wa-lightbox-content" id="wa-media-lightbox-content"></div>
+    </div>
+
     <style>
         .wa-inbox-card { padding: 0; overflow: hidden; }
         .wa-inbox-shell { display: flex; height: 80vh; min-height: 520px; max-width: 100%; }
@@ -200,13 +264,56 @@
         .wa-col { display: flex; flex-direction: column; min-width: 0; }
         .wa-col-contacts { width: 320px; flex: 0 0 320px; border-right: 1px solid var(--bs-border-color, #e9ecef); background: #fff; }
         .wa-col-thread { flex: 1 1 auto; background: #f2e9de; position: relative; }
-        .wa-col-detail { width: 300px; flex: 0 0 300px; border-left: 1px solid var(--bs-border-color, #e9ecef); background: #fff; overflow-y: auto; padding: 18px; }
+        .wa-col-detail { width: 300px; flex: 0 0 300px; border-left: 1px solid var(--bs-border-color, #e9ecef); background: #fff; overflow-y: auto; padding: 18px; position: relative; }
         .wa-col-detail.wa-hidden { display: none; }
+        .wa-detail-close-btn { display: none; }
 
         .wa-thread-back-btn { display: none; }
 
+        /* Below 1200px the detail panel no longer fits as a 3rd in-flow
+           column next to the list+thread, so it's hidden by default here
+           — but unlike before (where this was an unconditional, permanent
+           `display: none` that the "layout-right" toggle button had zero
+           power over, silently making Assignment/Labels/Media/Notes
+           unreachable on every tablet and most laptop windows), a click
+           can still bring it back as a slide-in overlay via the
+           `.wa-detail-open` class instead of the feature being dead
+           weight below this breakpoint. */
         @media (max-width: 1200px) {
             .wa-col-detail { display: none; }
+            .wa-col-detail.wa-detail-open {
+                display: flex;
+                position: fixed;
+                top: 0;
+                right: 0;
+                bottom: 0;
+                width: min(320px, 100vw);
+                z-index: 1055;
+                box-shadow: -8px 0 24px rgba(0, 0, 0, 0.18);
+            }
+            .wa-detail-close-btn {
+                display: flex;
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                width: 32px;
+                height: 32px;
+                border-radius: 50%;
+                border: none;
+                background: #f1f5f9;
+                color: #374151;
+                align-items: center;
+                justify-content: center;
+                z-index: 5;
+            }
+            .wa-detail-backdrop {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(15, 23, 42, 0.45);
+                z-index: 1054;
+            }
+            .wa-detail-backdrop.show { display: block; }
         }
 
         /* --- small tablets / large phones in landscape: the 3-column
@@ -298,6 +405,13 @@
         .wa-modal-btn-primary { border: none; background: #16a34a; color: #fff; border-radius: 8px; padding: 7px 16px; font-size: 0.85rem; font-weight: 600; }
         .wa-modal-btn-primary:hover { background: #128a3e; }
 
+        /* --- media lightbox --- */
+        .wa-lightbox-overlay { background: rgba(0, 0, 0, 0.85); z-index: 1100; }
+        .wa-lightbox-close { position: absolute; top: 16px; right: 16px; width: 40px; height: 40px; border-radius: 50%; border: none; background: rgba(255,255,255,0.15); color: #fff; font-size: 1.4rem; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .wa-lightbox-close:hover { background: rgba(255,255,255,0.3); }
+        .wa-lightbox-content { max-width: 92vw; max-height: 92vh; display: flex; align-items: center; justify-content: center; }
+        .wa-lightbox-content img, .wa-lightbox-content video { max-width: 92vw; max-height: 92vh; border-radius: 6px; object-fit: contain; }
+
         .wa-chat-list { flex: 1 1 auto; overflow-y: auto; }
         .wa-chat-list-empty { padding: 32px 16px; text-align: center; color: #9ca3af; font-size: 0.85rem; }
 
@@ -377,6 +491,17 @@
         .wa-msg-sticker { width: 128px; height: 128px; object-fit: contain; }
         .wa-msg-document { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; background: rgba(0,0,0,0.05); color: inherit; text-decoration: none; font-size: 0.85rem; }
         .wa-msg-document i { font-size: 1.3rem; flex-shrink: 0; }
+
+        {{-- Fitur #5 poll bubble — question, then each option as its own
+             pill-style line (never squeezed word-by-word: min-width 0 +
+             the bubble's own max-width above keeps long option text
+             wrapping cleanly instead of overflowing). --}}
+        .wa-msg-poll-question { display: flex; align-items: flex-start; gap: 6px; font-weight: 600; margin-bottom: 6px; }
+        .wa-msg-poll-question i { flex-shrink: 0; margin-top: 2px; }
+        .wa-msg-poll-option { display: block; padding: 6px 10px; margin-bottom: 4px; border-radius: 8px; background: rgba(0,0,0,0.05); font-size: 0.85rem; }
+        .wa-msg-poll-option:last-of-type { margin-bottom: 6px; }
+        .wa-msg-poll-results-btn { display: inline-flex; align-items: center; gap: 4px; font-size: 0.78rem; }
+        .wa-msg-poll-results-btn i { font-size: 0.9rem; }
 
         .wa-attach-preview { display: none; align-items: center; gap: 10px; padding: 8px 14px; background: #f9fafb; border-top: 1px solid #ece3d8; font-size: 0.82rem; color: #374151; }
         .wa-attach-preview.show { display: flex; }
@@ -462,22 +587,24 @@
 
     <script>
         (function () {
-            const chatsUrl = @json(route('inbox.chats', ['device' => $deviceId]));
-            const messagesUrlTemplate = @json(route('inbox.messages', ['device' => $deviceId, 'jid' => '__JID__']));
-            const sendUrlTemplate = @json(route('inbox.send', ['device' => $deviceId, 'jid' => '__JID__']));
-            const sendMediaUrlTemplate = @json(route('inbox.send-media', ['device' => $deviceId, 'jid' => '__JID__']));
-            const mediaUrlTemplate = @json(route('inbox.media', ['device' => $deviceId, 'messageId' => '__MSGID__']));
-            const presenceUrlTemplate = @json(route('inbox.presence', ['device' => $deviceId, 'jid' => '__JID__']));
-            const labelsUrlTemplate = @json(route('inbox.labels', ['device' => $deviceId, 'jid' => '__JID__']));
-            const labelAttachUrlTemplate = @json(route('inbox.labels.attach', ['device' => $deviceId, 'jid' => '__JID__']));
-            const notesUrlTemplate = @json(route('inbox.notes', ['device' => $deviceId, 'jid' => '__JID__']));
-            const mediaListUrlTemplate = @json(route('inbox.media-list', ['device' => $deviceId, 'jid' => '__JID__']));
-            const contactUrlTemplate = @json(route('inbox.contact', ['device' => $deviceId, 'jid' => '__JID__']));
-            const contactAssignUrlTemplate = @json(route('inbox.contact.assign', ['device' => $deviceId, 'jid' => '__JID__']));
-            const assignmentsUrl = @json(route('inbox.assignments', ['device' => $deviceId]));
-            const quickRepliesUrl = @json(route('inbox.quick-replies', ['device' => $deviceId]));
-            const templatesUrl = @json(route('inbox.templates', ['device' => $deviceId]));
-            const csrfToken = @json(csrf_token());
+            const chatsUrl = {{ \Illuminate\Support\Js::from(route('inbox.chats', ['device' => $deviceId])) }};
+            const messagesUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.messages', ['device' => $deviceId, 'jid' => '__JID__'])) }};
+            const sendUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.send', ['device' => $deviceId, 'jid' => '__JID__'])) }};
+            const sendMediaUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.send-media', ['device' => $deviceId, 'jid' => '__JID__'])) }};
+            const sendPollUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.send-poll', ['device' => $deviceId, 'jid' => '__JID__'])) }};
+            const pollResultsUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.poll-results', ['device' => $deviceId, 'jid' => '__JID__', 'messageId' => '__MSGID__'])) }};
+            const mediaUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.media', ['device' => $deviceId, 'messageId' => '__MSGID__'])) }};
+            const presenceUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.presence', ['device' => $deviceId, 'jid' => '__JID__'])) }};
+            const labelsUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.labels', ['device' => $deviceId, 'jid' => '__JID__'])) }};
+            const labelAttachUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.labels.attach', ['device' => $deviceId, 'jid' => '__JID__'])) }};
+            const notesUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.notes', ['device' => $deviceId, 'jid' => '__JID__'])) }};
+            const mediaListUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.media-list', ['device' => $deviceId, 'jid' => '__JID__'])) }};
+            const contactUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.contact', ['device' => $deviceId, 'jid' => '__JID__'])) }};
+            const contactAssignUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.contact.assign', ['device' => $deviceId, 'jid' => '__JID__'])) }};
+            const assignmentsUrl = {{ \Illuminate\Support\Js::from(route('inbox.assignments', ['device' => $deviceId])) }};
+            const quickRepliesUrl = {{ \Illuminate\Support\Js::from(route('inbox.quick-replies', ['device' => $deviceId])) }};
+            const templatesUrl = {{ \Illuminate\Support\Js::from(route('inbox.templates', ['device' => $deviceId])) }};
+            const csrfToken = {{ \Illuminate\Support\Js::from(csrf_token()) }};
 
             // Detach re-uses the attach URL above instead of its own
             // Blade route helper call with a third URL placeholder, since
@@ -500,6 +627,53 @@
             const newChatCloseEl = document.getElementById('wa-new-chat-close');
             const newChatCancelEl = document.getElementById('wa-new-chat-cancel');
             const newChatStartEl = document.getElementById('wa-new-chat-start');
+
+            const mediaLightboxOverlayEl = document.getElementById('wa-media-lightbox-overlay');
+            const mediaLightboxContentEl = document.getElementById('wa-media-lightbox-content');
+            const mediaLightboxCloseEl = document.getElementById('wa-media-lightbox-close');
+
+            // Opens a chat-bubble image/video or a Media & Files panel
+            // thumbnail full-size, in-app — before this, clicking an
+            // image did nothing at all, and the panel's thumbnails linked
+            // out to a raw, un-proxied backend URL in a new tab instead.
+            function openMediaLightbox(url, kind, altText) {
+                mediaLightboxContentEl.innerHTML = '';
+
+                let el;
+                if (kind === 'video') {
+                    el = document.createElement('video');
+                    el.src = url;
+                    el.controls = true;
+                    el.autoplay = true;
+                } else {
+                    el = document.createElement('img');
+                    el.src = url;
+                    el.alt = altText || '';
+                }
+
+                mediaLightboxContentEl.appendChild(el);
+                mediaLightboxOverlayEl.classList.remove('d-none');
+            }
+
+            function closeMediaLightbox() {
+                mediaLightboxOverlayEl.classList.add('d-none');
+                // Clears the <video>/<img> so a playing video actually
+                // stops (just hiding the overlay would leave its audio
+                // running in the background).
+                mediaLightboxContentEl.innerHTML = '';
+            }
+
+            if (mediaLightboxCloseEl) mediaLightboxCloseEl.addEventListener('click', closeMediaLightbox);
+            if (mediaLightboxOverlayEl) {
+                mediaLightboxOverlayEl.addEventListener('click', function (e) {
+                    if (e.target === mediaLightboxOverlayEl) closeMediaLightbox();
+                });
+            }
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && mediaLightboxOverlayEl && !mediaLightboxOverlayEl.classList.contains('d-none')) {
+                    closeMediaLightbox();
+                }
+            });
 
             const threadHeaderEl = document.getElementById('wa-thread-header');
             const threadAvatarEl = document.getElementById('wa-thread-avatar');
@@ -541,6 +715,8 @@
             const contactAssignSelectEl = document.getElementById('wa-contact-assign-select');
             const contactBranchEl = document.getElementById('wa-contact-branch');
             const toggleDetailBtnEl = document.getElementById('wa-toggle-detail-btn');
+            const detailBackdropEl = document.getElementById('wa-detail-backdrop');
+            const detailCloseBtnEl = document.getElementById('wa-detail-close-btn');
             const threadBackBtnEl = document.getElementById('wa-thread-back-btn');
             const inboxShellEl = document.querySelector('.wa-inbox-shell');
 
@@ -561,6 +737,225 @@
             const noteCancelBtnEl = document.getElementById('wa-note-cancel');
             const noteListEl = document.getElementById('wa-note-list');
             const noteEmptyEl = document.getElementById('wa-note-empty');
+
+            // Moved to run immediately after the DOM element references
+            // above (rather than staying interleaved further down among
+            // unrelated features/sections) so wiring these 3 buttons can
+            // never be starved by an unrelated exception thrown while
+            // setting up something else later in this script — this
+            // feature was reported as "doesn't show anything" often
+            // enough that it's worth it running first, before anything
+            // riskier gets a chance to break page setup.
+            // --- emoji / balasan cepat / template pesan pickers ---
+            // One shared popover reused for all 3 (filled differently per
+            // button) instead of three separate custom dropdowns — these
+            // were literally non-functional "coming soon" placeholders
+            // before (hidden on mobile too, see the removed CSS rule).
+            const COMMON_EMOJIS = ['😀','😁','😂','🤣','😊','😍','😘','😉','😎','🤔','😅','😢','😭','😡','👍','👎','🙏','👏','💪','🔥','🎉','❤️','💯','✅','❌','⚠️','📌','⏰','📞','📎','😴','🥳','🤗','😇','🙌','👋','🤝','💬','📷','🎁'];
+
+            function insertAtCursor(text) {
+                const start = sendInputEl.selectionStart != null ? sendInputEl.selectionStart : sendInputEl.value.length;
+                const end = sendInputEl.selectionEnd != null ? sendInputEl.selectionEnd : sendInputEl.value.length;
+                const value = sendInputEl.value;
+                sendInputEl.value = value.slice(0, start) + text + value.slice(end);
+                const cursor = start + text.length;
+                sendInputEl.focus();
+                sendInputEl.setSelectionRange(cursor, cursor);
+                autoGrowSendInput();
+            }
+
+            function closePicker() {
+                pickerPopoverEl.classList.add('d-none');
+                pickerPopoverBodyEl.innerHTML = '';
+            }
+
+            function openEmojiPicker() {
+                pickerPopoverTitleEl.textContent = 'Emoji';
+                const grid = document.createElement('div');
+                grid.className = 'wa-emoji-grid';
+                COMMON_EMOJIS.forEach(function (emoji) {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.textContent = emoji;
+                    btn.addEventListener('click', function () { insertAtCursor(emoji); });
+                    grid.appendChild(btn);
+                });
+                pickerPopoverBodyEl.innerHTML = '';
+                pickerPopoverBodyEl.appendChild(grid);
+                pickerPopoverEl.classList.remove('d-none');
+            }
+
+            function renderPickerList(items, opts) {
+                pickerPopoverBodyEl.innerHTML = '';
+
+                if (items.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.className = 'wa-picker-empty';
+                    empty.textContent = opts.emptyText;
+                    pickerPopoverBodyEl.appendChild(empty);
+                    return;
+                }
+
+                items.forEach(function (item) {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'wa-picker-list-item';
+
+                    const title = document.createElement('div');
+                    title.className = 'wa-picker-list-title';
+                    const titleText = document.createElement('span');
+                    titleText.textContent = opts.title(item);
+                    title.appendChild(titleText);
+
+                    const tag = opts.tag ? opts.tag(item) : null;
+                    if (tag) {
+                        const tagEl = document.createElement('span');
+                        tagEl.className = 'wa-picker-shortcut-tag';
+                        tagEl.textContent = tag;
+                        title.appendChild(tagEl);
+                    }
+
+                    const preview = document.createElement('div');
+                    preview.className = 'wa-picker-list-preview';
+                    preview.textContent = opts.body(item);
+
+                    btn.appendChild(title);
+                    btn.appendChild(preview);
+                    btn.addEventListener('click', function () {
+                        // Quick replies just paste their text (opts.onSelect
+                        // unset) — a WA Template needs more than that (its
+                        // composed header/link/buttons text, plus possibly
+                        // an attachment), so it supplies its own handler
+                        // instead of relying on this default.
+                        if (opts.onSelect) {
+                            opts.onSelect(item);
+                        } else {
+                            insertAtCursor(opts.body(item));
+                        }
+                        closePicker();
+                    });
+
+                    pickerPopoverBodyEl.appendChild(btn);
+                });
+            }
+
+            function openQuickReplyPicker() {
+                pickerPopoverTitleEl.textContent = 'Balasan Cepat';
+                pickerPopoverBodyEl.innerHTML = '<div class="wa-picker-empty">Memuat...</div>';
+                pickerPopoverEl.classList.remove('d-none');
+
+                fetchJson(quickRepliesUrl).then(function (data) {
+                    if (pickerPopoverTitleEl.textContent !== 'Balasan Cepat') return; // closed/switched while loading
+                    renderPickerList(data.quick_replies || [], {
+                        emptyText: 'Belum ada balasan cepat. Kelola di Chat > Pengaturan > Balasan Cepat.',
+                        title: function (item) { return item.title; },
+                        tag: function (item) { return item.shortcut ? '/' + item.shortcut : null; },
+                        body: function (item) { return item.message_content; },
+                    });
+                }).catch(function () {
+                    // Without this, a failed request left the popover
+                    // stuck on "Memuat..." forever — which reads as the
+                    // button just being broken/non-functional rather than
+                    // a network hiccup.
+                    if (pickerPopoverTitleEl.textContent !== 'Balasan Cepat') return;
+                    pickerPopoverBodyEl.innerHTML = '<div class="wa-picker-empty">Gagal memuat balasan cepat. Coba lagi.</div>';
+                });
+            }
+
+            // Fetches a template's already-uploaded attachment and drops it
+            // into the exact same "pending attachment" state the manual
+            // paperclip button uses (pendingFile / showAttachPreview) —
+            // reusing that flow end-to-end (including the existing 32MB
+            // guard, preview UI, and the real InboxController::sendMedia()
+            // send path) instead of building a second, parallel way to
+            // send media just for templates.
+            function attachTemplateFile(item) {
+                return fetch(item.attachment_url, { credentials: 'same-origin' })
+                    .then(function (res) { return res.ok ? res.blob() : null; })
+                    .then(function (blob) {
+                        if (!blob) return;
+                        var filename = item.attachment_original_name || 'attachment';
+                        var file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
+                        showAttachPreview(file);
+                    })
+                    .catch(function () {
+                        // Attachment fetch failed — the composed text was
+                        // already inserted by the caller, so the send
+                        // still goes out (just without the file) rather
+                        // than silently doing nothing.
+                    });
+            }
+
+            function openTemplatePicker() {
+                pickerPopoverTitleEl.textContent = 'Template Pesan';
+                pickerPopoverBodyEl.innerHTML = '<div class="wa-picker-empty">Memuat...</div>';
+                pickerPopoverEl.classList.remove('d-none');
+
+                fetchJson(templatesUrl).then(function (data) {
+                    if (pickerPopoverTitleEl.textContent !== 'Template Pesan') return;
+                    renderPickerList(data.templates || [], {
+                        emptyText: 'Belum ada template. Kelola di Chat > Pengaturan > WA Template.',
+                        title: function (item) { return item.name; },
+                        // Full composed text (header + body + link +
+                        // buttons-as-text + footer) in the preview too, so
+                        // what's shown in the picker matches what actually
+                        // gets sent — not just the bare body.
+                        body: function (item) { return item.composed || item.template; },
+                        onSelect: function (item) {
+                            insertAtCursor(item.composed || item.template);
+                            if (item.attachment_url) {
+                                attachTemplateFile(item);
+                            }
+                        },
+                    });
+                }).catch(function () {
+                    if (pickerPopoverTitleEl.textContent !== 'Template Pesan') return;
+                    pickerPopoverBodyEl.innerHTML = '<div class="wa-picker-empty">Gagal memuat template. Coba lagi.</div>';
+                });
+            }
+
+            if (emojiBtnEl) {
+                emojiBtnEl.addEventListener('click', function () {
+                    const isOpen = !pickerPopoverEl.classList.contains('d-none') && pickerPopoverTitleEl.textContent === 'Emoji';
+                    isOpen ? closePicker() : openEmojiPicker();
+                });
+            }
+
+            if (quickReplyBtnEl) {
+                quickReplyBtnEl.addEventListener('click', function () {
+                    const isOpen = !pickerPopoverEl.classList.contains('d-none') && pickerPopoverTitleEl.textContent === 'Balasan Cepat';
+                    isOpen ? closePicker() : openQuickReplyPicker();
+                });
+            }
+
+            if (templateBtnEl) {
+                templateBtnEl.addEventListener('click', function () {
+                    const isOpen = !pickerPopoverEl.classList.contains('d-none') && pickerPopoverTitleEl.textContent === 'Template Pesan';
+                    isOpen ? closePicker() : openTemplatePicker();
+                });
+            }
+
+            if (pickerPopoverCloseEl) pickerPopoverCloseEl.addEventListener('click', closePicker);
+
+            // Click outside the popover (and off its 3 trigger buttons)
+            // closes it — standard dropdown/popover behavior.
+            document.addEventListener('click', function (e) {
+                if (pickerPopoverEl.classList.contains('d-none')) return;
+                const target = e.target;
+                if (pickerPopoverEl.contains(target) || target === emojiBtnEl || target === quickReplyBtnEl || target === templateBtnEl) return;
+                closePicker();
+            });
+
+            // "/" at the very start of an empty box opens quick replies —
+            // matches the input's own placeholder text ("/ for quick
+            // reply"), which promised this before it actually did
+            // anything.
+            sendInputEl.addEventListener('keydown', function (e) {
+                if (e.key === '/' && sendInputEl.value === '') {
+                    e.preventDefault();
+                    openQuickReplyPicker();
+                }
+            });
 
             let activeChatJid = null;
             let activeChat = null;
@@ -584,7 +979,11 @@
             // chats feeling heavy, especially ones with a lot of
             // history-synced backlog.
             let messagesInitialized = false;
-            let lastMessageId = 0;
+            // Polling cursor — Go's message id is a UUID (no natural
+            // order), so the "give me what's new" cursor is built on each
+            // message's seq (a plain auto-increment counter) instead. See
+            // WaInboxService.ListMessages on the Go side.
+            let lastMessageSeq = 0;
             let lastRenderedDay = null;
 
             function urlForMedia(id) {
@@ -596,7 +995,14 @@
             }
 
             function fetchJson(url, options) {
-                return fetch(url, Object.assign({ headers: { 'Accept': 'application/json' } }, options))
+                options = options || {};
+                // See the same fix/comment in chatbot-flows/index.blade.php —
+                // Object.assign({headers: defaults}, options) replaces the
+                // whole headers object instead of merging it, silently
+                // dropping these defaults whenever a caller passes its own
+                // headers (X-CSRF-TOKEN, etc.).
+                const headers = Object.assign({ 'Accept': 'application/json' }, options.headers || {});
+                return fetch(url, Object.assign({}, options, { headers: headers }))
                     .then(function (res) { return res.json(); });
             }
 
@@ -623,8 +1029,20 @@
                 return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
             }
 
+            // Contacts with no saved WhatsApp name fall back to their raw
+            // JID/phone as the "label" (see applyAvatar() below), which for
+            // a phone number formatted with a leading "+" used to produce a
+            // literal "+" glyph as the avatar's initial — charAt(0) doesn't
+            // care whether that first character is actually a letter. This
+            // instead looks for the first real letter ANYWHERE in the
+            // label (handles "+62...", emoji-prefixed names, etc.) and
+            // returns '' when there isn't one at all (a pure phone number),
+            // so showInitialsFallback() below can show a person icon
+            // instead of a stray symbol/digit.
             function initials(name) {
-                return (name || '?').trim().charAt(0).toUpperCase();
+                const trimmed = (name || '').trim();
+                const match = trimmed.match(/[A-Za-z]/);
+                return match ? match[0].toUpperCase() : '';
             }
 
             // Deterministic color per contact so the list has the same
@@ -692,8 +1110,20 @@
                 function showInitialsFallback() {
                     container.innerHTML = '';
                     container.style.background = colorForName(label);
-                    container.style.fontSize = Math.max(12, Math.round(size * 0.4)) + 'px';
-                    container.textContent = initials(label);
+
+                    const letter = initials(label);
+
+                    if (letter) {
+                        container.style.fontSize = Math.max(12, Math.round(size * 0.4)) + 'px';
+                        container.textContent = letter;
+                    } else {
+                        // No real letter to show (contact has no saved
+                        // name, only a phone number) — a generic person
+                        // icon reads much better than a stray "+" or a
+                        // random-looking single digit would.
+                        container.innerHTML = '<i class="ri-user-3-fill" style="font-size:'
+                            + Math.max(14, Math.round(size * 0.5)) + 'px;"></i>';
+                    }
                 }
 
                 if (chat.avatar_url) {
@@ -984,6 +1414,12 @@
                 return icon;
             }
 
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text === null || text === undefined ? '' : String(text);
+                return div.innerHTML;
+            }
+
             // Builds the image/video/audio/document/sticker element for a
             // media message, or null for a plain text one. msg.media_url
             // is just a "this message has stored media" flag from the Go
@@ -1002,6 +1438,8 @@
                     img.loading = 'lazy';
                     img.alt = msg.file_name || (msg.message_type === 'sticker' ? 'Stiker' : 'Gambar');
                     img.className = msg.message_type === 'sticker' ? 'wa-msg-sticker' : 'wa-msg-image';
+                    img.style.cursor = 'zoom-in';
+                    img.addEventListener('click', function () { openMediaLightbox(url, 'image', img.alt); });
                     return img;
                 }
 
@@ -1048,23 +1486,63 @@
                 const bubble = document.createElement('div');
                 bubble.className = 'wa-msg-bubble';
 
-                const media = mediaElement(msg);
-                if (media) {
-                    bubble.classList.add('wa-msg-bubble-media');
-                    if (msg.message_type === 'sticker') {
-                        bubble.classList.add('wa-msg-bubble-sticker');
-                    }
-                    bubble.appendChild(media);
-                }
+                if (msg.message_type === 'poll') {
+                    // Fitur #5 — native WhatsApp poll. poll_options comes
+                    // back as a JSON-ENCODED STRING (it's a plain TEXT
+                    // column on the Go side, see models.WaMessage.
+                    // PollOptions), not a real array, so it needs parsing
+                    // here same as the vote tally in showPollResults()
+                    // below.
+                    bubble.classList.add('wa-msg-bubble-poll');
 
-                // A media message with no caption skips the text div
-                // entirely, so a bare photo isn't followed by an empty
-                // line — but a plain text message (no media at all)
-                // always gets one, even if body somehow came back empty.
-                if (msg.body || !media) {
-                    const text = document.createElement('div');
-                    text.textContent = msg.body;
-                    bubble.appendChild(text);
+                    const question = document.createElement('div');
+                    question.className = 'wa-msg-poll-question';
+                    question.innerHTML = '<i class="ri-bar-chart-box-line"></i> ' + escapeHtml(msg.body || '');
+                    bubble.appendChild(question);
+
+                    let pollOptions = [];
+                    try { pollOptions = JSON.parse(msg.poll_options || '[]'); } catch (e) { pollOptions = []; }
+
+                    pollOptions.forEach(function (opt) {
+                        const optEl = document.createElement('div');
+                        optEl.className = 'wa-msg-poll-option';
+                        optEl.textContent = opt;
+                        bubble.appendChild(optEl);
+                    });
+
+                    // Only the sender side can usefully view an
+                    // aggregate tally — an incoming poll from a customer
+                    // (theirs, not ours) has no "our" results to show.
+                    if (msg.from_me) {
+                        const resultsBtn = document.createElement('button');
+                        resultsBtn.type = 'button';
+                        resultsBtn.className = 'btn btn-sm btn-light wa-msg-poll-results-btn';
+                        resultsBtn.innerHTML = '<i class="ri-pie-chart-line"></i> Lihat Hasil';
+                        resultsBtn.addEventListener('click', function (e) {
+                            e.stopPropagation();
+                            showPollResults(msg.message_id, msg.body);
+                        });
+                        bubble.appendChild(resultsBtn);
+                    }
+                } else {
+                    const media = mediaElement(msg);
+                    if (media) {
+                        bubble.classList.add('wa-msg-bubble-media');
+                        if (msg.message_type === 'sticker') {
+                            bubble.classList.add('wa-msg-bubble-sticker');
+                        }
+                        bubble.appendChild(media);
+                    }
+
+                    // A media message with no caption skips the text div
+                    // entirely, so a bare photo isn't followed by an empty
+                    // line — but a plain text message (no media at all)
+                    // always gets one, even if body somehow came back empty.
+                    if (msg.body || !media) {
+                        const text = document.createElement('div');
+                        text.textContent = msg.body;
+                        bubble.appendChild(text);
+                    }
                 }
 
                 const time = document.createElement('div');
@@ -1097,7 +1575,7 @@
             // chat.
             function renderMessagesFull(messages) {
                 threadBodyEl.innerHTML = '';
-                lastMessageId = 0;
+                lastMessageSeq = 0;
                 lastRenderedDay = null;
 
                 messages.forEach(function (msg) {
@@ -1107,7 +1585,7 @@
                         threadBodyEl.appendChild(dayDivider(msg.sent_at));
                     }
                     threadBodyEl.appendChild(messageBubble(msg));
-                    if (msg.id > lastMessageId) lastMessageId = msg.id;
+                    if (msg.seq > lastMessageSeq) lastMessageSeq = msg.seq;
                 });
 
                 threadBodyEl.scrollTop = threadBodyEl.scrollHeight;
@@ -1129,7 +1607,7 @@
                         threadBodyEl.appendChild(dayDivider(msg.sent_at));
                     }
                     threadBodyEl.appendChild(messageBubble(msg));
-                    if (msg.id > lastMessageId) lastMessageId = msg.id;
+                    if (msg.seq > lastMessageSeq) lastMessageSeq = msg.seq;
                 });
 
                 if (wasAtBottom) {
@@ -1143,9 +1621,9 @@
             // the clock icon real pending messages already use, so it
             // reads as "sending..." rather than looking like a normal
             // sent message that just happens to load fast. Kept out of
-            // appendMessages()/lastMessageId entirely since a temp id
-            // isn't a real server message id and must never be mistaken
-            // for one by the after_id polling cursor.
+            // appendMessages()/lastMessageSeq entirely since a temp id
+            // isn't a real server message and has no real seq to be
+            // mistaken for one by the after_seq polling cursor.
             function appendOptimisticMessage(tempId, body) {
                 const wasAtBottom = threadBodyEl.scrollTop + threadBodyEl.clientHeight >= threadBodyEl.scrollHeight - 20;
                 const nowIso = new Date().toISOString();
@@ -1287,217 +1765,6 @@
                     }
                 });
             }
-
-            // --- emoji / balasan cepat / template pesan pickers ---
-            // One shared popover reused for all 3 (filled differently per
-            // button) instead of three separate custom dropdowns — these
-            // were literally non-functional "coming soon" placeholders
-            // before (hidden on mobile too, see the removed CSS rule).
-            const COMMON_EMOJIS = ['😀','😁','😂','🤣','😊','😍','😘','😉','😎','🤔','😅','😢','😭','😡','👍','👎','🙏','👏','💪','🔥','🎉','❤️','💯','✅','❌','⚠️','📌','⏰','📞','📎','😴','🥳','🤗','😇','🙌','👋','🤝','💬','📷','🎁'];
-
-            function insertAtCursor(text) {
-                const start = sendInputEl.selectionStart != null ? sendInputEl.selectionStart : sendInputEl.value.length;
-                const end = sendInputEl.selectionEnd != null ? sendInputEl.selectionEnd : sendInputEl.value.length;
-                const value = sendInputEl.value;
-                sendInputEl.value = value.slice(0, start) + text + value.slice(end);
-                const cursor = start + text.length;
-                sendInputEl.focus();
-                sendInputEl.setSelectionRange(cursor, cursor);
-                autoGrowSendInput();
-            }
-
-            function closePicker() {
-                pickerPopoverEl.classList.add('d-none');
-                pickerPopoverBodyEl.innerHTML = '';
-            }
-
-            function openEmojiPicker() {
-                pickerPopoverTitleEl.textContent = 'Emoji';
-                const grid = document.createElement('div');
-                grid.className = 'wa-emoji-grid';
-                COMMON_EMOJIS.forEach(function (emoji) {
-                    const btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.textContent = emoji;
-                    btn.addEventListener('click', function () { insertAtCursor(emoji); });
-                    grid.appendChild(btn);
-                });
-                pickerPopoverBodyEl.innerHTML = '';
-                pickerPopoverBodyEl.appendChild(grid);
-                pickerPopoverEl.classList.remove('d-none');
-            }
-
-            function renderPickerList(items, opts) {
-                pickerPopoverBodyEl.innerHTML = '';
-
-                if (items.length === 0) {
-                    const empty = document.createElement('div');
-                    empty.className = 'wa-picker-empty';
-                    empty.textContent = opts.emptyText;
-                    pickerPopoverBodyEl.appendChild(empty);
-                    return;
-                }
-
-                items.forEach(function (item) {
-                    const btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'wa-picker-list-item';
-
-                    const title = document.createElement('div');
-                    title.className = 'wa-picker-list-title';
-                    const titleText = document.createElement('span');
-                    titleText.textContent = opts.title(item);
-                    title.appendChild(titleText);
-
-                    const tag = opts.tag ? opts.tag(item) : null;
-                    if (tag) {
-                        const tagEl = document.createElement('span');
-                        tagEl.className = 'wa-picker-shortcut-tag';
-                        tagEl.textContent = tag;
-                        title.appendChild(tagEl);
-                    }
-
-                    const preview = document.createElement('div');
-                    preview.className = 'wa-picker-list-preview';
-                    preview.textContent = opts.body(item);
-
-                    btn.appendChild(title);
-                    btn.appendChild(preview);
-                    btn.addEventListener('click', function () {
-                        // Quick replies just paste their text (opts.onSelect
-                        // unset) — a WA Template needs more than that (its
-                        // composed header/link/buttons text, plus possibly
-                        // an attachment), so it supplies its own handler
-                        // instead of relying on this default.
-                        if (opts.onSelect) {
-                            opts.onSelect(item);
-                        } else {
-                            insertAtCursor(opts.body(item));
-                        }
-                        closePicker();
-                    });
-
-                    pickerPopoverBodyEl.appendChild(btn);
-                });
-            }
-
-            function openQuickReplyPicker() {
-                pickerPopoverTitleEl.textContent = 'Balasan Cepat';
-                pickerPopoverBodyEl.innerHTML = '<div class="wa-picker-empty">Memuat...</div>';
-                pickerPopoverEl.classList.remove('d-none');
-
-                fetchJson(quickRepliesUrl).then(function (data) {
-                    if (pickerPopoverTitleEl.textContent !== 'Balasan Cepat') return; // closed/switched while loading
-                    renderPickerList(data.quick_replies || [], {
-                        emptyText: 'Belum ada balasan cepat. Kelola di Chat > Pengaturan > Balasan Cepat.',
-                        title: function (item) { return item.title; },
-                        tag: function (item) { return item.shortcut ? '/' + item.shortcut : null; },
-                        body: function (item) { return item.message_content; },
-                    });
-                }).catch(function () {
-                    // Without this, a failed request left the popover
-                    // stuck on "Memuat..." forever — which reads as the
-                    // button just being broken/non-functional rather than
-                    // a network hiccup.
-                    if (pickerPopoverTitleEl.textContent !== 'Balasan Cepat') return;
-                    pickerPopoverBodyEl.innerHTML = '<div class="wa-picker-empty">Gagal memuat balasan cepat. Coba lagi.</div>';
-                });
-            }
-
-            // Fetches a template's already-uploaded attachment and drops it
-            // into the exact same "pending attachment" state the manual
-            // paperclip button uses (pendingFile / showAttachPreview) —
-            // reusing that flow end-to-end (including the existing 32MB
-            // guard, preview UI, and the real InboxController::sendMedia()
-            // send path) instead of building a second, parallel way to
-            // send media just for templates.
-            function attachTemplateFile(item) {
-                return fetch(item.attachment_url, { credentials: 'same-origin' })
-                    .then(function (res) { return res.ok ? res.blob() : null; })
-                    .then(function (blob) {
-                        if (!blob) return;
-                        var filename = item.attachment_original_name || 'attachment';
-                        var file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
-                        showAttachPreview(file);
-                    })
-                    .catch(function () {
-                        // Attachment fetch failed — the composed text was
-                        // already inserted by the caller, so the send
-                        // still goes out (just without the file) rather
-                        // than silently doing nothing.
-                    });
-            }
-
-            function openTemplatePicker() {
-                pickerPopoverTitleEl.textContent = 'Template Pesan';
-                pickerPopoverBodyEl.innerHTML = '<div class="wa-picker-empty">Memuat...</div>';
-                pickerPopoverEl.classList.remove('d-none');
-
-                fetchJson(templatesUrl).then(function (data) {
-                    if (pickerPopoverTitleEl.textContent !== 'Template Pesan') return;
-                    renderPickerList(data.templates || [], {
-                        emptyText: 'Belum ada template. Kelola di Chat > Pengaturan > WA Template.',
-                        title: function (item) { return item.name; },
-                        // Full composed text (header + body + link +
-                        // buttons-as-text + footer) in the preview too, so
-                        // what's shown in the picker matches what actually
-                        // gets sent — not just the bare body.
-                        body: function (item) { return item.composed || item.template; },
-                        onSelect: function (item) {
-                            insertAtCursor(item.composed || item.template);
-                            if (item.attachment_url) {
-                                attachTemplateFile(item);
-                            }
-                        },
-                    });
-                }).catch(function () {
-                    if (pickerPopoverTitleEl.textContent !== 'Template Pesan') return;
-                    pickerPopoverBodyEl.innerHTML = '<div class="wa-picker-empty">Gagal memuat template. Coba lagi.</div>';
-                });
-            }
-
-            if (emojiBtnEl) {
-                emojiBtnEl.addEventListener('click', function () {
-                    const isOpen = !pickerPopoverEl.classList.contains('d-none') && pickerPopoverTitleEl.textContent === 'Emoji';
-                    isOpen ? closePicker() : openEmojiPicker();
-                });
-            }
-
-            if (quickReplyBtnEl) {
-                quickReplyBtnEl.addEventListener('click', function () {
-                    const isOpen = !pickerPopoverEl.classList.contains('d-none') && pickerPopoverTitleEl.textContent === 'Balasan Cepat';
-                    isOpen ? closePicker() : openQuickReplyPicker();
-                });
-            }
-
-            if (templateBtnEl) {
-                templateBtnEl.addEventListener('click', function () {
-                    const isOpen = !pickerPopoverEl.classList.contains('d-none') && pickerPopoverTitleEl.textContent === 'Template Pesan';
-                    isOpen ? closePicker() : openTemplatePicker();
-                });
-            }
-
-            if (pickerPopoverCloseEl) pickerPopoverCloseEl.addEventListener('click', closePicker);
-
-            // Click outside the popover (and off its 3 trigger buttons)
-            // closes it — standard dropdown/popover behavior.
-            document.addEventListener('click', function (e) {
-                if (pickerPopoverEl.classList.contains('d-none')) return;
-                const target = e.target;
-                if (pickerPopoverEl.contains(target) || target === emojiBtnEl || target === quickReplyBtnEl || target === templateBtnEl) return;
-                closePicker();
-            });
-
-            // "/" at the very start of an empty box opens quick replies —
-            // matches the input's own placeholder text ("/ for quick
-            // reply"), which promised this before it actually did
-            // anything.
-            sendInputEl.addEventListener('keydown', function (e) {
-                if (e.key === '/' && sendInputEl.value === '') {
-                    e.preventDefault();
-                    openQuickReplyPicker();
-                }
-            });
 
             function renderPresence(presence) {
                 if (presence.state === 'typing') {
@@ -1722,13 +1989,28 @@
             // --- media & files ---
             let activeMediaType = 'image';
 
+            // item.media_url is the same "this has stored media" flag from
+            // the Go backend that msg.media_url is on a chat message (see
+            // mediaElement()'s docblock) — the browser can't actually load
+            // it directly (wrong host/port, no auth header attached), so
+            // whenever the item carries a message id, the real <img>/
+            // <video>/link src is built through the same Laravel proxy
+            // route (urlForMedia) chat-bubble media already uses. Only
+            // falls back to the raw item.media_url when no id is present,
+            // to degrade gracefully rather than showing nothing at all.
+            function mediaListSrc(item) {
+                const msgId = item.id || item.message_id;
+                return msgId ? urlForMedia(msgId) : item.media_url;
+            }
+
             function renderMedia(items) {
                 mediaGridEl.innerHTML = '';
                 mediaEmptyEl.classList.toggle('d-none', items.length > 0);
 
                 items.forEach(function (item) {
+                    const src = mediaListSrc(item);
                     const box = document.createElement('a');
-                    box.href = item.media_url;
+                    box.href = src;
                     box.target = '_blank';
                     box.rel = 'noopener';
 
@@ -1745,14 +2027,23 @@
                     } else {
                         box.className = 'wa-media-grid-item';
 
+                        // Image/video thumbnails open the in-app lightbox
+                        // instead of following the link out to a new tab —
+                        // the href above is kept anyway as a plain
+                        // right-click/"open in new tab" fallback.
+                        box.addEventListener('click', function (e) {
+                            e.preventDefault();
+                            openMediaLightbox(src, activeMediaType === 'video' ? 'video' : 'image', item.file_name || '');
+                        });
+
                         if (activeMediaType === 'video') {
                             const video = document.createElement('video');
-                            video.src = item.media_url;
+                            video.src = src;
                             video.muted = true;
                             box.appendChild(video);
                         } else {
                             const img = document.createElement('img');
-                            img.src = item.media_url;
+                            img.src = src;
                             img.loading = 'lazy';
                             img.alt = '';
                             box.appendChild(img);
@@ -1932,7 +2223,7 @@
                 activeChatJid = chat.chat_jid;
                 activeChat = chat;
                 messagesInitialized = false; // force a full (re)load for the new chat
-                lastMessageId = 0;
+                lastMessageSeq = 0;
                 renderedChatsSignature = ''; // force chat list re-render to highlight selection
                 clearAttachPreview(); // a pending attachment shouldn't follow you into a different chat
                 closeThreadSearch(); // matches/highlights belong to the chat being left, not the new one
@@ -2007,7 +2298,7 @@
                 const isInitialLoad = !messagesInitialized;
                 let url = urlFor(messagesUrlTemplate, requestedChatJid);
                 if (!isInitialLoad) {
-                    url += '?after_id=' + lastMessageId;
+                    url += '?after_seq=' + lastMessageSeq;
                 }
 
                 fetchJson(url).then(function (data) {
@@ -2144,10 +2435,37 @@
                 });
             }
 
+            // Below 1200px the panel is an off-canvas overlay that's
+            // CLOSED by default (see the CSS media query), so the toggle
+            // there means "open/close the overlay" (.wa-detail-open) —
+            // the exact opposite default from >=1200px, where it's an
+            // in-flow column that's OPEN by default and the toggle means
+            // "hide/show it" (.wa-hidden). Checking the media query at
+            // click time (rather than trying to force one shared boolean
+            // to mean both things) is what actually makes this button
+            // work at every width, instead of being permanently inert
+            // below 1200px like before.
+            const detailNarrowQuery = window.matchMedia('(max-width: 1200px)');
+
+            function closeDetailOverlay() {
+                detailPanelEl.classList.remove('wa-detail-open');
+                if (detailBackdropEl) detailBackdropEl.classList.remove('show');
+            }
+
             toggleDetailBtnEl.addEventListener('click', function () {
-                detailVisible = !detailVisible;
-                detailPanelEl.classList.toggle('wa-hidden', !detailVisible);
+                if (detailNarrowQuery.matches) {
+                    const opening = !detailPanelEl.classList.contains('wa-detail-open');
+                    detailPanelEl.classList.remove('wa-hidden');
+                    detailPanelEl.classList.toggle('wa-detail-open', opening);
+                    if (detailBackdropEl) detailBackdropEl.classList.toggle('show', opening);
+                } else {
+                    detailVisible = !detailVisible;
+                    detailPanelEl.classList.toggle('wa-hidden', !detailVisible);
+                }
             });
+
+            if (detailBackdropEl) detailBackdropEl.addEventListener('click', closeDetailOverlay);
+            if (detailCloseBtnEl) detailCloseBtnEl.addEventListener('click', closeDetailOverlay);
 
             if (threadBackBtnEl) {
                 threadBackBtnEl.addEventListener('click', function () {
@@ -2205,6 +2523,182 @@
 
             if (attachPreviewCancelEl) {
                 attachPreviewCancelEl.addEventListener('click', clearAttachPreview);
+            }
+
+            // --- poll / survey compose (Fitur #5) ---
+            const pollModalEl = document.getElementById('wa-poll-modal');
+            const pollQuestionInput = document.getElementById('wa-poll-question');
+            const pollOptionsListEl = document.getElementById('wa-poll-options-list');
+            const pollOptionAddBtn = document.getElementById('wa-poll-option-add');
+            const pollErrorEl = document.getElementById('wa-poll-error');
+            const pollSendBtn = document.getElementById('wa-poll-send-btn');
+
+            function addPollOptionRow(value) {
+                const row = document.createElement('div');
+                row.className = 'd-flex gap-2 align-items-center wa-poll-option-row';
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'form-control form-control-sm wa-poll-option-input';
+                input.placeholder = 'Pilihan jawaban';
+                input.maxLength = 100;
+                input.value = value || '';
+
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'btn btn-sm btn-light text-danger flex-shrink-0';
+                removeBtn.innerHTML = '<i class="ri-close-line"></i>';
+                removeBtn.addEventListener('click', function () {
+                    // A poll always needs at least 2 options — the last
+                    // two rows can't be removed, only cleared.
+                    if (pollOptionsListEl.querySelectorAll('.wa-poll-option-row').length <= 2) return;
+                    row.remove();
+                });
+
+                row.appendChild(input);
+                row.appendChild(removeBtn);
+                pollOptionsListEl.appendChild(row);
+            }
+
+            function resetPollForm() {
+                pollQuestionInput.value = '';
+                pollOptionsListEl.innerHTML = '';
+                addPollOptionRow('');
+                addPollOptionRow('');
+                pollErrorEl.style.display = 'none';
+            }
+
+            if (pollOptionAddBtn) {
+                pollOptionAddBtn.addEventListener('click', function () {
+                    if (pollOptionsListEl.querySelectorAll('.wa-poll-option-row').length >= 12) return;
+                    addPollOptionRow('');
+                });
+            }
+
+            if (pollModalEl) {
+                pollModalEl.addEventListener('show.bs.modal', resetPollForm);
+            }
+
+            if (pollSendBtn) {
+                pollSendBtn.addEventListener('click', function () {
+                    if (!activeChatJid) return;
+
+                    pollErrorEl.style.display = 'none';
+
+                    const question = pollQuestionInput.value.trim();
+                    const options = Array.from(pollOptionsListEl.querySelectorAll('.wa-poll-option-input'))
+                        .map(function (input) { return input.value.trim(); })
+                        .filter(function (v) { return v !== ''; });
+
+                    if (!question) {
+                        pollErrorEl.textContent = 'Pertanyaan wajib diisi.';
+                        pollErrorEl.style.display = 'block';
+                        return;
+                    }
+                    if (options.length < 2) {
+                        pollErrorEl.textContent = 'Minimal 2 pilihan jawaban.';
+                        pollErrorEl.style.display = 'block';
+                        return;
+                    }
+
+                    pollSendBtn.disabled = true;
+
+                    fetch(urlFor(sendPollUrlTemplate, activeChatJid), {
+                        method: 'POST',
+                        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+                        body: JSON.stringify({ question: question, options: options, selectable_count: 1 }),
+                    }).then(function (res) {
+                        return res.json().then(function (data) { return { ok: res.ok, data: data }; });
+                    }).then(function (result) {
+                        if (!result.ok) {
+                            const errors = result.data.errors;
+                            const message = errors ? errors[Object.keys(errors)[0]][0] : (result.data.error || 'Gagal mengirim survei.');
+                            pollErrorEl.textContent = message;
+                            pollErrorEl.style.display = 'block';
+                            return;
+                        }
+
+                        const modalInstance = bootstrap.Modal.getInstance(pollModalEl);
+                        if (modalInstance) modalInstance.hide();
+
+                        if (result.data.message && messagesInitialized) {
+                            appendMessages([result.data.message]);
+                        } else {
+                            loadMessages();
+                        }
+                        loadChats();
+                    }).finally(function () {
+                        pollSendBtn.disabled = false;
+                    });
+                });
+            }
+
+            // Poll results — "Lihat Hasil" button on a poll bubble this
+            // device sent (see messageBubble() above). Both poll_options
+            // and each vote's selected_options come back as JSON-ENCODED
+            // STRINGS (plain TEXT columns on the Go side), hence the
+            // JSON.parse calls below rather than reading them as arrays
+            // directly.
+            function showPollResults(messageId, question) {
+                const modalEl = document.getElementById('wa-poll-results-modal');
+                const modal = new bootstrap.Modal(modalEl);
+                const questionEl = document.getElementById('wa-poll-results-question');
+                const bodyEl = document.getElementById('wa-poll-results-body');
+                const countEl = document.getElementById('wa-poll-results-count');
+
+                questionEl.textContent = question || '';
+                bodyEl.innerHTML = '<div class="text-muted text-center py-3">Memuat...</div>';
+                countEl.textContent = '';
+                modal.show();
+
+                const url = pollResultsUrlTemplate
+                    .replace('__JID__', encodeURIComponent(activeChatJid))
+                    .replace('__MSGID__', encodeURIComponent(messageId));
+
+                fetch(url, { headers: { 'Accept': 'application/json' } })
+                    .then(function (res) { return res.json(); })
+                    .then(function (data) {
+                        if (!data.poll) {
+                            bodyEl.innerHTML = '<div class="text-muted text-center py-3">Data survei tidak ditemukan.</div>';
+                            return;
+                        }
+
+                        let options = [];
+                        try { options = JSON.parse(data.poll.poll_options || '[]'); } catch (e) { options = []; }
+
+                        const votes = data.votes || [];
+                        const tally = {};
+                        options.forEach(function (opt) { tally[opt] = 0; });
+
+                        votes.forEach(function (vote) {
+                            let selected = [];
+                            try { selected = JSON.parse(vote.selected_options || '[]'); } catch (e) { selected = []; }
+                            selected.forEach(function (opt) {
+                                if (typeof tally[opt] === 'undefined') tally[opt] = 0;
+                                tally[opt]++;
+                            });
+                        });
+
+                        const maxCount = Math.max(1, Object.values(tally).reduce(function (a, b) { return Math.max(a, b); }, 0));
+
+                        bodyEl.innerHTML = '';
+                        options.forEach(function (opt) {
+                            const count = tally[opt] || 0;
+                            const pct = Math.round((count / maxCount) * 100);
+
+                            const row = document.createElement('div');
+                            row.className = 'mb-2';
+                            row.innerHTML =
+                                '<div class="d-flex justify-content-between fs-13 mb-1"><span>' + escapeHtml(opt) + '</span><span class="text-muted">' + count + '</span></div>' +
+                                '<div class="progress" style="height: 8px;"><div class="progress-bar bg-primary" style="width:' + pct + '%"></div></div>';
+                            bodyEl.appendChild(row);
+                        });
+
+                        countEl.textContent = votes.length + ' orang telah menjawab.';
+                    })
+                    .catch(function () {
+                        bodyEl.innerHTML = '<div class="text-muted text-center py-3">Gagal memuat hasil survei.</div>';
+                    });
             }
 
             sendFormEl.addEventListener('submit', function (e) {

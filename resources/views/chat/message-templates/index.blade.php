@@ -16,7 +16,7 @@
                 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
                     <div>
                         <h4 class="mb-1">WA Template</h4>
-                        <p class="text-muted mb-0">Simpan pesan yang sering dipakai supaya tinggal dipilih saat membuat Pesan Terjadwal.</p>
+                        <p class="text-muted mb-0">Simpan pesan yang sering dipakai supaya tinggal dipilih saat membuat Pesan Terjadwal. Isi pesan langsung diperiksa AI moderasi — otomatis lolos, diperbaiki, atau ditolak.</p>
                     </div>
                     <a href="{{ route('chat.message-templates.create') }}" class="btn btn-primary">
                         <i class="ri-add-line"></i> Tambah Template
@@ -51,10 +51,8 @@
                                             <span class="badge bg-success-subtle text-success">Approved</span>
                                         @elseif ($template->review_status === 'rejected')
                                             <span class="badge bg-danger-subtle text-danger" title="{{ $template->rejection_reason }}">Rejected</span>
-                                        @elseif ($template->review_status === 'in_review')
-                                            <span class="badge bg-warning-subtle text-warning">In Review</span>
                                         @else
-                                            <span class="badge bg-secondary-subtle text-secondary">Draft</span>
+                                            <span class="badge bg-warning-subtle text-warning" title="{{ $template->rejection_reason }}">Menunggu AI</span>
                                         @endif
                                     </td>
                                     <td class="text-end" style="white-space: nowrap;">

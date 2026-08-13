@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Chat;
 
+use App\Http\Controllers\Concerns\AppliesTemplateModeration;
 use App\Http\Controllers\Concerns\ResolvesCompanyContext;
 use App\Http\Controllers\Controller;
 use App\Models\WaCategoryTemplate;
+use App\Services\Moderation\TemplateModerationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -13,15 +15,25 @@ use Illuminate\View\View;
 /**
  * CRUD for a company's own WA Template categories (Chat > Pengaturan >
  * Pesan > Kategori Template) — free-form names the company defines
- * itself (e.g. "Promo", "Reminder"), each needing a superadmin's
- * approval (`review_status`) before it's selectable on the WA Template
- * form — see Superadmin\CategoryTemplateReviewController for that side.
+ * itself (e.g. "Promo", "Reminder").
+ *
+ * `review_status` is no longer a manual superadmin approval gate — every
+ * create/rename is run through App\Services\Moderation\
+ * TemplateModerationService (the superadmin-configured AI, see
+ * App\Models\AiModerationSetting) instead, which can approve the name
+ * as-is, silently correct it, or reject it with a reason. There is no
+ * more human-approval queue on the superadmin side for this resource
+ * (see Superadmin\WaTemplateReviewController, now read-only oversight).
  * Always scoped to the logged-in user's own company, same rule as
  * Chat\MessageTemplateController.
  */
 class CategoryTemplateController extends Controller
 {
-    use ResolvesCompanyContext;
+    use ResolvesCompanyContext, AppliesTemplateModeration;
+
+    public function __construct(protected TemplateModerationService $moderation)
+    {
+    }
 
     public function index(Request $request): View
     {
@@ -53,17 +65,29 @@ class CategoryTemplateController extends Controller
                 ->withInput();
         }
 
-        WaCategoryTemplate::create([
+        $name = $validator->validated()['name'];
+        $moderation = $this->moderation->moderate(['name' => $name]);
+
+        if ($moderation->isCorrected()) {
+            $name = $moderation->fields['name'] ?? $name;
+        }
+
+        WaCategoryTemplate::create(array_merge([
             'company_id' => $company->id,
             'created_by' => $request->user()?->id,
-            'name' => $validator->validated()['name'],
+            'name' => $name,
             'status' => 'active',
-            'review_status' => 'pending',
-        ]);
+        ], $this->reviewFieldsFor($moderation)));
+
+        [$flashType, $flashMessage] = $this->flashFor(
+            $moderation,
+            'Kategori berhasil dibuat',
+            "nama disesuaikan otomatis menjadi \"{$name}\""
+        );
 
         return redirect()
             ->route('chat.category-templates.index')
-            ->with('success', 'Kategori berhasil diajukan, menunggu review superadmin.');
+            ->with($flashType, $flashMessage);
     }
 
     public function edit(Request $request, string $id): View
@@ -95,25 +119,35 @@ class CategoryTemplateController extends Controller
         }
 
         $data = $validator->validated();
+        $data['status'] = $request->input('status', 'active');
+
+        $flashType = 'success';
+        $flashMessage = 'Kategori berhasil diperbarui.';
 
         // Renaming an already-approved (or previously-rejected) category
-        // sends it back to the review queue — a superadmin approved (or
+        // sends it back through moderation — an AI approved (or
         // rejected) specific *text*, not "whatever this row happens to
         // be called later".
         if ($category->name !== $data['name']) {
-            $data['review_status'] = 'pending';
-            $data['rejection_reason'] = null;
-            $data['reviewed_by'] = null;
-            $data['reviewed_at'] = null;
-        }
+            $moderation = $this->moderation->moderate(['name' => $data['name']]);
 
-        $data['status'] = $request->input('status', 'active');
+            if ($moderation->isCorrected()) {
+                $data['name'] = $moderation->fields['name'] ?? $data['name'];
+            }
+
+            $data = array_merge($data, $this->reviewFieldsFor($moderation));
+            [$flashType, $flashMessage] = $this->flashFor(
+                $moderation,
+                'Kategori berhasil diperbarui',
+                "nama disesuaikan otomatis menjadi \"{$data['name']}\""
+            );
+        }
 
         $category->update($data);
 
         return redirect()
             ->route('chat.category-templates.index')
-            ->with('success', 'Kategori berhasil diperbarui.');
+            ->with($flashType, $flashMessage);
     }
 
     public function destroy(Request $request, string $id): RedirectResponse

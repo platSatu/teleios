@@ -5,7 +5,7 @@
     <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
         <div>
             <h4 class="mb-1">Edit Kategori Template</h4>
-            <p class="text-muted mb-0">Mengubah nama akan mengirim kategori ini kembali ke antrean review.</p>
+            <p class="text-muted mb-0">Mengubah nama akan memeriksa ulang kategori ini lewat AI moderasi.</p>
         </div>
         <a href="{{ route('chat.category-templates.index') }}" class="btn btn-light">
             <i class="ri-arrow-left-line"></i> Kembali

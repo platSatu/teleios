@@ -131,6 +131,7 @@ class ContactController extends Controller
     {
         return [
             'id' => $contact->id,
+            'wa_customer_id' => $contact->wa_customer_id,
             'phone' => $contact->phone,
             'name' => $contact->name,
             'branch_office_id' => $contact->branch_office_id,

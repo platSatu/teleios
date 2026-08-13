@@ -5,8 +5,20 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\Superadmin\UserController;
 use App\Http\Controllers\Api\WaIncomingMessageWebhookController;
 use App\Http\Controllers\Api\WaMessageStatusWebhookController;
+use App\Http\Controllers\Api\WaPollVoteWebhookController;
 use App\Http\Controllers\Api\WaApiSendMessageController;
 use App\Http\Controllers\Api\GoogleFormWebhookController;
+use App\Http\Controllers\Api\Frontend\ArticleController as FrontendArticleController;
+use App\Http\Controllers\Api\Frontend\CategoryApplicationController as FrontendCategoryApplicationController;
+use App\Http\Controllers\Api\Frontend\CategoryVideoController as FrontendCategoryVideoController;
+use App\Http\Controllers\Api\Frontend\FaqController as FrontendFaqController;
+use App\Http\Controllers\Api\Frontend\FeatureController as FrontendFeatureController;
+use App\Http\Controllers\Api\Frontend\FooterController as FrontendFooterController;
+use App\Http\Controllers\Api\Frontend\HeaderController as FrontendHeaderController;
+use App\Http\Controllers\Api\Frontend\PackageController as FrontendPackageController;
+use App\Http\Controllers\Api\Frontend\TermConditionController as FrontendTermConditionController;
+use App\Http\Controllers\Api\Frontend\VideoController as FrontendVideoController;
+use App\Http\Controllers\Api\Frontend\WebSettingController as FrontendWebSettingController;
 use App\Http\Controllers\User\Deposit\DuitkuCallbackController;
 
 // Server-to-server webhook Duitku posts payment results to — resolves
@@ -43,6 +55,16 @@ Route::post('/webhooks/wa/message-status', [WaMessageStatusWebhookController::cl
     ->middleware('golang.api-key')
     ->name('webhooks.wa.message-status');
 
+// Server-to-server webhook the Go backend posts to every time a WhatsApp
+// poll vote arrives (see g_backend's WaInboxService.notifyPollVoteWebhook,
+// fired from handlePollVote() right after it decrypts the vote) — drives
+// Fitur #7's CSAT survey scoring. See App\Http\Controllers\Api\
+// WaPollVoteWebhookController. Same trust model as the two webhooks
+// above (shared X-API-KEY via golang.api-key middleware).
+Route::post('/webhooks/wa/poll-vote', [WaPollVoteWebhookController::class, 'handle'])
+    ->middleware('golang.api-key')
+    ->name('webhooks.wa.poll-vote');
+
 // Public third-party WhatsApp send API — authenticated purely by the
 // per-device token/secret_key pair (App\Http\Middleware\VerifyWaApiKey),
 // no logged-in user or session involved at all. See App\Models\WaApiKey
@@ -63,6 +85,47 @@ Route::post('/wa-api/v1/send-message', [WaApiSendMessageController::class, 'send
 Route::post('/third-party/google-form/{token}', [GoogleFormWebhookController::class, 'receive'])
     ->middleware('throttle:60,1')
     ->name('third-party.google-form.receive');
+
+// Public read-only catalog the fe-konexa frontend (separate Laravel
+// app, running on its own `php artisan serve` port — see .env's
+// SERVER_PORT / FRONTEND_API_URL) calls server-to-server to render its
+// landing/product pages. Gated by the shared X-API-KEY secret
+// (frontend.api-key -> VerifyFrontendApiKey), same trust model as
+// golang.api-key above — no logged-in user involved on that side.
+Route::prefix('frontend')->middleware('frontend.api-key')->group(function () {
+    Route::get('/category-applications', [FrontendCategoryApplicationController::class, 'index'])
+        ->name('api.frontend.category-applications.index');
+
+    Route::get('/packages', [FrontendPackageController::class, 'index'])
+        ->name('api.frontend.packages.index');
+
+    Route::get('/articles', [FrontendArticleController::class, 'index'])
+        ->name('api.frontend.articles.index');
+
+    Route::get('/faqs', [FrontendFaqController::class, 'index'])
+        ->name('api.frontend.faqs.index');
+
+    Route::get('/term-condition', [FrontendTermConditionController::class, 'show'])
+        ->name('api.frontend.term-condition.show');
+
+    Route::get('/category-videos', [FrontendCategoryVideoController::class, 'index'])
+        ->name('api.frontend.category-videos.index');
+
+    Route::get('/videos', [FrontendVideoController::class, 'index'])
+        ->name('api.frontend.videos.index');
+
+    Route::get('/web-setting', [FrontendWebSettingController::class, 'show'])
+        ->name('api.frontend.web-setting.show');
+
+    Route::get('/features', [FrontendFeatureController::class, 'index'])
+        ->name('api.frontend.features.index');
+
+    Route::get('/headers', [FrontendHeaderController::class, 'index'])
+        ->name('api.frontend.headers.index');
+
+    Route::get('/footers', [FrontendFooterController::class, 'index'])
+        ->name('api.frontend.footers.index');
+});
 
 Route::prefix('superadmin')->middleware('auth:sanctum')->group(function () {
 

@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers\Chat;
 
+use App\Exceptions\PackageLimitExceededException;
+use App\Http\Controllers\Concerns\ResolvesCompanyContext;
 use App\Http\Controllers\Controller;
 use App\Services\Chat\ConnectDeviceService;
+use App\Services\PackageLimitService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Throwable;
 
@@ -20,8 +24,11 @@ use Throwable;
  */
 class ConnectDeviceController extends Controller
 {
+    use ResolvesCompanyContext;
+
     public function __construct(
         protected ConnectDeviceService $connectDeviceService,
+        protected PackageLimitService $packageLimits,
     ) {}
 
     /**
@@ -63,9 +70,51 @@ class ConnectDeviceController extends Controller
     /**
      * AJAX: register a new device and start pairing it. The frontend
      * opens a modal with the returned QR code right after this call.
+     *
+     * Package quota guard: "device_count" is a 'stock' metric (see
+     * App\Models\LimitMetric) — checked live against how many devices
+     * this user already has via connectDeviceService->listDevices()
+     * rather than a separately-tracked counter (there's no local devices
+     * table to keep in sync — see the class docblock). Resolving a
+     * company context is best-effort here: this controller is otherwise
+     * purely session/JWT-scoped, not company-scoped, so if a context
+     * can't be resolved the guard simply doesn't apply (fails open,
+     * same as everywhere else PackageLimitService is used) rather than
+     * blocking a device connection outright.
      */
-    public function add(): JsonResponse
+    public function add(Request $request): JsonResponse
     {
+        $jwt = session('golang_jwt_token');
+
+        if (! $jwt) {
+            return response()->json(['error' => 'Sesi WhatsApp tidak ditemukan.'], 401);
+        }
+
+        try {
+            $company = $this->companyContext($request)->company;
+        } catch (Throwable $e) {
+            $company = null;
+        }
+
+        if ($company) {
+            try {
+                $this->packageLimits->assertWithinLimit(
+                    $company,
+                    'device_count',
+                    1,
+                    null,
+                    fn () => count($this->connectDeviceService->listDevices($jwt)),
+                );
+            } catch (PackageLimitExceededException $e) {
+                return response()->json(['error' => $e->getMessage()], 403);
+            } catch (Throwable $e) {
+                // listDevices() itself failing shouldn't block adding a
+                // device — report it and fall through to addDevice()'s
+                // own error handling (safeJson below) instead.
+                report($e);
+            }
+        }
+
         return $this->safeJson(fn (string $jwt) => $this->connectDeviceService->addDevice($jwt));
     }
 

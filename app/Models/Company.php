@@ -32,6 +32,15 @@ class Company extends Model
         'phone',
         'email',
         'status',
+        'chat_sla_first_response_minutes',
+        'chat_sla_resolution_minutes',
+        'chat_broadcast_max_per_minute',
+        'csat_enabled',
+        'csat_question',
+    ];
+
+    protected $casts = [
+        'csat_enabled' => 'boolean',
     ];
 
     protected static function boot()
@@ -72,6 +81,11 @@ class Company extends Model
     public function branchOffices()
     {
         return $this->hasMany(BranchOffice::class);
+    }
+
+    public function conversations()
+    {
+        return $this->hasMany(WaConversation::class);
     }
 
     /**

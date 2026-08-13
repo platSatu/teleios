@@ -2,8 +2,9 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasUuidPrimaryKey;
+use App\Support\PhoneNumber;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Str;
 
 /**
  * A company's CRM contact — see the migration's docblock
@@ -12,16 +13,19 @@ use Illuminate\Support\Str;
  * created/refreshed by App\Http\Controllers\Chat\InboxController::contact()
  * whenever a chat is opened; managed in bulk from the Kontak page
  * (App\Http\Controllers\Chat\ContactController).
+ *
+ * wa_customer_id links this to the CRM Roadmap Fase 0 customer identity
+ * (App\Models\WaCustomer) — see that model's docblock. Set by
+ * App\Services\Crm\CustomerIdentityService, never directly.
  */
 class WaContact extends Model
 {
+    use HasUuidPrimaryKey;
+
     protected $table = 'wa_contacts';
 
-    protected $keyType = 'string';
-
-    public $incrementing = false;
-
     protected $fillable = [
+        'wa_customer_id',
         'company_id',
         'branch_office_id',
         'phone',
@@ -36,15 +40,9 @@ class WaContact extends Model
         'last_contacted_at' => 'datetime',
     ];
 
-    protected static function boot()
+    public function customer()
     {
-        parent::boot();
-
-        static::creating(function (self $contact) {
-            if (empty($contact->id)) {
-                $contact->id = (string) Str::uuid();
-            }
-        });
+        return $this->belongsTo(WaCustomer::class, 'wa_customer_id');
     }
 
     public function company()
@@ -70,10 +68,12 @@ class WaContact extends Model
     /**
      * Normalizes a raw phone/JID-user-part string down to digits only,
      * no leading '+' — the shape stored in `phone` and what every lookup
-     * here keys on. Safe to call on an already-clean value.
+     * here keys on. Safe to call on an already-clean value. Delegates to
+     * App\Support\PhoneNumber, the shared rule App\Models\WaCustomer and
+     * App\Models\WaPhoneBook also normalize by.
      */
     public static function normalizePhone(string $raw): string
     {
-        return preg_replace('/\D/', '', $raw) ?? '';
+        return PhoneNumber::normalize($raw);
     }
 }

@@ -35,7 +35,7 @@
                         </option>
                     @endforeach
                 </select>
-                <div class="form-text">Hanya kategori yang sudah disetujui superadmin yang muncul di sini.</div>
+                <div class="form-text">Hanya kategori yang sudah lolos moderasi AI yang muncul di sini.</div>
                 @error('wa_category_template_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
             </div>
             <div class="col-sm-5 mb-3">
@@ -136,7 +136,7 @@
                     <i class="ri-braces-line"></i> Variabel
                 </button>
                 <button type="button" class="btn btn-sm btn-light text-muted" data-bs-toggle="tooltip" data-bs-placement="top"
-                    title="Variabel seperti @{{nama}} akan diganti otomatis dengan data asli tiap kontak saat pesan dikirim (mis. @{{nama}} jadi 'Budi'). Isi contoh nilainya di kolom 'Contoh Nilai Variabel' di bawah supaya preview & review superadmin menampilkan hasil yang realistis.">
+                    title="Variabel seperti @{{nama}} akan diganti otomatis dengan data asli tiap kontak saat pesan dikirim (mis. @{{nama}} jadi 'Budi'). Isi contoh nilainya di kolom 'Contoh Nilai Variabel' di bawah supaya preview menampilkan hasil yang realistis.">
                     <i class="ri-information-line"></i>
                 </button>
             </div>
@@ -195,7 +195,7 @@
         <div class="mb-3" id="tpl-variables-wrapper" style="display:none;">
             <label class="form-label">Contoh Nilai Variabel</label>
             <div id="tpl-variables-list" class="d-flex flex-column gap-2"></div>
-            <div class="form-text">Dipakai untuk menampilkan contoh isi pada live preview &amp; layar review superadmin.</div>
+            <div class="form-text">Dipakai untuk menampilkan contoh isi pada live preview.</div>
         </div>
 
         <div class="mb-0">
@@ -337,7 +337,7 @@
                 <option value="active" @selected(old('status', $template->status ?? 'active') == 'active')>Active</option>
                 <option value="inactive" @selected(old('status', $template->status ?? '') == 'inactive')>Inactive</option>
             </select>
-            <div class="form-text">Hanya template Active &amp; sudah disetujui superadmin yang muncul di pilihan Pesan Terjadwal.</div>
+            <div class="form-text">Hanya template Active &amp; sudah lolos moderasi AI yang muncul di pilihan Pesan Terjadwal.</div>
             @error('status')<div class="invalid-feedback">{{ $message }}</div>@enderror
         </div>
 

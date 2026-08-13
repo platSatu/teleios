@@ -63,6 +63,39 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('jadwal:process-reminders')
             ->dailyAt('18:00')
             ->withoutOverlapping();
+
+        // Flags WhatsApp conversations whose first-response/resolution
+        // SLA due date has passed — see
+        // App\Console\Commands\EvaluateChatSlaBreaches. Minute-granular
+        // like the deposit/wa-schedules jobs above, since the shortest
+        // SLA a company can configure is itself minute-granular (see
+        // App\Services\Chat\ConversationService::DEFAULT_FIRST_RESPONSE_MINUTES).
+        $schedule->command('chat:evaluate-sla')
+            ->everyMinute()
+            ->withoutOverlapping();
+
+        // Sweeps abandoned Fitur #6 chatbot flow sessions (a customer
+        // who started a flow and never replied again) — see
+        // App\Console\Commands\CleanupExpiredChatbotSessions. Every 15
+        // minutes is plenty: this is pure hygiene (bounding a small
+        // table's size), not something any user-facing behavior depends
+        // on timing precisely — a stale session is already treated as
+        // expired the moment ChatbotFlowService::activeState() next
+        // looks at it, this just cleans up the ones nobody ever will.
+        $schedule->command('chatbot:cleanup-expired-sessions')
+            ->everyFifteenMinutes()
+            ->withoutOverlapping();
+
+        // CRM Roadmap Fase 4 — fires 'no_contact_days' automation rules
+        // (App\Models\WaCustomerAutomationRule). The other two trigger
+        // types (deal stage changed, tag added) fire synchronously from
+        // their own controller action instead — see
+        // App\Services\Crm\CustomerAutomationService's docblock. Once a
+        // day is enough: a "no contact in N days" check doesn't need
+        // minute-granularity like SLA breach flagging above does.
+        $schedule->command('crm:evaluate-automation-rules')
+            ->dailyAt('07:00')
+            ->withoutOverlapping();
     })
      ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
@@ -71,6 +104,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'golang.api-key' => \App\Http\Middleware\VerifyGolangApiKey::class,
             'menu.access' => \App\Http\Middleware\EnsureMenuAccess::class,
             'wa.api-key' => \App\Http\Middleware\VerifyWaApiKey::class,
+            'frontend.api-key' => \App\Http\Middleware\VerifyFrontendApiKey::class,
         ]);
 
         // Stops the browser Back/Forward button from repainting a cached

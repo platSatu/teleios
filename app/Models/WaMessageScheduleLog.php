@@ -53,6 +53,18 @@ class WaMessageScheduleLog extends Model
         'read' => 3,
     ];
 
+    /**
+     * A recipient App\Jobs\SendScheduledWaMessage deliberately never
+     * attempted to send to — currently only ever set when the recipient
+     * has opted out of broadcasts (see App\Services\Chat\
+     * BroadcastOptOutService). Distinct from 'failed': a failure implies
+     * something went wrong that a retry or a fix might resolve, while
+     * 'skipped' is a final, intentional "we are not allowed to message
+     * this number" outcome — reported separately on the history page
+     * rather than being lumped in with 'failed'.
+     */
+    public const STATUS_SKIPPED = 'skipped';
+
     protected $casts = [
         'step_order' => 'integer',
         'send_date' => 'date',

@@ -10,11 +10,14 @@ use App\Models\WaChatNote;
 use App\Models\WaContact;
 use App\Models\WaMessageQuickReply;
 use App\Models\WaMessageTemplate;
+use App\Services\Chat\ConversationService;
 use App\Services\Chat\InboxService;
+use App\Services\Crm\CustomerIdentityService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Throwable;
@@ -38,6 +41,8 @@ class InboxController extends Controller
 
     public function __construct(
         protected InboxService $inboxService,
+        protected ConversationService $conversations,
+        protected CustomerIdentityService $customerIdentity,
     ) {}
 
     public function index(string $device): View|RedirectResponse
@@ -62,16 +67,18 @@ class InboxController extends Controller
     }
 
     /**
-     * AJAX: message history for one chat on one device. ?after_id=<id>
-     * switches this from "recent history" to "what's new since <id>" —
-     * see InboxService::messages().
+     * AJAX: message history for one chat on one device. ?after_seq=<seq>
+     * switches this from "recent history" to "what's new since <seq>" —
+     * see InboxService::messages(). Keyed on the Go backend's Seq column
+     * (a plain auto-increment counter), not id (a random UUID with no
+     * natural order) — see g_backend's models.WaMessage.
      */
     public function messages(Request $request, string $device, string $jid): JsonResponse
     {
-        $afterId = (int) $request->query('after_id', 0);
+        $afterSeq = (int) $request->query('after_seq', 0);
 
         return $this->safeJson(fn (string $jwt) => [
-            'messages' => $this->inboxService->messages($jwt, $device, $jid, $afterId),
+            'messages' => $this->inboxService->messages($jwt, $device, $jid, $afterSeq),
         ]);
     }
 
@@ -84,9 +91,54 @@ class InboxController extends Controller
             'body' => ['required', 'string', 'max:4096'],
         ]);
 
-        return $this->safeJson(fn (string $jwt) => [
-            'message' => $this->inboxService->send($jwt, $device, $jid, $request->string('body')->value()),
+        return $this->safeJson(function (string $jwt) use ($request, $device, $jid) {
+            $message = $this->inboxService->send($jwt, $device, $jid, $request->string('body')->value());
+
+            $this->recordOutboundConversation($device, $jid);
+
+            return ['message' => $message];
+        });
+    }
+
+    /**
+     * AJAX: send a native WhatsApp poll (survey) to one chat through one
+     * device — the anti-ban-safe "interactive message" this app offers
+     * (see App\Services\Chat\InboxService::sendPoll's docblock for why
+     * buttons/list messages are deliberately not exposed here).
+     */
+    public function sendPoll(Request $request, string $device, string $jid): JsonResponse
+    {
+        $request->validate([
+            'question' => ['required', 'string', 'max:255'],
+            'options' => ['required', 'array', 'min:2', 'max:12'],
+            'options.*' => ['required', 'string', 'max:100'],
+            'selectable_count' => ['nullable', 'integer', 'min:1'],
         ]);
+
+        return $this->safeJson(function (string $jwt) use ($request, $device, $jid) {
+            $message = $this->inboxService->sendPoll(
+                $jwt,
+                $device,
+                $jid,
+                $request->string('question')->value(),
+                $request->input('options'),
+                (int) $request->input('selectable_count', 1),
+            );
+
+            $this->recordOutboundConversation($device, $jid);
+
+            return ['message' => $message];
+        });
+    }
+
+    /**
+     * AJAX: a poll's current tally (question/options + every voter's
+     * current selection) — powers a simple results view under the poll
+     * bubble in the chat thread.
+     */
+    public function pollResults(string $device, string $jid, string $messageId): JsonResponse
+    {
+        return $this->safeJson(fn (string $jwt) => $this->inboxService->pollResults($jwt, $device, $jid, $messageId));
     }
 
     /**
@@ -112,16 +164,20 @@ class InboxController extends Controller
             'as_sticker' => ['nullable', 'boolean'],
         ]);
 
-        return $this->safeJson(fn (string $jwt) => [
-            'message' => $this->inboxService->sendMedia(
+        return $this->safeJson(function (string $jwt) use ($request, $device, $jid) {
+            $message = $this->inboxService->sendMedia(
                 $jwt,
                 $device,
                 $jid,
                 $request->file('file'),
                 $request->input('caption'),
                 $request->boolean('as_sticker'),
-            ),
-        ]);
+            );
+
+            $this->recordOutboundConversation($device, $jid);
+
+            return ['message' => $message];
+        });
     }
 
     /**
@@ -131,7 +187,7 @@ class InboxController extends Controller
      * safeJson() like everything else here, since the response body is
      * the raw file, not a JSON envelope.
      */
-    public function media(string $device, int $messageId): Response
+    public function media(string $device, string $messageId): Response
     {
         $jwt = session('golang_jwt_token');
 
@@ -360,8 +416,10 @@ class InboxController extends Controller
             'phone' => $phone,
         ]);
 
+        $branchOfficeId = $context->isLockedToBranch() ? $context->branchOffice?->id : null;
+
         if (! $contact->exists) {
-            $contact->branch_office_id = $context->isLockedToBranch() ? $context->branchOffice?->id : null;
+            $contact->branch_office_id = $branchOfficeId;
             $contact->name = $request->string('name')->value() ?: null;
             $contact->source = 'whatsapp';
         } elseif (! $contact->name && $request->filled('name')) {
@@ -369,6 +427,20 @@ class InboxController extends Controller
         }
 
         $contact->last_contacted_at = now();
+
+        // CRM Roadmap Fase 0: resolve (or create) the one WaCustomer
+        // identity this phone belongs to, and link this contact to it —
+        // see App\Services\Crm\CustomerIdentityService's docblock. Done
+        // on every open, not just creation, so a contact created before
+        // this wiring existed gets linked retroactively the next time
+        // its chat is opened (on top of the one-time backfill command).
+        $customer = $this->customerIdentity->resolve($context->company->id, $phone, [
+            'name' => $contact->name,
+            'branch_office_id' => $branchOfficeId,
+        ]);
+        $this->customerIdentity->touchContacted($customer);
+        $contact->wa_customer_id = $customer->id;
+
         $contact->save();
         $contact->load(['branchOffice:id,name', 'assignee:id,name']);
 
@@ -527,6 +599,29 @@ class InboxController extends Controller
         return $this->safeJson(fn (string $jwt) => [
             'items' => $this->inboxService->mediaList($jwt, $device, $jid, $type),
         ]);
+    }
+
+    /**
+     * Tells App\Services\Chat\ConversationService an agent just replied
+     * on this thread from the Inbox, so its status flips to "waiting on
+     * the customer" and its response SLA is marked met. Isolated in its
+     * own try/catch, deliberately separate from safeJson()'s own
+     * try/catch: a failure here must never turn into "Gagal mengirim
+     * pesan" for the agent when the WhatsApp message itself actually
+     * went out fine — this is purely internal bookkeeping layered on
+     * top of an already-successful send.
+     */
+    private function recordOutboundConversation(string $device, string $jid): void
+    {
+        try {
+            $this->conversations->recordOutbound($device, $jid);
+        } catch (Throwable $e) {
+            Log::warning('wa-conversation: failed to record outbound message', [
+                'device_id' => $device,
+                'chat_jid' => $jid,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

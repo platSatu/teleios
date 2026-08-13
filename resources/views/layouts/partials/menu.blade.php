@@ -67,9 +67,79 @@
                                 </li>
                             @endif
 
+                            {{-- Fitur #1 — antrian chat ops company-wide
+                                     (status/SLA/assignee), lintas device.
+                                     See App\Http\Controllers\Chat\
+                                     ConversationController::index(). --}}
+                            @if ($canSeeChatMenu('chat.conversations.index'))
+                                <li class="pe-slide-item">
+                                    <a href="{{ route('chat.conversations.index') }}" class="pe-nav-link">
+                                        Percakapan
+                                    </a>
+                                </li>
+                            @endif
+
+                            {{-- CRM Roadmap Fase 2 "Task & Follow-up" —
+                                     every open/overdue follow-up across all
+                                     customers, own top-level item since it's
+                                     a daily CS queue, not filed under Buku
+                                     Telepon. See App\Http\Controllers\Crm\
+                                     CustomerTaskController::index(). --}}
+                            @if ($canSeeChatMenu('chat.tasks.index'))
+                                <li class="pe-slide-item">
+                                    <a href="{{ route('chat.tasks.index') }}" class="pe-nav-link">
+                                        Tugas &amp; Follow-up
+                                    </a>
+                                </li>
+                            @endif
+
+                            {{-- CRM Roadmap Fase 3 "Sales Pipeline / Deal"
+                                     — Kanban board of every open opportunity.
+                                     See App\Http\Controllers\Crm\
+                                     DealController::index(). --}}
+                            @if ($canSeeChatMenu('chat.deals.index'))
+                                <li class="pe-slide-item">
+                                    <a href="{{ route('chat.deals.index') }}" class="pe-nav-link">
+                                        Sales Pipeline
+                                    </a>
+                                </li>
+                            @endif
+
+                            {{-- CRM Roadmap Fase 4 "Segmentasi & Automation"
+                                     — dynamic segments + tag catalog. See
+                                     App\Http\Controllers\Crm\
+                                     CustomerSegmentController::index(). --}}
+                            @if ($canSeeChatMenu('chat.segments.index'))
+                                <li class="pe-slide-item">
+                                    <a href="{{ route('chat.segments.index') }}" class="pe-nav-link">
+                                        Segmentasi
+                                    </a>
+                                </li>
+                            @endif
+
+                            {{-- CRM Roadmap Fase 4 — trigger-based
+                                     follow-up automation rules. See
+                                     App\Http\Controllers\Crm\
+                                     CustomerAutomationRuleController::index(). --}}
+                            @if ($canSeeChatMenu('chat.automation-rules.index'))
+                                <li class="pe-slide-item">
+                                    <a href="{{ route('chat.automation-rules.index') }}" class="pe-nav-link">
+                                        Automasi
+                                    </a>
+                                </li>
+                            @endif
+
+                            {{-- Fitur #3 & #7 (respon/penyelesaian, performa
+                                     agent, broadcast, dan CSAT) moved off
+                                     this Chat submenu onto the main
+                                     Dashboard — see
+                                     App\Http\Controllers\DashboardController
+                                     ::summary() and resources/views/
+                                     dashboard/index.blade.php. --}}
+
                             {{-- "Pesan" moved up one level (used to sit under
                                      Chat > Pengaturan > Pesan) so it's now
-                                     Chat > Pesan directly. This <li> itself is
+                                     Chat > Pesan directly. This list item is
                                      intentionally NOT wrapped in its own
                                      $canSeeChatMenu(...) check — same as every
                                      other submenu group here (e.g. "Pengaturan"
@@ -124,6 +194,17 @@
                                         <li class="pe-slide-item">
                                             <a href="{{ route('chat.ai-bots.index') }}" class="pe-nav-link">
                                                 AI Bot
+                                            </a>
+                                        </li>
+                                    @endif
+                                    {{-- Fitur #2 — daftar nomor yang
+                                             berhenti berlangganan broadcast.
+                                             See App\Http\Controllers\Chat\
+                                             OptOutController. --}}
+                                    @if ($canSeeChatMenu('chat.opt-outs.index'))
+                                        <li class="pe-slide-item">
+                                            <a href="{{ route('chat.opt-outs.index') }}" class="pe-nav-link">
+                                                Opt-out
                                             </a>
                                         </li>
                                     @endif
@@ -234,6 +315,16 @@
                                     @endif
                                 </ul>
                             </li>
+
+                            {{-- SLA, broadcast throttle, dan CSAT — lihat
+                                     App\Http\Controllers\Chat\ChatSettingController. --}}
+                            @if ($canSeeChatMenu('chat.settings.edit'))
+                                <li class="pe-slide-item">
+                                    <a href="{{ route('chat.settings.edit') }}" class="pe-nav-link">
+                                        Pengaturan
+                                    </a>
+                                </li>
+                            @endif
                         </ul>
                     </li>
                 @endif
@@ -339,6 +430,16 @@
                                 </a>
                             </li>
                             <li class="pe-slide-item">
+                                <a href="{{ route('limit-metric.index') }}" class="pe-nav-link">
+                                    Limit Metrics
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('package-limit.index') }}" class="pe-nav-link">
+                                    Package Limits
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
                                 <a href="{{ route('wa-api-dokumentasi.categories.index') }}" class="pe-nav-link">
                                     Dokumentasi API (Kategori)
                                 </a>
@@ -395,6 +496,26 @@
                                     Video
                                 </a>
                             </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('web.headers.index') }}" class="pe-nav-link">
+                                    Header
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('web.features.index') }}" class="pe-nav-link">
+                                    Fitur
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('web.footers.index') }}" class="pe-nav-link">
+                                    Footer
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('web.setting.edit') }}" class="pe-nav-link">
+                                    Pengaturan Web
+                                </a>
+                            </li>
                         </ul>
                     </li>
 
@@ -403,7 +524,7 @@
                             aria-expanded="false" aria-controls="collapseDashboards"
                             onclick="toggleCollapse('collapseAuth', this)">
                             <i class="uil uil-clipboard-notes pe-nav-icon"></i>
-                            <span class="pe-nav-content">Review Template WA</span>
+                            <span class="pe-nav-content">Log Template WA</span>
                             <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
                             <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
                         </a>
@@ -439,6 +560,11 @@
                             <li class="pe-slide-item">
                                 <a href="{{ route('wa-ai-bot-model.index') }}" class="pe-nav-link">
                                     Model AI
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('ai-moderation-setting.edit') }}" class="pe-nav-link">
+                                    Moderasi AI
                                 </a>
                             </li>
                         </ul>

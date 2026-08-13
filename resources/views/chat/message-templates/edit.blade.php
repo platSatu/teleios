@@ -14,10 +14,12 @@
 
     @if ($template->review_status === 'rejected' && $template->rejection_reason)
         <div class="alert alert-danger">
-            <strong>Ditolak superadmin:</strong> {{ $template->rejection_reason }}
+            <strong>Ditolak AI moderasi:</strong> {{ $template->rejection_reason }}
         </div>
-    @elseif ($template->review_status === 'in_review')
-        <div class="alert alert-warning">Template ini sedang menunggu review superadmin.</div>
+    @elseif ($template->review_status === 'pending')
+        <div class="alert alert-warning">
+            Template ini menunggu AI moderasi (belum bisa dijalankan saat ini{{ $template->rejection_reason ? ': '.$template->rejection_reason : '' }}). Simpan ulang untuk mencoba lagi.
+        </div>
     @endif
 
     @if (session('success'))

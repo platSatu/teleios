@@ -16,14 +16,14 @@
                     </div>
 
                     <div class="table-responsive">
-                        <table id="wa-device-table" class="table table-centered table-hover align-middle mb-0">
+                        <table id="wa-device-table" class="table table-centered table-hover align-middle mb-0" style="min-width: 780px;">
                             <thead class="table-light">
                                 <tr>
-                                    <th style="width: 60px;">No</th>
-                                    <th>No Handphone</th>
-                                    <th>Status</th>
-                                    <th>Terakhir Terhubung</th>
-                                    <th class="text-end">Action</th>
+                                    <th style="width: 60px; min-width: 60px;">No</th>
+                                    <th style="min-width: 150px;">No Handphone</th>
+                                    <th style="min-width: 130px;">Status</th>
+                                    <th style="min-width: 170px; white-space: nowrap;">Terakhir Terhubung</th>
+                                    <th class="text-end" style="min-width: 270px;">Action</th>
                                 </tr>
                             </thead>
                             <tbody id="wa-device-table-body">
@@ -91,6 +91,53 @@
         </div>
     </div>
 
+    {{-- Device health score modal — see App\Services\Chat\DeviceHealthService.
+         Shares the "Kesehatan" button per row with the score badge and
+         signal breakdown, same shape as the Riwayat modal above but for
+         the anti-ban health SCORE rather than the raw event log. --}}
+    <div class="modal fade" id="wa-health-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Kesehatan Nomor <span id="wa-health-phone" class="text-muted fs-14"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="wa-health-loading" class="text-center text-muted py-4">Memuat...</div>
+                    <div id="wa-health-content" class="d-none">
+                        <div class="d-flex align-items-center gap-3 mb-3">
+                            <div class="avatar-item avatar-lg rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" id="wa-health-score-circle">
+                                <span id="wa-health-score-number" class="fs-4 fw-semibold"></span>
+                            </div>
+                            <div>
+                                <span class="badge fs-13 px-3 py-2" id="wa-health-label-badge"></span>
+                                <p class="text-muted fs-12 mb-0 mt-1">Skor 0-100, makin tinggi makin aman dari risiko banned.</p>
+                            </div>
+                        </div>
+                        <ul class="list-unstyled mb-0 fs-13">
+                            <li class="d-flex justify-content-between py-1 border-bottom">
+                                <span class="text-muted">Logout / Banned (7 hari)</span>
+                                <span id="wa-health-logged-out" class="fw-semibold"></span>
+                            </li>
+                            <li class="d-flex justify-content-between py-1 border-bottom">
+                                <span class="text-muted">Terputus (7 hari)</span>
+                                <span id="wa-health-disconnected" class="fw-semibold"></span>
+                            </li>
+                            <li class="d-flex justify-content-between py-1 border-bottom">
+                                <span class="text-muted">Gagal Sambung Ulang</span>
+                                <span id="wa-health-reconnect-failed" class="fw-semibold"></span>
+                            </li>
+                            <li class="d-flex justify-content-between py-1">
+                                <span class="text-muted">Gagal Kirim Broadcast</span>
+                                <span id="wa-health-failure-rate" class="fw-semibold"></span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <style>
         .wa-status-dot {
             display: inline-block;
@@ -138,15 +185,59 @@
         .wa-history-detail { font-size: 0.8rem; color: #6b7280; margin-top: 2px; }
         .wa-history-time { font-size: 0.72rem; color: #9ca3af; margin-top: 2px; }
 
-        /* Action buttons wrap onto multiple lines instead of forcing the
-           whole table wider — .btn-group's joined-border layout never
-           wraps, which was the main reason 5 labeled buttons pushed the
-           Status/Terakhir Terhubung columns off-screen on mobile even
-           inside .table-responsive's horizontal scroll. */
+        /* Desktop: buttons stay on one row, always level with each
+           other — the table itself has a min-width (see the inline
+           style on #wa-device-table) and .table-responsive already
+           scrolls horizontally, so there's no need to wrap the action
+           buttons onto a second line; wrapping was what made them look
+           uneven ("naik turun"). Overridden back to wrap below 768px,
+           where each row becomes its own stacked card instead of a
+           wide scrolling table — see the media query below. */
         .wa-action-buttons {
             display: flex;
-            flex-wrap: wrap;
-            gap: 4px;
+            flex-wrap: nowrap;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 6px;
+            padding-top: 2px;
+        }
+
+        /* Icon-only action buttons. Every button (Inbox, Refresh, API Key,
+           Riwayat, Kesehatan, Chatbot Flow, Disconnect) shares this exact
+           box, so the icons all render at the same size regardless of how
+           long the old text label used to be — that's what made them look
+           mismatched before. Flat "subtle" background instead of an
+           outlined pill for a simpler, more modern look; title="" on each
+           button (set in JS) provides a native tooltip in place of the
+           removed text label. */
+        .wa-icon-btn {
+            width: 34px;
+            height: 34px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            line-height: 1;
+            transition: filter .15s ease, transform .1s ease;
+        }
+        .wa-icon-btn i {
+            font-size: 16px;
+            line-height: 1;
+        }
+        .wa-icon-btn:hover:not(:disabled):not(.disabled) {
+            filter: brightness(0.94);
+        }
+        .wa-icon-btn:active:not(:disabled):not(.disabled) {
+            transform: scale(0.92);
+        }
+        .wa-icon-btn:disabled,
+        .wa-icon-btn.disabled {
+            opacity: .4;
+            pointer-events: none;
         }
 
         /* Below md: table rows re-flow into stacked "cards" (one per
@@ -161,6 +252,22 @@
             #wa-device-table, #wa-device-table tbody, #wa-device-table tr, #wa-device-table td {
                 display: block;
                 width: 100%;
+                /* Cancels the desktop min-width (see the table's inline
+                   style) — without this the stacked-card layout below
+                   would still be forced 900px wide and scroll instead
+                   of actually stacking. */
+                min-width: 0;
+            }
+            /* Back to wrapping here: each device is its own card on
+               mobile (not one wide scrolling table), so 7 buttons in a
+               single forced row would overflow the card instead of
+               reading as one aligned action row like on desktop. Icon
+               buttons are fixed 34x34px (see .wa-icon-btn), so wrapped
+               rows line up cleanly instead of the ragged, overlapping
+               look the old text-label pills had at narrow widths. */
+            #wa-device-table .wa-action-buttons {
+                flex-wrap: wrap;
+                row-gap: 8px;
             }
             #wa-device-table tbody tr {
                 margin-bottom: 12px;
@@ -214,15 +321,17 @@
         // blocking script on the page (bootstrap included) has already run.
         document.addEventListener('DOMContentLoaded', function () {
         (function () {
-            const listUrl = @json(route('chat.connect-device.list'));
-            const addUrl = @json(route('chat.connect-device.add'));
-            const statusUrlTemplate = @json(route('chat.connect-device.status', ['device' => '__ID__']));
-            const reconnectUrlTemplate = @json(route('chat.connect-device.reconnect', ['device' => '__ID__']));
-            const disconnectUrlTemplate = @json(route('chat.connect-device.disconnect', ['device' => '__ID__']));
-            const inboxUrlTemplate = @json(route('inbox.index', ['device' => '__ID__']));
-            const apiKeyPageUrlTemplate = @json(route('chat.connect-device.api-key.show', ['device' => '__ID__']));
-            const historyUrlTemplate = @json(route('chat.connect-device.history', ['device' => '__ID__']));
-            const csrfToken = @json(csrf_token());
+            const listUrl = {{ \Illuminate\Support\Js::from(route('chat.connect-device.list')) }};
+            const addUrl = {{ \Illuminate\Support\Js::from(route('chat.connect-device.add')) }};
+            const statusUrlTemplate = {{ \Illuminate\Support\Js::from(route('chat.connect-device.status', ['device' => '__ID__'])) }};
+            const reconnectUrlTemplate = {{ \Illuminate\Support\Js::from(route('chat.connect-device.reconnect', ['device' => '__ID__'])) }};
+            const disconnectUrlTemplate = {{ \Illuminate\Support\Js::from(route('chat.connect-device.disconnect', ['device' => '__ID__'])) }};
+            const inboxUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.index', ['device' => '__ID__'])) }};
+            const apiKeyPageUrlTemplate = {{ \Illuminate\Support\Js::from(route('chat.connect-device.api-key.show', ['device' => '__ID__'])) }};
+            const historyUrlTemplate = {{ \Illuminate\Support\Js::from(route('chat.connect-device.history', ['device' => '__ID__'])) }};
+            const healthUrlTemplate = {{ \Illuminate\Support\Js::from(route('chat.connect-device.health', ['device' => '__ID__'])) }};
+            const chatbotFlowsUrlTemplate = {{ \Illuminate\Support\Js::from(route('chatbot-flows.index', ['device' => '__ID__'])) }};
+            const csrfToken = {{ \Illuminate\Support\Js::from(csrf_token()) }};
 
             const tableBody = document.getElementById('wa-device-table-body');
             const addDeviceBtn = document.getElementById('wa-add-device-btn');
@@ -250,7 +359,14 @@
             }
 
             function fetchJson(url, options) {
-                return fetch(url, Object.assign({ headers: { 'Accept': 'application/json' } }, options))
+                options = options || {};
+                // See the same fix/comment in chatbot-flows/index.blade.php —
+                // Object.assign({headers: defaults}, options) replaces the
+                // whole headers object instead of merging it, silently
+                // dropping these defaults whenever a caller passes its own
+                // headers (X-CSRF-TOKEN, etc.).
+                const headers = Object.assign({ 'Accept': 'application/json' }, options.headers || {});
+                return fetch(url, Object.assign({}, options, { headers: headers }))
                     .then(function (res) { return res.json(); });
             }
 
@@ -327,9 +443,23 @@
                     const actionGroup = document.createElement('div');
                     actionGroup.className = 'wa-action-buttons';
 
-                    const inboxBtn = document.createElement('a');
-                    inboxBtn.className = 'btn btn-sm btn-outline-primary';
-                    inboxBtn.innerHTML = '<i class="ri-message-3-line"></i> Inbox';
+                    // Every action is now an icon-only "chip" of identical
+                    // size (.wa-icon-btn, 34x34px) with a flat subtle-color
+                    // background instead of an outlined text pill — same
+                    // color per action as before, just simplified. `title`
+                    // gives a native tooltip so the action is still
+                    // discoverable without a text label.
+                    function iconBtn(tag, colorClass, icon, title) {
+                        const el = document.createElement(tag);
+                        if (tag === 'button') el.type = 'button';
+                        el.className = 'btn btn-sm wa-icon-btn ' + colorClass;
+                        el.title = title;
+                        el.setAttribute('aria-label', title);
+                        el.innerHTML = '<i class="' + icon + '"></i>';
+                        return el;
+                    }
+
+                    const inboxBtn = iconBtn('a', 'bg-primary-subtle text-primary', 'ri-message-3-line', 'Inbox');
                     if (device.status === 'connected') {
                         inboxBtn.href = urlFor(inboxUrlTemplate, device.id);
                     } else {
@@ -338,44 +468,43 @@
                         inboxBtn.href = '#';
                     }
 
-                    const refreshBtn = document.createElement('button');
-                    refreshBtn.type = 'button';
-                    refreshBtn.className = 'btn btn-sm btn-outline-secondary';
-                    refreshBtn.innerHTML = '<i class="ri-refresh-line"></i> Refresh';
+                    const refreshBtn = iconBtn('button', 'bg-secondary-subtle text-secondary-emphasis', 'ri-refresh-line', 'Refresh');
                     refreshBtn.addEventListener('click', function () {
                         openQrModalForReconnect(device.id);
                     });
 
-                    const disconnectBtn = document.createElement('button');
-                    disconnectBtn.type = 'button';
-                    disconnectBtn.className = 'btn btn-sm btn-outline-danger';
-                    disconnectBtn.innerHTML = '<i class="ri-link-unlink-m"></i> Disconnect';
+                    const disconnectBtn = iconBtn('button', 'bg-danger-subtle text-danger', 'ri-link-unlink-m', 'Disconnect');
                     disconnectBtn.disabled = device.status === 'disconnected';
                     disconnectBtn.addEventListener('click', function () {
                         disconnectDevice(device.id, disconnectBtn);
                     });
 
-                    const apiKeyBtn = document.createElement('a');
-                    apiKeyBtn.className = 'btn btn-sm btn-outline-dark';
-                    apiKeyBtn.innerHTML = '<i class="ri-key-2-line"></i> API Key';
+                    const apiKeyBtn = iconBtn('a', 'bg-dark-subtle text-dark-emphasis', 'ri-key-2-line', 'API Key');
                     let apiKeyHref = urlFor(apiKeyPageUrlTemplate, device.id);
                     if (device.phone_number) {
                         apiKeyHref += '?phone=' + encodeURIComponent(device.phone_number);
                     }
                     apiKeyBtn.href = apiKeyHref;
 
-                    const historyBtn = document.createElement('button');
-                    historyBtn.type = 'button';
-                    historyBtn.className = 'btn btn-sm btn-outline-secondary';
-                    historyBtn.innerHTML = '<i class="ri-history-line"></i> Riwayat';
+                    const historyBtn = iconBtn('button', 'bg-secondary-subtle text-secondary-emphasis', 'ri-history-line', 'Riwayat');
                     historyBtn.addEventListener('click', function () {
                         openHistoryModal(device.id, device.phone_number);
                     });
+
+                    const healthBtn = iconBtn('button', 'bg-success-subtle text-success', 'ri-heart-pulse-line', 'Kesehatan');
+                    healthBtn.addEventListener('click', function () {
+                        openHealthModal(device.id, device.phone_number);
+                    });
+
+                    const flowBtn = iconBtn('a', 'bg-info-subtle text-info-emphasis', 'ri-git-branch-line', 'Chatbot Flow');
+                    flowBtn.href = urlFor(chatbotFlowsUrlTemplate, device.id);
 
                     actionGroup.appendChild(inboxBtn);
                     actionGroup.appendChild(refreshBtn);
                     actionGroup.appendChild(apiKeyBtn);
                     actionGroup.appendChild(historyBtn);
+                    actionGroup.appendChild(healthBtn);
+                    actionGroup.appendChild(flowBtn);
                     actionGroup.appendChild(disconnectBtn);
                     actionCell.appendChild(actionGroup);
 
@@ -609,6 +738,60 @@
                 historyPhoneEl.textContent = phoneNumber ? ('— +' + phoneNumber) : '';
                 historyModal.show();
                 loadHistory(deviceId);
+            }
+
+            // --- health modal -----------------------------------------
+            const healthModalEl = document.getElementById('wa-health-modal');
+            const healthModal = new bootstrap.Modal(healthModalEl);
+            const healthPhoneEl = document.getElementById('wa-health-phone');
+            const healthLoadingEl = document.getElementById('wa-health-loading');
+            const healthContentEl = document.getElementById('wa-health-content');
+            const healthScoreCircleEl = document.getElementById('wa-health-score-circle');
+            const healthScoreNumberEl = document.getElementById('wa-health-score-number');
+            const healthLabelBadgeEl = document.getElementById('wa-health-label-badge');
+
+            const HEALTH_COLOR = {
+                'Sehat': { circle: 'bg-success-subtle text-success', badge: 'bg-success-subtle text-success' },
+                'Perlu Perhatian': { circle: 'bg-warning-subtle text-warning', badge: 'bg-warning-subtle text-warning' },
+                'Berisiko': { circle: 'bg-danger-subtle text-danger', badge: 'bg-danger-subtle text-danger' },
+            };
+
+            function renderHealth(health) {
+                const color = HEALTH_COLOR[health.label] || HEALTH_COLOR['Berisiko'];
+
+                healthScoreCircleEl.className = 'avatar-item avatar-lg rounded-circle d-flex align-items-center justify-content-center flex-shrink-0 ' + color.circle;
+                healthScoreNumberEl.textContent = health.score;
+                healthLabelBadgeEl.className = 'badge fs-13 px-3 py-2 ' + color.badge;
+                healthLabelBadgeEl.textContent = health.label + (health.status !== 'connected' ? ' — Sedang Terputus' : '');
+
+                document.getElementById('wa-health-logged-out').textContent = health.signals.logged_out_count + 'x';
+                document.getElementById('wa-health-disconnected').textContent = health.signals.disconnected_count + 'x';
+                document.getElementById('wa-health-reconnect-failed').textContent = health.signals.reconnect_failed_count + 'x';
+                document.getElementById('wa-health-failure-rate').textContent = health.signals.send_failure_rate !== null
+                    ? (health.signals.send_failure_rate + '%')
+                    : 'Belum ada data';
+            }
+
+            function loadHealth(deviceId) {
+                healthLoadingEl.textContent = 'Memuat...';
+                healthLoadingEl.classList.remove('d-none');
+                healthContentEl.classList.add('d-none');
+
+                fetchJson(urlFor(healthUrlTemplate, deviceId))
+                    .then(function (data) {
+                        renderHealth(data.health);
+                        healthLoadingEl.classList.add('d-none');
+                        healthContentEl.classList.remove('d-none');
+                    })
+                    .catch(function () {
+                        healthLoadingEl.textContent = 'Gagal memuat data kesehatan.';
+                    });
+            }
+
+            function openHealthModal(deviceId, phoneNumber) {
+                healthPhoneEl.textContent = phoneNumber ? ('— +' + phoneNumber) : '';
+                healthModal.show();
+                loadHealth(deviceId);
             }
         })();
         });
