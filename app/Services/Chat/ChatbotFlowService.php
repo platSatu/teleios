@@ -262,6 +262,30 @@ class ChatbotFlowService
                 break;
             }
 
+            // 'choice' steps: the step's own body text and its numbered
+            // options list are combined into ONE WhatsApp message (joined
+            // with "\n", then trimmed) instead of two separate messages —
+            // matches the reprompt path in continueFlow() above, which
+            // already combines them the same way. Handled before the
+            // generic renderStepMessage() push below so the body text
+            // isn't sent twice.
+            if ($step->step_type === WaChatbotFlowStep::TYPE_CHOICE) {
+                $combined = trim(
+                    $this->renderStepMessage($step, $company)
+                    ."\n".$this->renderChoiceOptions($step)
+                );
+
+                if ($combined !== '') {
+                    $messages[] = $combined;
+                }
+
+                $state->current_step_id = $step->id;
+                $state->last_interaction_at = now();
+                $state->save();
+
+                return ['messages' => $messages, 'ended' => false];
+            }
+
             $rendered = $this->renderStepMessage($step, $company);
             if ($rendered !== '') {
                 $messages[] = $rendered;
@@ -284,14 +308,7 @@ class ChatbotFlowService
                 continue;
             }
 
-            if ($step->step_type === WaChatbotFlowStep::TYPE_CHOICE) {
-                $optionsText = $this->renderChoiceOptions($step);
-                if ($optionsText !== '') {
-                    $messages[] = $optionsText;
-                }
-            }
-
-            // 'message' or 'choice' — this step waits for a reply.
+            // 'message' — this step waits for a reply.
             $state->current_step_id = $step->id;
             $state->last_interaction_at = now();
             $state->save();
