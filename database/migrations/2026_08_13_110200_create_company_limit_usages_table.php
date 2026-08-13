@@ -58,8 +58,13 @@ return new class extends Migration
             // NULL-safe uniqueness guarantee — see the class docblock.
             // "-" can never collide with a real uuid, so this is safe as
             // a stand-in for "no branch"/"no subscription".
+            //
+            // COALESCE (not IFNULL) on purpose: functionally identical
+            // here, but some MariaDB versions reject IFNULL() specifically
+            // inside a GENERATED ALWAYS AS expression (MySQL error 1901)
+            // while COALESCE() with the same two arguments is accepted.
             $table->string('usage_key', 150)->storedAs(
-                "CONCAT(company_id, ':', IFNULL(branch_office_id, '-'), ':', limit_metric_id, ':', IFNULL(subscription_id, '-'))"
+                "CONCAT(company_id, ':', COALESCE(branch_office_id, '-'), ':', limit_metric_id, ':', COALESCE(subscription_id, '-'))"
             )->unique();
         });
     }
