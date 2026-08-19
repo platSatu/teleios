@@ -24,6 +24,12 @@ class DepositExpiredNotification extends Notification implements ShouldQueue
 
     public function __construct(protected Deposit $deposit)
     {
+        // Terpisah dari antrian pengiriman WA (broadcast/jadwal/auto-reply/
+        // AI bot) — lihat docblock VerifyEmailNotification untuk alasan
+        // lengkapnya: email tidak boleh ikut mengantre di belakang broadcast
+        // besar. Worker produksi didengarkan lewat
+        // `queue:work --queue=emails,default` supaya antrian ini diprioritaskan.
+        $this->onQueue('emails');
     }
 
     public function via(object $notifiable): array

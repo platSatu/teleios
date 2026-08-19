@@ -21,6 +21,15 @@ use Illuminate\Notifications\Notification;
  * implements ShouldQueue so registration/resend requests return
  * immediately — the actual SMTP call happens on the queue worker, not
  * inline in the request (see `php artisan queue:work`).
+ *
+ * Naik di antrian bernama 'emails' (bukan antrian default) — supaya
+ * verifikasi email/reset password/notifikasi lain di App\Notifications
+ * tidak pernah ikut mengantre di belakang broadcast WA berjumlah besar
+ * yang diproses worker yang sama (satu proses queue:work saja di
+ * produksi). Produksi menjalankan
+ * `queue:work --queue=emails,default` supaya antrian 'emails' selalu
+ * dicek lebih dulu sebelum 'default' (job WA) — lihat konfigurasi
+ * supervisor `konexa-queue-worker`.
  */
 class VerifyEmailNotification extends Notification implements ShouldQueue
 {
@@ -29,7 +38,9 @@ class VerifyEmailNotification extends Notification implements ShouldQueue
     public function __construct(
         protected string $token,
         protected int $expiresInMinutes,
-    ) {}
+    ) {
+        $this->onQueue('emails');
+    }
 
     /**
      * @return array<int, string>

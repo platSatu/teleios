@@ -22,9 +22,10 @@ use Illuminate\Queue\SerializesModels;
  *
  * implements ShouldQueue supaya respons webhook ke Duitku ("OK") tetap
  * cepat — panggilan SMTP yang sebenarnya terjadi di queue worker
- * (`php artisan queue:work`), bukan inline di request webhook. Sama pola
- * dengan VerifyEmailNotification/ResetPasswordNotification: naik di
- * connection/queue default (`database`), tanpa ->onQueue() khusus.
+ * (`php artisan queue:work`), bukan inline di request webhook. Naik di
+ * antrian bernama 'emails' (lihat onQueue() di constructor) — terpisah
+ * dari antrian pengiriman WA, supaya email ini tidak ikut tertunda di
+ * belakang broadcast besar yang sedang diproses worker yang sama.
  *
  * SerializesModels supaya $deposit disimpan sebagai referensi
  * (class + id) di payload job, bukan di-serialize utuh — begitu job
@@ -37,7 +38,9 @@ class DepositReceivedNotification extends Notification implements ShouldQueue
 
     public function __construct(
         protected Deposit $deposit,
-    ) {}
+    ) {
+        $this->onQueue('emails');
+    }
 
     /**
      * @return array<int, string>

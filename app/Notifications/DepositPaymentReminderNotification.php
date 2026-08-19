@@ -24,6 +24,10 @@ class DepositPaymentReminderNotification extends Notification implements ShouldQ
 
     public function __construct(protected Deposit $deposit)
     {
+        // Lihat docblock VerifyEmailNotification — antrian 'emails' terpisah
+        // dari antrian pengiriman WA supaya tidak ikut tertunda di belakang
+        // broadcast besar.
+        $this->onQueue('emails');
     }
 
     public function via(object $notifiable): array

@@ -18,4 +18,15 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 class ResetPasswordNotification extends BaseResetPasswordNotification implements ShouldQueue
 {
     use Queueable;
+
+    public function __construct(string $token)
+    {
+        parent::__construct($token);
+
+        // Lihat docblock VerifyEmailNotification — antrian 'emails' terpisah
+        // dari antrian pengiriman WA, supaya email reset password tidak
+        // pernah ikut tertunda di belakang broadcast besar yang sedang
+        // diproses worker yang sama.
+        $this->onQueue('emails');
+    }
 }

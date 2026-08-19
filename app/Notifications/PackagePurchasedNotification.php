@@ -23,7 +23,9 @@ use Illuminate\Queue\SerializesModels;
  * implements ShouldQueue dengan alasan yang sama seperti
  * DepositReceivedNotification: supaya redirect ke halaman invoice setelah
  * checkout tetap responsif, panggilan SMTP-nya terjadi di queue worker
- * (`php artisan queue:work`), bukan inline di request checkout.
+ * (`php artisan queue:work`), bukan inline di request checkout. Naik di
+ * antrian 'emails' (lihat onQueue() di constructor) — terpisah dari
+ * antrian pengiriman WA.
  */
 class PackagePurchasedNotification extends Notification implements ShouldQueue
 {
@@ -31,7 +33,9 @@ class PackagePurchasedNotification extends Notification implements ShouldQueue
 
     public function __construct(
         protected Subscription $subscription,
-    ) {}
+    ) {
+        $this->onQueue('emails');
+    }
 
     /**
      * @return array<int, string>

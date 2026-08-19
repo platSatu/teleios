@@ -25,8 +25,10 @@ use Illuminate\Queue\SerializesModels;
  *
  * implements ShouldQueue supaya command yang memproses ratusan/ribuan
  * voucher tiap hari tidak nge-block pada panggilan SMTP satu-satu —
- * setiap notify() hanya melempar satu job ke queue (`database`, worker
- * `php artisan queue:work`), sama pola dengan DepositReceivedNotification.
+ * setiap notify() hanya melempar satu job ke antrian 'emails' (lihat
+ * onQueue() di constructor), terpisah dari antrian pengiriman WA supaya
+ * ratusan reminder ini tidak ikut menunda broadcast yang sedang jalan,
+ * dan sebaliknya.
  */
 class PackageExpiringNotification extends Notification implements ShouldQueue
 {
@@ -40,7 +42,9 @@ class PackageExpiringNotification extends Notification implements ShouldQueue
     public function __construct(
         protected Voucher $voucher,
         protected int $daysLeft,
-    ) {}
+    ) {
+        $this->onQueue('emails');
+    }
 
     /**
      * @return array<int, string>

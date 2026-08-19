@@ -24,7 +24,11 @@ class PackageLimitExhaustedNotification extends Notification implements ShouldQu
         protected string $metricName,
         protected ?string $unit,
         protected int $maxValue,
-    ) {}
+    ) {
+        // Lihat docblock VerifyEmailNotification — antrian 'emails' terpisah
+        // dari antrian pengiriman WA.
+        $this->onQueue('emails');
+    }
 
     /**
      * @return array<int, string>
