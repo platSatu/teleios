@@ -51,9 +51,27 @@ class WaApiSendMessageController extends Controller
 
         $chatJid = $this->normalizeJid($validated['to']);
 
+        // Dicatat SEBELUM proses kirim dimulai (bukan cuma pas gagal) — supaya
+        // ada jejak "request ini memang sampai & lolos otentikasi WaApiKey"
+        // yang bisa dicek terpisah dari apakah pengirimannya sendiri berhasil.
+        // Isi pesan sengaja tidak ikut dicatat (cuma panjangnya), konsisten
+        // dengan aturan proyek untuk tidak melog data yang tidak perlu.
+        Log::info('WaApiSendMessageController: send attempt', [
+            'api_key_id' => $apiKey->id,
+            'company_id' => $apiKey->company_id,
+            'device_id' => $apiKey->device_id,
+            'to' => $chatJid,
+            'message_length' => mb_strlen($validated['message']),
+        ]);
+
         $owner = $apiKey->company?->user;
 
         if (! $owner) {
+            Log::error('WaApiSendMessageController: company pemilik API Key tidak punya user pemilik yang valid', [
+                'api_key_id' => $apiKey->id,
+                'company_id' => $apiKey->company_id,
+            ]);
+
             return response()->json([
                 'error' => 'Company pemilik API Key ini tidak memiliki user pemilik yang valid.',
             ], 500);
@@ -63,22 +81,77 @@ class WaApiSendMessageController extends Controller
             $token = $jwtService->mintFor($owner);
             $result = $inbox->send($token, $apiKey->device_id, $chatJid, $validated['message']);
 
+            Log::info('WaApiSendMessageController: send success', [
+                'api_key_id' => $apiKey->id,
+                'device_id' => $apiKey->device_id,
+                'to' => $chatJid,
+                'message_id' => $result['id'] ?? null,
+                'sent_at' => $result['sent_at'] ?? null,
+            ]);
+
             return response()->json([
                 'status' => 'sent',
                 'message' => $result,
             ]);
         } catch (Throwable $e) {
+            $reason = $this->describeSendFailure($e);
+
             Log::warning('WaApiSendMessageController: send failed', [
                 'api_key_id' => $apiKey->id,
+                'company_id' => $apiKey->company_id,
                 'device_id' => $apiKey->device_id,
                 'to' => $chatJid,
                 'error' => $e->getMessage(),
+                'reason' => $reason,
             ]);
 
             return response()->json([
-                'error' => 'Gagal mengirim pesan. Pastikan device masih terhubung.',
+                'error' => $reason,
             ], 502);
         }
+    }
+
+    /**
+     * Menerjemahkan exception mentah dari InboxService::send() jadi pesan yang
+     * bisa langsung ditindaklanjuti pemilik API Key — sebelum ini SELALU
+     * kalimat generik "Pastikan device masih terhubung." apa pun sebab
+     * aslinya, sehingga "device sudah dihapus" tidak bisa dibedakan dari
+     * "device cuma lagi terputus sebentar" di sisi pemanggil (mis. InaStudy).
+     *
+     * Pola & regex parsing-nya SAMA dengan App\Services\Chat\InboxService::
+     * describeSendFailure() dan GoogleFormWebhookController::describeSendFailure()
+     * — App\Services\Chat\InboxService::request() membungkus body error JSON
+     * asli dari backend Go langsung ke pesan RuntimeException-nya ("...failed:
+     * {"error":"..."}"), jadi ini menarik lagi key `error`-nya kalau ada.
+     * Kalimatnya sengaja ditulis ulang (bukan panggil versi InboxService/
+     * GoogleForm apa adanya) supaya pas untuk konsumen API pihak ketiga —
+     * tidak menyebut istilah internal seperti "jadwal" atau "integrasi" yang
+     * tidak relevan buat mereka.
+     */
+    private function describeSendFailure(Throwable $e): string
+    {
+        $reason = null;
+
+        if (preg_match('/\{.*\}\s*$/s', $e->getMessage(), $matches)) {
+            $decoded = json_decode($matches[0], true);
+            if (is_array($decoded) && ! empty($decoded['error'])) {
+                $reason = (string) $decoded['error'];
+            }
+        }
+
+        if ($reason === null) {
+            return 'Gagal mengirim pesan. Pastikan device masih terhubung.';
+        }
+
+        if (str_contains($reason, 'device not found')) {
+            return 'Device untuk API Key ini tidak ditemukan (mungkin sudah dihapus). Generate ulang API Key dari device yang masih aktif di menu Connect Device.';
+        }
+
+        if (str_contains($reason, 'not connected')) {
+            return 'Device untuk API Key ini sedang tidak terhubung ke WhatsApp. Buka menu Connect Device, klik "Reconnect" pada device tersebut, lalu coba kirim ulang.';
+        }
+
+        return "Gagal mengirim pesan: {$reason}.";
     }
 
     /**
