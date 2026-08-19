@@ -179,6 +179,29 @@ return [
             'backoff_cap' => env('REDIS_BACKOFF_CAP', 1000),
         ],
 
+        // Separate logical DB from 'cache' (see REDIS_CACHE_DB above) and
+        // from 'default' (locks — RateLimiter, Cache::lock(), WithoutOverlapping
+        // all ride on 'default' via cache.php's redis store lock_connection).
+        // Queue jobs live in their own DB so a queue:flush, a redis-cli
+        // inspection, or an accidental FLUSHDB on this connection during
+        // an incident never touches cache entries or in-flight locks, and
+        // vice versa. Referenced by config/queue.php's 'redis' connection
+        // via REDIS_QUEUE_CONNECTION=queue (see .env) — config/queue.php
+        // itself is stock Laravel and needs no code change, only the two
+        // new env vars below plus this connection block.
+        'queue' => [
+            'url' => env('REDIS_URL'),
+            'host' => env('REDIS_HOST', '127.0.0.1'),
+            'username' => env('REDIS_USERNAME'),
+            'password' => env('REDIS_PASSWORD'),
+            'port' => env('REDIS_PORT', '6379'),
+            'database' => env('REDIS_QUEUE_DB', '2'),
+            'max_retries' => env('REDIS_MAX_RETRIES', 3),
+            'backoff_algorithm' => env('REDIS_BACKOFF_ALGORITHM', 'decorrelated_jitter'),
+            'backoff_base' => env('REDIS_BACKOFF_BASE', 100),
+            'backoff_cap' => env('REDIS_BACKOFF_CAP', 1000),
+        ],
+
     ],
 
 ];

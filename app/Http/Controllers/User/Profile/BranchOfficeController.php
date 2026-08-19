@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\User\Profile;
 
+use App\Exceptions\PackageLimitExceededException;
 use App\Http\Controllers\Concerns\ResolvesCompanyContext;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\User\Profile\Concerns\ScopesActivePackage;
 use App\Models\BranchOffice;
 use App\Models\Company;
+use App\Services\PackageLimitService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -40,6 +42,10 @@ class BranchOfficeController extends Controller
     use ResolvesCompanyContext;
 
     use ScopesActivePackage;
+
+    public function __construct(
+        protected PackageLimitService $packageLimits,
+    ) {}
 
     /**
      * "Add Branch" row action on the Company tab lands here — a
@@ -77,6 +83,29 @@ class BranchOfficeController extends Controller
             return redirect()
                 ->route('profile.edit', ['tab' => 'company'])
                 ->with('error', 'Anda belum memiliki package aktif. Beli package terlebih dahulu sebelum menambah branch office.');
+        }
+
+        // Package quota guard: "branch_count" is a 'stock' metric (see
+        // App\Models\LimitMetric), checked live against how many branch
+        // offices this company already has — same pattern as
+        // "device_count" in Chat\ConnectDeviceController::add(). Until a
+        // superadmin actually registers a branch_count LimitMetric and
+        // attaches a PackageLimit to a package, this fails open
+        // (unlimited) exactly like every other metric does when it's
+        // simply not configured yet — see PackageLimitService::
+        // assertWithinLimit()'s docblock.
+        try {
+            $this->packageLimits->assertWithinLimit(
+                $company,
+                'branch_count',
+                1,
+                null,
+                fn () => $company->branchOffices()->count(),
+            );
+        } catch (PackageLimitExceededException $e) {
+            return redirect()
+                ->route('profile.branch-offices.create', $company->id)
+                ->with('error', $e->getMessage());
         }
 
         $validator = $this->validator($request);

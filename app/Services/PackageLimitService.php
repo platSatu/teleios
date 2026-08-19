@@ -64,6 +64,43 @@ class PackageLimitService
     }
 
     /**
+     * Throws PackageLimitExceededException if the company has NO active
+     * package at all right now — deliberately the opposite failure mode
+     * from assertWithinLimit()/reserve()/consume() below, which all
+     * fail OPEN (silently allow) when there's no active package, because
+     * they're answering "is this specific metric capped by the package
+     * the company has?", not "does this company have a package at all?".
+     * That fail-open is correct for e.g. a metric nobody's configured a
+     * PackageLimit for yet — but it's the wrong answer for "should this
+     * company's WhatsApp messages keep going out after their package
+     * expired", which is exactly what this method is for.
+     *
+     * Why this needs to exist as its own check rather than just relying
+     * on assertWithinLimit('broadcast_send', ...): App\Http\Middleware\
+     * EnsureActivePackage already blocks an expired company from the
+     * dashboard UI, but it's HTTP middleware — it never runs for
+     * App\Console\Commands\DispatchDueWaMessageSchedules (a scheduled
+     * artisan command) or the queue jobs it dispatches
+     * (App\Jobs\SendScheduledWaMessage, SendAutoReplyMessage,
+     * SendAiBotReply). A schedule created while the package was active
+     * keeps being picked up by cron and sent forever afterwards unless
+     * something inside those jobs themselves checks this. Call this
+     * before every send in those jobs, in ADDITION to (not instead of)
+     * the existing reserve()/BroadcastThrottleService checks — this
+     * answers "are they still a customer at all", those answer "have
+     * they used up what they're entitled to this period".
+     */
+    public function requireActivePackage(Company $company): void
+    {
+        if ($this->activePackage($company) === null) {
+            throw new PackageLimitExceededException(
+                'Masa aktif package perusahaan ini sudah habis. Redeem voucher atau beli package baru untuk melanjutkan pengiriman WhatsApp.',
+                'active_package'
+            );
+        }
+    }
+
+    /**
      * The catalog row for a metric key, preferring one scoped to the
      * given product/application (if any) and falling back to a global
      * (category_application_id = null) row with the same key — this is

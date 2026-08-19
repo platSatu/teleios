@@ -12,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
@@ -167,6 +168,21 @@ class WalletTransferController extends Controller
             return back()->withInput()->with('error', 'Saldo Anda tidak mencukupi.');
         }
 
+        // Submit-ganda guard — sama alasannya dengan
+        // Dashboard\PackageCheckoutController::store(): dua request
+        // store() dari user yang sama, hampir bersamaan (double-click,
+        // retry jaringan), masing-masing lolos lockForUpdate() wallet
+        // secara berurutan dan sah sendiri-sendiri, jadi tanpa guard ini
+        // saldo bisa terpotong dua kali untuk satu niat transfer. Lock
+        // atomic (CACHE_STORE=database), non-blocking: request kedua
+        // yang datang selagi yang pertama masih diproses langsung
+        // ditolak, bukan menunggu lalu ikut jalan.
+        $transferLock = Cache::lock("wallet-transfer:{$sender->id}", 15);
+
+        if (! $transferLock->get()) {
+            return back()->withInput()->with('error', 'Ada transfer lain yang sedang diproses untuk akun Anda. Silakan tunggu beberapa detik lalu coba lagi.');
+        }
+
         try {
             $transfer = DB::transaction(function () use ($sender, $receiver, $senderWallet, $receiverWallet, $amount, $validated) {
                 // Lock BOTH wallets up front, in a consistent order (sorted
@@ -241,6 +257,8 @@ class WalletTransferController extends Controller
             });
         } catch (RuntimeException $e) {
             return back()->withInput()->with('error', $e->getMessage());
+        } finally {
+            $transferLock->release();
         }
 
         return redirect()

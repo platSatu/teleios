@@ -91,12 +91,44 @@ class SendScheduledWaMessage implements ShouldQueue
      */
     private const MAX_THROTTLE_REDISPATCHES = 30;
 
+    /**
+     * How long to wait before retrying a send that failed only because
+     * the device had no live WhatsApp session at that instant (see
+     * App\Services\Chat\InboxService::isDeviceDisconnected()) — checked
+     * again fresh on every retry, so this recovers automatically the
+     * moment the device reconnects instead of waiting out the full grace
+     * period below.
+     */
+    private const DEVICE_OFFLINE_RETRY_SECONDS = 60;
+
+    /**
+     * How many times this job may re-dispatch ITSELF because the device
+     * was offline, before finally giving up — tracked separately from
+     * both $tries/$backoff and MAX_THROTTLE_REDISPATCHES above, for the
+     * same reason those are separate from each other: being offline
+     * isn't a send failure the normal retry budget was sized for, and
+     * must never spin forever either.
+     *
+     * At DEVICE_OFFLINE_RETRY_SECONDS = 60s, 30 redispatches is a 30
+     * minute grace period — long enough to cover a QR re-scan, a device
+     * reboot, or a brief hosting blip, without a broadcast's already-
+     * dispatched jobs (which, for a large recipient list, is every
+     * recipient staggered out over the run — see
+     * App\Console\Commands\DispatchDueWaMessageSchedules) all silently
+     * piling up as permanently 'failed' within the ~7.5 minutes a plain
+     * $tries=3/backoff=[30,120,300] would have allowed. Past that,
+     * something is genuinely wrong (not just "still reconnecting"), so
+     * this stops pausing and reports it instead of retrying forever.
+     */
+    private const MAX_DEVICE_OFFLINE_REDISPATCHES = 30;
+
     public function __construct(
         protected string $scheduleId,
         protected string $recipientKey,
         protected string $sendDate,
         protected int $stepOrder = 0,
         protected int $throttleAttempts = 0,
+        protected int $deviceOfflineAttempts = 0,
     ) {
     }
 
@@ -141,6 +173,31 @@ class SendScheduledWaMessage implements ShouldQueue
             $this->markFailed($log, 'Perusahaan pemilik jadwal ini tidak memiliki user pemilik yang valid.');
 
             return;
+        }
+
+        // Billing guard: checked as early as possible, before any other
+        // work (opt-out lookup, content resolution, throttle check, ...)
+        // — see PackageLimitService::requireActivePackage()'s docblock
+        // for why this can't just rely on the reserve() call further
+        // down (which deliberately fails OPEN when there's no active
+        // package) or on App\Http\Middleware\EnsureActivePackage (which
+        // never runs for this job at all, since it's dispatched by a
+        // scheduled command, not an HTTP request). Recorded as
+        // STATUS_SKIPPED, not markFailed()'s 'failed' — same distinction
+        // BroadcastOptOutService's guard below makes: this isn't a
+        // broken send, it's a send that was never supposed to happen.
+        if ($schedule->company) {
+            try {
+                $packageLimits->requireActivePackage($schedule->company);
+            } catch (PackageLimitExceededException $e) {
+                $log->forceFill([
+                    'status' => WaMessageScheduleLog::STATUS_SKIPPED,
+                    'error' => $e->getMessage(),
+                    'attempts' => $log->attempts + 1,
+                ])->save();
+
+                return;
+            }
         }
 
         // Anti-ban/compliance guard: never broadcast to a number that has
@@ -346,6 +403,43 @@ class SendScheduledWaMessage implements ShouldQueue
             // genuinely went out.
             if ($schedule->company) {
                 $packageLimits->release($schedule->company, 'broadcast_send');
+            }
+
+            // Auto-pause/resume: the device simply being offline right
+            // now isn't treated as a send failure — see
+            // InboxService::isDeviceDisconnected()'s docblock and
+            // MAX_DEVICE_OFFLINE_REDISPATCHES above for the full
+            // reasoning. Checked before touching $log at all (same as
+            // the throttle guard earlier in this method), so a device
+            // that's mid-reconnect never eats into $tries/backoff nor
+            // shows up as a failed attempt in the history page — it
+            // just quietly retries until the device is back, up to the
+            // grace period.
+            if (InboxService::isDeviceDisconnected($e)) {
+                if ($this->deviceOfflineAttempts >= self::MAX_DEVICE_OFFLINE_REDISPATCHES) {
+                    $this->markFailed($log, 'Device pengirim terputus terlalu lama (lebih dari 30 menit) — pengiriman dibatalkan. Sambungkan ulang device di menu Connect Device, lalu kirim ulang jadwal ini.');
+
+                    return;
+                }
+
+                Log::info('SendScheduledWaMessage: device offline, pausing and re-queueing', [
+                    'schedule_id' => $schedule->id,
+                    'device_id' => $schedule->device_id,
+                    'recipient_key' => $this->recipientKey,
+                    'offline_attempt' => $this->deviceOfflineAttempts + 1,
+                    'retry_in_seconds' => self::DEVICE_OFFLINE_RETRY_SECONDS,
+                ]);
+
+                self::dispatch(
+                    $this->scheduleId,
+                    $this->recipientKey,
+                    $this->sendDate,
+                    $this->stepOrder,
+                    $this->throttleAttempts,
+                    $this->deviceOfflineAttempts + 1
+                )->delay(now()->addSeconds(self::DEVICE_OFFLINE_RETRY_SECONDS));
+
+                return;
             }
 
             Log::warning('SendScheduledWaMessage: send failed', [

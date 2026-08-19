@@ -238,14 +238,7 @@ class InboxService
      */
     public static function describeSendFailure(\Throwable $e): string
     {
-        $reason = null;
-
-        if (preg_match('/\{.*\}\s*$/s', $e->getMessage(), $matches)) {
-            $decoded = json_decode($matches[0], true);
-            if (is_array($decoded) && ! empty($decoded['error'])) {
-                $reason = (string) $decoded['error'];
-            }
-        }
+        $reason = self::extractGoErrorReason($e);
 
         if ($reason === null) {
             return 'Gagal mengirim pesan. Pastikan device masih terhubung.';
@@ -260,6 +253,53 @@ class InboxService
         }
 
         return "Gagal mengirim pesan: {$reason}.";
+    }
+
+    /**
+     * True when a send failed specifically because the device has no
+     * live WhatsApp session right now (g_backend's "wa: device is not
+     * connected" / "wa: timed out waiting to send" — see
+     * WaConnectDeviceService.EnsureConnectedClient and AcquireSendSlot
+     * on the Go side) — distinct from every other failure reason
+     * (device deleted, an invalid recipient, a genuine WhatsApp API
+     * rejection, ...).
+     *
+     * Callers like App\Jobs\SendScheduledWaMessage treat this case very
+     * differently from a real send failure: a device being offline is
+     * often temporary (a QR re-scan, a flaky connection, a brief
+     * process restart) and worth quietly retrying for a while, instead
+     * of burning through the job's normal $tries/backoff and
+     * permanently failing minutes before the device likely reconnects —
+     * see SendScheduledWaMessage::MAX_DEVICE_OFFLINE_REDISPATCHES's
+     * docblock for the full reasoning.
+     */
+    public static function isDeviceDisconnected(\Throwable $e): bool
+    {
+        $reason = self::extractGoErrorReason($e);
+
+        return $reason !== null && str_contains($reason, 'not connected');
+    }
+
+    /**
+     * Pulls the Go backend's own `{"error": "..."}` JSON body back out of
+     * a RuntimeException's message (see request()'s throw below, which
+     * embeds it verbatim) — shared by describeSendFailure() and
+     * isDeviceDisconnected() so both read the exact same reason string
+     * rather than parsing it twice.
+     */
+    private static function extractGoErrorReason(\Throwable $e): ?string
+    {
+        if (! preg_match('/\{.*\}\s*$/s', $e->getMessage(), $matches)) {
+            return null;
+        }
+
+        $decoded = json_decode($matches[0], true);
+
+        if (! is_array($decoded) || empty($decoded['error'])) {
+            return null;
+        }
+
+        return (string) $decoded['error'];
     }
 
     protected function request(string $method, string $path, string $jwt, array $payload = []): array

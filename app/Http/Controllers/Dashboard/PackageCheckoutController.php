@@ -23,6 +23,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use RuntimeException;
@@ -187,6 +188,23 @@ class PackageCheckoutController extends Controller
             return back()->withInput()->with('error', 'Saldo wallet Anda tidak mencukupi untuk membeli package ini.');
         }
 
+        // Submit-ganda guard: tanpa ini, double-click atau retry
+        // browser karena koneksi lambat bisa membuat dua request
+        // store() diproses nyaris bersamaan, masing-masing membuat
+        // Subscription-nya sendiri dan mendebit wallet sendiri-sendiri
+        // — keduanya valid secara individual (WalletLedgerService tidak
+        // tahu ini "permintaan yang sama"), jadi kalau saldo cukup untuk
+        // dua-duanya, user bisa kepotong dua kali untuk satu niat beli.
+        // Cache::lock ini atomic (backed by CACHE_STORE=database, bukan
+        // file/array — lihat CLAUDE.md poin 2), non-blocking: request
+        // kedua yang datang selagi request pertama masih diproses akan
+        // langsung ditolak dengan pesan, bukan menunggu lalu ikut lolos.
+        $checkoutLock = Cache::lock("package-checkout:{$user->id}", 15);
+
+        if (! $checkoutLock->get()) {
+            return back()->withInput()->with('error', 'Ada proses pembelian lain yang sedang berjalan untuk akun Anda. Silakan tunggu beberapa detik lalu coba lagi.');
+        }
+
         try {
             $subscription = DB::transaction(function () use (
                 $package, $user, $wallet, $price, $discountPercent, $discountAmount, $finalPrice,
@@ -346,6 +364,8 @@ class PackageCheckoutController extends Controller
             });
         } catch (RuntimeException $e) {
             return back()->withInput()->with('error', $e->getMessage());
+        } finally {
+            $checkoutLock->release();
         }
 
         // Sent only after the DB transaction above has fully committed

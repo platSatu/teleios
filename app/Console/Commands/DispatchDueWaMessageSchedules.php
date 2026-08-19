@@ -7,6 +7,8 @@ use App\Models\WaMessageSchedule;
 use App\Models\WaMessageScheduleLog;
 use App\Models\WaMessageScheduleStep;
 use Illuminate\Console\Command;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Runs every minute (see bootstrap/app.php's ->withSchedule()). Covers
@@ -25,14 +27,20 @@ use Illuminate\Console\Command;
  *
  * Either way, "due" only turns into a dispatched job the moment this
  * command successfully claims a brand-new App\Models\WaMessageScheduleLog
- * row (firstOrCreate against that table's unique index on
- * (schedule, recipient, day, step) — see that migration). That's what
- * makes every branch below idempotent across ticks: work that's already
- * claimed — 'pending', 'sent', or 'failed' — is never re-dispatched by a
- * later run. A 'failed' outcome is final for that (recipient, day, step)
- * — the job's own tries/backoff covers retries within one attempt, and
- * editing a schedule (MessageScheduleController::update()) clears
- * today's pending/failed rows to allow a same-day retry after a fix.
+ * row for (schedule, recipient, day, step) — see claimAndDispatch(),
+ * which locks/creates that row the same race-safe way
+ * App\Services\PackageLimitService::lockOrCreateUsage() claims a usage
+ * counter row: a locked lookup first, then a create guarded by a catch
+ * on that table's unique index (wa_message_schedule_logs_unique_per_day
+ * — see that migration), so two overlapping ticks (or two overlapping
+ * runs of this command) racing for the exact same combination can never
+ * both win. That's what makes every branch below idempotent across
+ * ticks: work that's already claimed — 'pending', 'sent', or 'failed' —
+ * is never re-dispatched by a later run. A 'failed' outcome is final for
+ * that (recipient, day, step) — the job's own tries/backoff covers
+ * retries within one attempt, and editing a schedule
+ * (MessageScheduleController::update()) clears today's pending/failed
+ * rows to allow a same-day retry after a fix.
  *
  * Deliberately thin either way: this command only finds and *claims*
  * work — SendScheduledWaMessage does the actual sending.
@@ -159,19 +167,70 @@ class DispatchDueWaMessageSchedules extends Command
         return $count;
     }
 
+    /**
+     * Claims (schedule, recipient, day, step) by inserting its
+     * WaMessageScheduleLog row — returns whether THIS call was the one
+     * that created it (0/1 dispatched), never re-claiming a row an
+     * earlier tick already owns.
+     *
+     * Race-safe the same way App\Services\PackageLimitService::
+     * lockOrCreateUsage() is: a locked lookup first (lockForUpdate()
+     * only helps once the row exists, so this alone can't stop two
+     * concurrent callers both racing to insert the FIRST row for a
+     * brand-new combination), then a create wrapped in a catch for the
+     * QueryException that the table's own unique index
+     * (wa_message_schedule_logs_unique_per_day) throws when a second,
+     * simultaneous caller loses that race — re-fetched, not re-thrown,
+     * since "someone else already claimed it a moment ago" is exactly
+     * the outcome this method exists to detect, not an error. Plain
+     * firstOrCreate() used to be used here instead, which has this exact
+     * gap: two overlapping runs of this command (e.g. a slow tick still
+     * running when the next minute's cron fires) could both read "no row
+     * yet" and both try to insert, and without this catch the loser's
+     * INSERT would bubble up as an uncaught QueryException and crash the
+     * whole command run — including every other due schedule it hadn't
+     * gotten to yet.
+     */
     private function claimAndDispatch(string $scheduleId, string $recipientKey, string $today, int $stepOrder, int $delaySeconds): int
     {
-        $log = WaMessageScheduleLog::firstOrCreate(
-            [
-                'wa_message_schedule_id' => $scheduleId,
-                'recipient_key' => $recipientKey,
-                'send_date' => $today,
-                'step_order' => $stepOrder,
-            ],
-            ['status' => 'pending']
-        );
+        $claimed = DB::transaction(function () use ($scheduleId, $recipientKey, $today, $stepOrder) {
+            $find = fn () => WaMessageScheduleLog::where('wa_message_schedule_id', $scheduleId)
+                ->where('recipient_key', $recipientKey)
+                ->where('send_date', $today)
+                ->where('step_order', $stepOrder)
+                ->lockForUpdate()
+                ->first();
 
-        if (! $log->wasRecentlyCreated) {
+            if ($find()) {
+                return false;
+            }
+
+            try {
+                WaMessageScheduleLog::create([
+                    'wa_message_schedule_id' => $scheduleId,
+                    'recipient_key' => $recipientKey,
+                    'send_date' => $today,
+                    'step_order' => $stepOrder,
+                    'status' => 'pending',
+                ]);
+
+                return true;
+            } catch (QueryException $e) {
+                // Lost the race for this exact combination — another
+                // overlapping run of this command claimed it a moment
+                // ago and already committed. Confirm their row exists
+                // (rather than assuming from the exception alone) and
+                // report "not claimed by us"; a genuinely different
+                // failure (e.g. a real DB outage) still surfaces.
+                if ($find()) {
+                    return false;
+                }
+
+                throw $e;
+            }
+        });
+
+        if (! $claimed) {
             return 0;
         }
 
