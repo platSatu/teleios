@@ -53,11 +53,13 @@
                              ngikutin filter pencarian/kelompok/status yang lagi aktif —
                              makanya label & konfirmasinya sengaja ditulis tegas begitu,
                              supaya tidak dikira "hapus yang lagi tampil di filter ini". --}}
-                        <form action="{{ route('chat.phone-books.reset-all') }}" method="POST" class="m-0"
-                            onsubmit="return confirm('Hapus SEMUA kontak di Buku Telepon (bukan cuma yang lagi tampil di filter ini)?\n\nSemua kontak akan terhapus PERMANEN dan tidak bisa dikembalikan. Lanjutkan?');">
+                        <form action="{{ route('chat.phone-books.reset-all') }}" method="POST" class="m-0 js-danger-confirm-form"
+                            data-confirm="Hapus SEMUA kontak di Buku Telepon (bukan cuma yang lagi tampil di filter ini)?&#10;&#10;Semua kontak akan terhapus PERMANEN dan tidak bisa dikembalikan. Lanjutkan?"
+                            data-loading-text="Menghapus...">
                             @csrf
                             <button type="submit" class="btn btn-outline-danger">
-                                <i class="ri-delete-bin-line"></i> Hapus Semua Kontak
+                                <i class="ri-delete-bin-line js-btn-icon"></i>
+                                <span class="js-btn-label">Hapus Semua Kontak</span>
                             </button>
                         </form>
                     </div>
@@ -97,11 +99,13 @@
                             $selectedCategory = $categories->firstWhere('id', request('wa_category_phone_book_id'));
                         @endphp
                         @if ($selectedCategory)
-                            <form action="{{ route('chat.phone-books.reset-category', $selectedCategory->id) }}" method="POST" class="m-0"
-                                onsubmit="return confirm('Hapus semua kontak di kelompok &quot;{{ $selectedCategory->name }}&quot;?\n\nKontak di kelompok ini akan terhapus PERMANEN dan tidak bisa dikembalikan. Lanjutkan?');">
+                            <form action="{{ route('chat.phone-books.reset-category', $selectedCategory->id) }}" method="POST" class="m-0 js-danger-confirm-form"
+                                data-confirm="Hapus semua kontak di kelompok &quot;{{ $selectedCategory->name }}&quot;?&#10;&#10;Kontak di kelompok ini akan terhapus PERMANEN dan tidak bisa dikembalikan. Lanjutkan?"
+                                data-loading-text="Menghapus...">
                                 @csrf
                                 <button type="submit" class="btn btn-outline-danger">
-                                    <i class="ri-delete-bin-line"></i> Hapus Kontak di "{{ $selectedCategory->name }}"
+                                    <i class="ri-delete-bin-line js-btn-icon"></i>
+                                    <span class="js-btn-label">Hapus Kontak di "{{ $selectedCategory->name }}"</span>
                                 </button>
                             </form>
                         @endif
@@ -275,6 +279,41 @@
 </div>
 
 <script>
+    // "Hapus Semua Kontak" / "Hapus Kontak di [Kelompok]" — konfirmasi lewat
+    // data-confirm (bukan inline onsubmit biasa) karena setelah dikonfirmasi
+    // kita juga perlu MENONAKTIFKAN tombolnya + ganti jadi spinner "Menghapus...",
+    // supaya jelas ke user request-nya lagi diproses (bulk delete company-wide
+    // bisa makan waktu lebih dari sedetik kalau kontaknya banyak) — request
+    // sebelumnya sempat kelihatan "diam saja" tanpa ini, jadi dikira gagal.
+    document.querySelectorAll('.js-danger-confirm-form').forEach(function (form) {
+        form.addEventListener('submit', function (e) {
+            var message = form.getAttribute('data-confirm') || 'Yakin ingin melanjutkan?';
+
+            if (!confirm(message)) {
+                e.preventDefault();
+                return;
+            }
+
+            var button = form.querySelector('button[type="submit"]');
+            if (!button) return;
+
+            button.disabled = true;
+
+            var icon = button.querySelector('.js-btn-icon');
+            var label = button.querySelector('.js-btn-label');
+            var loadingText = form.getAttribute('data-loading-text') || 'Memproses...';
+            var spinner = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>';
+
+            if (icon) icon.style.display = 'none';
+
+            if (label) {
+                label.innerHTML = spinner + loadingText;
+            } else {
+                button.innerHTML = spinner + loadingText;
+            }
+        });
+    });
+
     // Blacklist reason is optional — a plain confirm() (not a full
     // modal) keeps this a one-click action from the table, same
     // lightweight treatment as the destroy forms right next to it.
