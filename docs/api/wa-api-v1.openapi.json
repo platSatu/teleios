@@ -1,0 +1,106 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Konexa WA API (per-device, pihak ketiga)",
+    "version": "1.0.0",
+    "description": "API yang bisa dipakai pihak ketiga (bukan user login aplikasi) untuk mengirim pesan WhatsApp lewat SATU device tertentu. Setiap token/secret di-generate per-device dari menu Connect Device (App\\Http\\Controllers\\Chat\\WaApiKeyController). Dokumen ini WAJIB diperbarui setiap kali ada endpoint baru di bawah prefix /api/wa-api/, sesuai CLAUDE.md."
+  },
+  "servers": [
+    { "url": "https://app.konexa.id/api", "description": "Production" },
+    { "url": "https://staging.konexa.id/api", "description": "Staging" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "WaApiToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-WA-Token",
+        "description": "Token per-device, didapat dari menu Connect Device."
+      },
+      "WaApiSecret": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-WA-Secret",
+        "description": "Secret key pasangan dari X-WA-Token. Wajib dikirim bersamaan."
+      }
+    },
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string", "example": "Token atau Secret Key tidak valid." }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/wa-api/v1/send-message": {
+      "post": {
+        "summary": "Kirim pesan WhatsApp lewat 1 device",
+        "description": "Satu-satunya kemampuan API pihak ketiga saat ini: kirim pesan teks lewat device yang dimiliki oleh token/secret ini. Tidak ada akses baca riwayat chat, tidak ada manajemen device, hanya kirim. Diimplementasikan di App\\Http\\Controllers\\Api\\WaApiSendMessageController::send().",
+        "operationId": "sendWaMessage",
+        "tags": ["WA API v1"],
+        "security": [{ "WaApiToken": [], "WaApiSecret": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["to", "message"],
+                "properties": {
+                  "to": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "description": "Nomor HP polos (mis. \"6281234567890\") ATAU JID WhatsApp lengkap (individu \"...@s.whatsapp.net\" atau grup \"...@g.us\").",
+                    "example": "6281234567890"
+                  },
+                  "message": {
+                    "type": "string",
+                    "maxLength": 4096,
+                    "example": "Halo, pesanan Anda sudah diproses."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pesan berhasil dikirim.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "sent" },
+                    "message": {
+                      "type": "object",
+                      "description": "Detail pesan dari backend Go (struktur mengikuti response InboxService::send())."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Header X-WA-Token / X-WA-Secret tidak ada atau tidak valid.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "422": {
+            "description": "Body request tidak valid (field to/message kosong atau kepanjangan).",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "500": {
+            "description": "Company pemilik API Key ini tidak punya user pemilik yang valid (data rusak/tidak konsisten).",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "502": {
+            "description": "Gagal mengirim pesan (device tidak terhubung, device tidak ditemukan, dsb). Lihat field error untuk pesan yang bisa ditindaklanjuti.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    }
+  }
+}

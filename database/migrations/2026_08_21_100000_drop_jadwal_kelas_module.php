@@ -104,7 +104,7 @@ return new class extends Migration
         }
 
         // 5. the module's own tables.
-        Schema::disableForeignKeyChecks();
+        Schema::disableForeignKeyConstraints();
 
         Schema::dropIfExists('jadwal_usulan_perubahan');
         Schema::dropIfExists('jadwal_kelas_sesi_murid');
@@ -114,7 +114,7 @@ return new class extends Migration
         Schema::dropIfExists('mata_pelajaran');
         Schema::dropIfExists('jadwal_message_templates');
 
-        Schema::enableForeignKeyChecks();
+        Schema::enableForeignKeyConstraints();
     }
 
     /**
