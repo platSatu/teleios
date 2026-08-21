@@ -82,7 +82,7 @@
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
                                 </div>
-                                <div class="form-text">Tanpa awalan 0 atau kode negara 62 — cukup 10-14 digit setelahnya. Dipakai untuk notifikasi WhatsApp otomatis (Jadwal, dll).</div>
+                                <div class="form-text">Tanpa awalan 0 atau kode negara 62 — cukup 10-14 digit setelahnya. Dipakai untuk notifikasi WhatsApp otomatis.</div>
                             </div>
 
                             <div class="mb-3">

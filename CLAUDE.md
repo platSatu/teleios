@@ -16,11 +16,11 @@ Dokumen ini adalah instruksi standing yang harus selalu diperhatikan di setiap s
 
 Codebase ini sudah punya pola yang benar untuk ini — WAJIB diikuti setiap kali menambah fitur yang bisa diakses banyak proses/worker bersamaan:
 
-- **Klaim/dedup pekerjaan**: pakai unique constraint di level database (bukan cuma cek `firstOrCreate` di kode PHP tanpa try/catch — ini masih jadi bug terbuka di `DispatchDueWaMessageSchedules::claimAndDispatch()`, lihat bagian "Known Issues" di bawah).
+- **Klaim/dedup pekerjaan**: pakai unique constraint di level database (bukan cuma cek `firstOrCreate` di kode PHP tanpa try/catch — lihat `DispatchDueWaMessageSchedules::claimAndDispatch()` untuk contoh pola yang benar: `lockForUpdate()` + try/catch `QueryException`, sama seperti `PackageLimitService::lockOrCreateUsage()`).
 - **Counter/kuota yang dipakai bersamaan** (uang, kuota kirim, dsb): ikuti pola `PackageLimitService::reserve()` — transaksi terkunci (`DB::transaction()` + `lockForUpdate()`), plus try/catch `QueryException` untuk race pada baris pertama (lihat `lockOrCreateUsage()`).
 - **Job queue yang tidak boleh dobel**: pakai `WithoutOverlapping` middleware seperti di `SendScheduledWaMessage`.
 - **Rate limiting per-resource** (device WA, dsb): pakai Laravel `RateLimiter` dengan cache store yang atomik (`database` atau `redis`, JANGAN `file`/`array` untuk sesuatu yang diakses banyak worker — lihat pola `BroadcastThrottleService`).
-- Kalau menambah job/fitur baru yang mengirim pesan WA (auto-reply, AI bot, chatbot flow, dsb), WAJIB pertimbangkan apakah perlu ikut lewat `BroadcastThrottleService` juga — jangan cuma broadcast terjadwal yang dibatasi (ini juga masih jadi gap terbuka, lihat "Known Issues").
+- Kalau menambah job/fitur baru yang mengirim pesan WA (auto-reply, AI bot, chatbot flow, dsb), WAJIB ikut lewat `BroadcastThrottleService` juga — jangan cuma broadcast terjadwal yang dibatasi. `SendAutoReplyMessage` dan `SendAiBotReply` sudah mengikuti pola ini (`$throttle->attempt($deviceId, $companyId)` sebelum kirim); jadikan keduanya contoh referensi untuk job pengirim WA berikutnya.
 
 ## 3. Skalabilitas
 
@@ -42,12 +42,17 @@ Codebase ini sudah punya pola yang benar untuk ini — WAJIB diikuti setiap kali
 - Jelaskan trade-off keamanan/skalabilitas di akhir setiap perubahan kode yang cukup signifikan — jangan cuma bilang "sudah selesai".
 - Bahasa komunikasi: Bahasa Indonesia.
 
-## 6. Known Issues (belum diperbaiki, per audit 14 Agustus 2026)
+## 6. Known Issues (per audit 14 Agustus 2026, diverifikasi ulang 21 Agustus 2026)
 
-Catatan untuk sesi mendatang — ini ditemukan lewat investigasi, belum ada kode yang diubah:
+Catatan untuk sesi mendatang — ini ditemukan lewat investigasi.
 
-1. **Race condition di `DispatchDueWaMessageSchedules::claimAndDispatch()`** — pakai `firstOrCreate()` tanpa try/catch untuk `QueryException`, beda dengan pola benar di `PackageLimitService::lockOrCreateUsage()`. Bisa crash command kalau ke-trigger dobel.
-2. **`SendAutoReplyMessage` dan `SendAiBotReply` tidak melewati `BroadcastThrottleService`** — bisa membuat batas kirim per-device tidak benar-benar ditegakkan saat auto-reply/AI bot aktif bersamaan broadcast.
-3. **Dua sistem assignment chat berjalan sendiri-sendiri**: `WaContact.assigned_to` (lama, dipakai UI Inbox) vs `WaConversation.assigned_to` + status Chat Ops (baru, backend lengkap tapi belum ada UI). Perlu diputuskan mau disatukan ke arah mana.
-4. Konsep "Category" untuk chat belum ada (baru ada Label). Pelacakan "assigned oleh siapa" (audit) juga belum ada di kedua sistem assignment.
-5. Verifikasi `CACHE_STORE`/`QUEUE_CONNECTION` di `.env` produksi — pastikan bukan `file`/`array`/`sync` supaya rate limiter dan queue tetap aman untuk banyak worker.
+### Masih terbuka
+
+1. **Dua sistem assignment chat berjalan sendiri-sendiri**: `WaContact.assigned_to` (lama, dipakai UI Inbox) vs `WaConversation.assigned_to` + status Chat Ops (baru, backend lengkap tapi belum ada UI). Perlu diputuskan mau disatukan ke arah mana.
+2. Konsep "Category" untuk chat belum ada (baru ada Label). Pelacakan "assigned oleh siapa" (audit) juga belum ada di kedua sistem assignment.
+3. Verifikasi `CACHE_STORE`/`QUEUE_CONNECTION` di `.env` produksi — pastikan bukan `file`/`array`/`sync` supaya rate limiter dan queue tetap aman untuk banyak worker. (Di `.env` lokal per 21 Agustus 2026 sudah `database` untuk keduanya — tetap cek ulang khusus di server production.)
+
+### Sudah diperbaiki
+
+- **Race condition di `DispatchDueWaMessageSchedules::claimAndDispatch()`** — sekarang sudah pakai `lockForUpdate()` + try/catch `QueryException`, pola yang sama dengan `PackageLimitService::lockOrCreateUsage()`. Diverifikasi 21 Agustus 2026.
+- **`SendAutoReplyMessage` dan `SendAiBotReply` tidak melewati `BroadcastThrottleService`** — sekarang keduanya sudah memanggil `$throttle->attempt($deviceId, $companyId)` sebelum kirim, sama seperti `SendScheduledWaMessage`. Diverifikasi 21 Agustus 2026.

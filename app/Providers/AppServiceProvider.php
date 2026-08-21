@@ -67,29 +67,6 @@ class AppServiceProvider extends ServiceProvider
                     ->exists()
             );
 
-            // "Jadwal" is its own separate paid package, not bundled
-            // with Chat or any other — same category-scoped check as
-            // 'active.package:Jadwal' on the route group itself (see
-            // App\Http\Middleware\EnsureActivePackage), just recomputed
-            // here for the sidebar since the menu partial has no
-            // controller of its own to pass this through. A user with
-            // an active Chat-only package does NOT see this menu.
-            $hasActiveJadwalPackage = $user && (
-                $user->user_type === 'SUPERADMIN'
-                || Voucher::query()
-                    ->where('user_id', $billingUserId)
-                    ->where('status', 'active')
-                    ->whereNotNull('valid_from')
-                    ->whereNotNull('valid_until')
-                    ->where('valid_from', '<=', now())
-                    ->where('valid_until', '>=', now())
-                    ->whereHas(
-                        'package.categoryApplication',
-                        fn ($q) => $q->where('name', 'Jadwal')
-                    )
-                    ->exists()
-            );
-
             // Which Chat route_names (App\Models\ApplicationMenu catalog)
             // the logged-in user is allowed to actually click through to
             // — null means "unrestricted" (owner/superadmin/no company
@@ -117,7 +94,6 @@ class AppServiceProvider extends ServiceProvider
             }
 
             $view->with('hasActivePackage', $hasActivePackage);
-            $view->with('hasActiveJadwalPackage', $hasActiveJadwalPackage);
             $view->with('allowedChatRouteNames', $allowedChatRouteNames);
         });
     }

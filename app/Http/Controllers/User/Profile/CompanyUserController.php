@@ -178,10 +178,10 @@ class CompanyUserController extends Controller
             // the '62'-prefixed digit-only form every other phone number
             // in this app expects (see App\Jobs\Concerns\
             // NormalizesWhatsAppJid) right after validation, below.
-            // Guru/murid notifications (App\Services\Jadwal\
-            // JadwalNotificationService) silently no-op for anyone
-            // without one, so this is the field that actually makes
-            // Jadwal's WA automation work for a user created here.
+            // WhatsApp-based notifications to this member (e.g. wallet/
+            // deposit alerts) silently no-op for anyone without one, so
+            // this is the field that actually makes that automation work
+            // for a user created here.
             'handphone' => ['nullable', 'regex:/^[1-9][0-9]{9,13}$/'],
             'company_role_id' => ['required', 'uuid'],
             // Both optional — a member doesn't have to be placed under a
@@ -407,9 +407,9 @@ class CompanyUserController extends Controller
             // created — see edit()'s view) since this is exactly the
             // field that wasn't collected at all before this change, so
             // every member created earlier needs a way to have it added
-            // after the fact for Jadwal's WA automation to work for them.
-            // Same shape/normalization as store() — see that method's
-            // comment.
+            // after the fact for WhatsApp-based automation to work for
+            // them. Same shape/normalization as store() — see that
+            // method's comment.
             'handphone' => ['nullable', 'regex:/^[1-9][0-9]{9,13}$/'],
             'branch_office_id' => ['nullable', 'uuid'],
             'branch_office_unit_id' => ['nullable', 'uuid'],

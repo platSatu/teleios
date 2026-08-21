@@ -328,35 +328,6 @@
                         </ul>
                     </li>
                 @endif
-                @if ($hasActiveJadwalPackage)
-                    <li class="pe-slide pe-has-sub">
-                        <a href="#collapseJadwal" class="pe-nav-link" data-bs-toggle="collapse"
-                            aria-expanded="false" aria-controls="collapseDashboards"
-                            onclick="toggleCollapse('collapseAuth', this)">
-                            <i class="uil uil-calendar-alt pe-nav-icon"></i>
-                            <span class="pe-nav-content">Jadwal</span>
-                            <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
-                            <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
-                        </a>
-                        <ul class="pe-slide-menu collapse" id="collapseJadwal">
-                            <li class="pe-slide-item">
-                                <a href="{{ route('jadwal.mata-pelajaran.index') }}" class="pe-nav-link">
-                                    Mata Pelajaran
-                                </a>
-                            </li>
-                            <li class="pe-slide-item">
-                                <a href="{{ route('jadwal.jadwal-kelas.index') }}" class="pe-nav-link">
-                                    Jadwal Kelas
-                                </a>
-                            </li>
-                            <li class="pe-slide-item">
-                                <a href="{{ route('jadwal.pengaturan-pesan.index') }}" class="pe-nav-link">
-                                    Pengaturan Pesan
-                                </a>
-                            </li>
-                        </ul>
-                    </li>
-                @endif
                 @if (auth()->check() && auth()->user()->user_type === 'SUPERADMIN')
                     <li class="pe-slide pe-has-sub">
                         <a href="#collapseUsers" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
@@ -612,19 +583,6 @@
                             </li>
                         </ul>
                     </li>
-
-                    {{-- "Jadwal" — sibling top-level menu to Chat, not
-                         nested under it, and its own SEPARATE paid
-                         package: gated by $hasActiveJadwalPackage
-                         (category-scoped to "Jadwal", NOT the general
-                         $hasActivePackage this whole outer block uses —
-                         see AppServiceProvider::boot()), so a Chat-only
-                         subscriber never sees this. Route access itself
-                         is backstopped by 'active.package:Jadwal' +
-                         'menu.access' + App\Models\CompanyRoleMenu once
-                         granted to a CompanyRole, same as every other
-                         menu here. --}}
-
 
                     <li class="pe-slide pe-has-sub">
                         <a href="#collapseDeposits" class="pe-nav-link" data-bs-toggle="collapse"
