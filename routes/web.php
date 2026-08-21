@@ -517,6 +517,12 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::get('/{id}/edit', 'edit')->name('chat.phone-books.edit');
                 Route::put('/{id}', 'update')->name('chat.phone-books.update');
                 Route::delete('/{id}', 'destroy')->name('chat.phone-books.destroy');
+                // "Hapus Semua" / "Hapus per Kelompok" — POST (bukan DELETE) supaya
+                // literal "reset-all" tidak pernah bentrok dengan wildcard DELETE
+                // /{id} di atas (beda HTTP method, jadi urutan registrasi di sini
+                // tidak masalah).
+                Route::post('/reset-all', 'resetAll')->name('chat.phone-books.reset-all');
+                Route::post('/reset-category/{categoryId}', 'resetByCategory')->name('chat.phone-books.reset-category');
                 Route::post('/{id}/blacklist', 'blacklist')->name('chat.phone-books.blacklist');
                 Route::post('/{id}/unblacklist', 'unblacklist')->name('chat.phone-books.unblacklist');
                 Route::get('/export', 'export')->name('chat.phone-books.export');

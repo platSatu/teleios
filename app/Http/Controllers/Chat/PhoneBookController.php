@@ -247,6 +247,82 @@ class PhoneBookController extends Controller
     }
 
     /**
+     * "Hapus Semua Kontak" — hapus PERMANEN seluruh Buku Telepon yang bisa
+     * dilihat caller. Scoping-nya sama persis dengan index()/destroy():
+     * company ini, dan kalau caller branch-locked cuma yang jadi
+     * miliknya sendiri atau belum ditugaskan ke branch manapun — jadi
+     * seorang branch-locked member tidak bisa menghapus kontak branch
+     * lain lewat endpoint ini, walaupun namanya "reset ALL".
+     *
+     * WaPhoneBook tidak pakai SoftDeletes (lihat model), dan tidak ada FK
+     * dari tabel lain yang menunjuk ke wa_phone_book (sudah dicek lewat
+     * migrations), jadi query delete() langsung ini aman secara
+     * integritas data — tapi tetap tidak bisa dibatalkan begitu jalan.
+     */
+    public function resetAll(Request $request): RedirectResponse
+    {
+        $context = $this->companyContext($request);
+        $company = $context->company;
+
+        $query = WaPhoneBook::where('company_id', $company->id);
+
+        if ($context->isLockedToBranch()) {
+            $query->where(function ($q) use ($context) {
+                $q->where('branch_office_id', $context->branchOffice?->id)
+                    ->orWhereNull('branch_office_id');
+            });
+        }
+
+        $deleted = $query->delete();
+
+        return redirect()
+            ->route('chat.phone-books.index')
+            ->with('success', "Berhasil menghapus {$deleted} kontak dari Buku Telepon.");
+    }
+
+    /**
+     * "Hapus Kontak di Kelompok Ini" — sama seperti resetAll() tapi
+     * dipersempit ke satu Kelompok (Kategori) tertentu. Kelompoknya
+     * sendiri divalidasi dulu (company + branch scope, sama pola dengan
+     * categoriesFor()) sebelum isinya dihapus — supaya ID kelompok milik
+     * company lain tidak bisa dipakai buat menghapus data company lain
+     * (IDOR) lewat route ini.
+     */
+    public function resetByCategory(Request $request, string $categoryId): RedirectResponse
+    {
+        $context = $this->companyContext($request);
+        $company = $context->company;
+
+        $categoryQuery = WaCategoryPhoneBook::where('company_id', $company->id)
+            ->where('id', $categoryId);
+
+        if ($context->isLockedToBranch()) {
+            $categoryQuery->where(function ($q) use ($context) {
+                $q->where('branch_office_id', $context->branchOffice?->id)
+                    ->orWhereNull('branch_office_id');
+            });
+        }
+
+        $category = $categoryQuery->firstOrFail();
+
+        $query = WaPhoneBook::where('company_id', $company->id)
+            ->where('wa_category_phone_book_id', $category->id);
+
+        if ($context->isLockedToBranch()) {
+            $query->where(function ($q) use ($context) {
+                $q->where('branch_office_id', $context->branchOffice?->id)
+                    ->orWhereNull('branch_office_id');
+            });
+        }
+
+        $deleted = $query->delete();
+
+        return redirect()
+            ->route('chat.phone-books.index')
+            ->with('success', "Berhasil menghapus {$deleted} kontak dari kelompok \"{$category->name}\".");
+    }
+
+    /**
      * A blacklisted entry stays in the phone book (so it can be reversed)
      * but every recipient picker across Chat should skip it — see
      * WaPhoneBook's migration docblock.

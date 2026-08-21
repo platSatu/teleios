@@ -48,10 +48,22 @@
                         <a href="{{ route('chat.phone-books.create') }}" class="btn btn-primary">
                             <i class="ri-add-line"></i> Tambah Kontak
                         </a>
+                        {{-- "Hapus Semua" (bahasa lain buat resetAll() di controller) selalu
+                             menghapus SELURUH Buku Telepon (company/branch scope), TIDAK
+                             ngikutin filter pencarian/kelompok/status yang lagi aktif —
+                             makanya label & konfirmasinya sengaja ditulis tegas begitu,
+                             supaya tidak dikira "hapus yang lagi tampil di filter ini". --}}
+                        <form action="{{ route('chat.phone-books.reset-all') }}" method="POST" class="m-0"
+                            onsubmit="return confirm('Hapus SEMUA kontak di Buku Telepon (bukan cuma yang lagi tampil di filter ini)?\n\nSemua kontak akan terhapus PERMANEN dan tidak bisa dikembalikan. Lanjutkan?');">
+                            @csrf
+                            <button type="submit" class="btn btn-outline-danger">
+                                <i class="ri-delete-bin-line"></i> Hapus Semua Kontak
+                            </button>
+                        </form>
                     </div>
                 </div>
 
-                <form method="GET" class="d-flex flex-wrap gap-2 mb-3">
+                <form method="GET" class="d-flex flex-wrap align-items-center gap-2 mb-3">
                     <div class="input-group" style="max-width: 260px;">
                         <input type="text" name="search" class="form-control" placeholder="Cari nama, nomor, email..." value="{{ request('search') }}">
                         <button type="submit" class="btn btn-outline-secondary"><i class="ri-search-line"></i></button>
@@ -74,6 +86,25 @@
                     </select>
                     @if(request('search') || request('wa_category_phone_book_id') || request('status') || request('blacklist') !== null)
                         <a href="{{ route('chat.phone-books.index') }}" class="btn btn-light">Reset</a>
+                    @endif
+
+                    {{-- Muncul cuma pas satu Kelompok spesifik lagi difilter — "reset per
+                         grup/category" dari PhoneBookController::resetByCategory(), beda
+                         dari tombol "Reset" di atas (yang cuma bersihin filter, bukan
+                         hapus data). --}}
+                    @if (request()->filled('wa_category_phone_book_id'))
+                        @php
+                            $selectedCategory = $categories->firstWhere('id', request('wa_category_phone_book_id'));
+                        @endphp
+                        @if ($selectedCategory)
+                            <form action="{{ route('chat.phone-books.reset-category', $selectedCategory->id) }}" method="POST" class="m-0"
+                                onsubmit="return confirm('Hapus semua kontak di kelompok &quot;{{ $selectedCategory->name }}&quot;?\n\nKontak di kelompok ini akan terhapus PERMANEN dan tidak bisa dikembalikan. Lanjutkan?');">
+                                @csrf
+                                <button type="submit" class="btn btn-outline-danger">
+                                    <i class="ri-delete-bin-line"></i> Hapus Kontak di "{{ $selectedCategory->name }}"
+                                </button>
+                            </form>
+                        @endif
                     @endif
                 </form>
 
