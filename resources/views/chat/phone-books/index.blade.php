@@ -55,6 +55,25 @@
                              ngikutin filter pencarian/kelompok/status yang lagi aktif —
                              makanya label & konfirmasinya sengaja ditulis tegas begitu,
                              supaya tidak dikira "hapus yang lagi tampil di filter ini". --}}
+                        {{-- "Hapus Terpilih" — beda dari "Hapus Semua Kontak" di
+                             sampingnya: cuma menghapus baris yang dicentang lewat
+                             checkbox di tabel (lihat <script> di bawah), bukan
+                             seluruh Buku Telepon. Form ini sengaja dimulai KOSONG
+                             (tanpa input ids[] apa pun) — <script> di bawah yang
+                             menyuntikkan <input type="hidden" name="ids[]"> sesuai
+                             checkbox yang lagi dicentang, tepat sebelum form ini
+                             submit. Tombolnya nonaktif sampai minimal 1 baris
+                             dicentang. --}}
+                        <form id="bulkDeletePhoneBookForm" action="{{ route('chat.phone-books.bulk-delete') }}" method="POST" class="m-0 js-danger-confirm-form"
+                            data-confirm="Hapus kontak yang dicentang? Tindakan ini PERMANEN dan tidak bisa dibatalkan."
+                            data-loading-text="Menghapus...">
+                            @csrf
+                            <button type="submit" id="bulkDeletePhoneBookBtn" class="btn btn-outline-danger" disabled>
+                                <i class="ri-delete-bin-line js-btn-icon"></i>
+                                <span class="js-btn-label">Hapus Terpilih (<span id="bulkDeletePhoneBookCount">0</span>)</span>
+                            </button>
+                        </form>
+
                         <form action="{{ route('chat.phone-books.reset-all') }}" method="POST" class="m-0 js-danger-confirm-form"
                             data-confirm="Hapus SEMUA kontak di Buku Telepon (bukan cuma yang lagi tampil di filter ini)?&#10;&#10;Semua kontak akan terhapus PERMANEN dan tidak bisa dikembalikan. Lanjutkan?"
                             data-loading-text="Menghapus...">
@@ -118,6 +137,9 @@
                     <table class="table table-centered table-hover align-middle mb-0" style="min-width: 1000px;">
                         <thead class="table-light">
                             <tr>
+                                <th style="width: 40px;">
+                                    <input type="checkbox" class="form-check-input" id="selectAllPhoneBooks" title="Pilih semua di halaman ini">
+                                </th>
                                 <th style="min-width: 160px;">Nama</th>
                                 <th style="min-width: 140px;">Nomor</th>
                                 <th style="min-width: 160px;">Email</th>
@@ -130,6 +152,9 @@
                         <tbody>
                             @forelse($phoneBooks as $phoneBook)
                                 <tr>
+                                    <td>
+                                        <input type="checkbox" class="form-check-input js-phonebook-row-checkbox" value="{{ $phoneBook->id }}">
+                                    </td>
                                     <td class="fw-semibold">
                                         {{ $phoneBook->name }}
                                         @if ($phoneBook->is_blacklisted)
@@ -181,7 +206,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="7" class="text-center text-muted py-4">Belum ada kontak. Klik "Tambah Kontak" untuk membuat yang pertama.</td>
+                                    <td colspan="8" class="text-center text-muted py-4">Belum ada kontak. Klik "Tambah Kontak" untuk membuat yang pertama.</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -316,6 +341,63 @@
             }
         });
     });
+
+    // "Hapus Terpilih" — select-all checkbox + per-row checkboxes stay
+    // OUTSIDE any <form> (each row already has its own destroy/blacklist
+    // <form>, and nesting a form around the whole table would be invalid
+    // HTML), so this collects whichever row checkboxes are checked and
+    // injects them as ids[] hidden inputs into #bulkDeletePhoneBookForm
+    // right before it submits — see that form's own comment above.
+    (function () {
+        var selectAll = document.getElementById('selectAllPhoneBooks');
+        var bulkForm = document.getElementById('bulkDeletePhoneBookForm');
+        var bulkBtn = document.getElementById('bulkDeletePhoneBookBtn');
+        var bulkCount = document.getElementById('bulkDeletePhoneBookCount');
+
+        function rowCheckboxes() {
+            return document.querySelectorAll('.js-phonebook-row-checkbox');
+        }
+
+        function updateBulkState() {
+            var all = rowCheckboxes();
+            var checked = document.querySelectorAll('.js-phonebook-row-checkbox:checked');
+
+            bulkCount.textContent = checked.length;
+            bulkBtn.disabled = checked.length === 0;
+
+            if (selectAll) {
+                selectAll.checked = all.length > 0 && checked.length === all.length;
+                selectAll.indeterminate = checked.length > 0 && checked.length < all.length;
+            }
+        }
+
+        if (selectAll) {
+            selectAll.addEventListener('change', function () {
+                rowCheckboxes().forEach(function (cb) {
+                    cb.checked = selectAll.checked;
+                });
+                updateBulkState();
+            });
+        }
+
+        rowCheckboxes().forEach(function (cb) {
+            cb.addEventListener('change', updateBulkState);
+        });
+
+        if (bulkForm) {
+            bulkForm.addEventListener('submit', function () {
+                document.querySelectorAll('.js-phonebook-row-checkbox:checked').forEach(function (cb) {
+                    var input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'ids[]';
+                    input.value = cb.value;
+                    bulkForm.appendChild(input);
+                });
+            });
+        }
+
+        updateBulkState();
+    })();
 
     // Blacklist reason is optional — a plain confirm() (not a full
     // modal) keeps this a one-click action from the table, same

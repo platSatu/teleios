@@ -523,6 +523,10 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 // tidak masalah).
                 Route::post('/reset-all', 'resetAll')->name('chat.phone-books.reset-all');
                 Route::post('/reset-category/{categoryId}', 'resetByCategory')->name('chat.phone-books.reset-category');
+                // "Hapus Terpilih" — checkbox-selected rows from the index table
+                // (see PhoneBookController::bulkDestroy()'s docblock). POST for the
+                // same reason as reset-all/reset-category above.
+                Route::post('/bulk-delete', 'bulkDestroy')->name('chat.phone-books.bulk-delete');
                 Route::post('/{id}/blacklist', 'blacklist')->name('chat.phone-books.blacklist');
                 Route::post('/{id}/unblacklist', 'unblacklist')->name('chat.phone-books.unblacklist');
                 Route::get('/export', 'export')->name('chat.phone-books.export');

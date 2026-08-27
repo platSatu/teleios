@@ -248,6 +248,48 @@ class PhoneBookController extends Controller
     }
 
     /**
+     * "Hapus Terpilih" — hapus hanya baris yang dicentang lewat checkbox di
+     * index.blade.php, bukan seluruh Buku Telepon (itu resetAll(), di bawah).
+     * Scoping identik dengan destroy()/resetAll(): whereIn(...) di-intersect
+     * dengan company_id (dan branch lock kalau ada), jadi id yang bukan milik
+     * scope caller ini otomatis tidak pernah ke-match — bukan dihapus, bukan
+     * dilaporkan error, sama seperti findOrFail() "tidak bisa dilihat = tidak
+     * bisa diklaim forbidden".
+     *
+     * Redirect-nya sengaja pakai back() (bukan route('chat.phone-books.index')
+     * seperti resetAll()/resetByCategory()) — menghapus beberapa baris dari
+     * daftar yang lagi difilter/di-paginate seharusnya tidak melempar user
+     * balik ke halaman 1 tanpa filter; kemungkinan besar mereka mau lanjut
+     * kerja dari halaman/filter yang sama persis.
+     */
+    public function bulkDestroy(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['string'],
+        ]);
+
+        $context = $this->companyContext($request);
+        $company = $context->company;
+
+        $query = WaPhoneBook::where('company_id', $company->id)
+            ->whereIn('id', $validated['ids']);
+
+        if ($context->isLockedToBranch()) {
+            $query->where(function ($q) use ($context) {
+                $q->where('branch_office_id', $context->branchOffice?->id)
+                    ->orWhereNull('branch_office_id');
+            });
+        }
+
+        $deleted = $query->delete();
+
+        return redirect()
+            ->back()
+            ->with('success', "Berhasil menghapus {$deleted} kontak terpilih.");
+    }
+
+    /**
      * "Hapus Semua Kontak" — hapus PERMANEN seluruh Buku Telepon yang bisa
      * dilihat caller. Scoping-nya sama persis dengan index()/destroy():
      * company ini, dan kalau caller branch-locked cuma yang jadi
