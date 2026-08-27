@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\WaApiKey;
 use App\Services\Chat\InboxService;
 use App\Services\Chat\SystemJwtService;
+use App\Support\PhoneNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -155,9 +156,16 @@ class WaApiSendMessageController extends Controller
     }
 
     /**
-     * A bare phone number (digits only, optionally with a leading '+')
-     * becomes an individual JID; anything already containing '@' (a real
-     * JID, individual or group) is passed through untouched.
+     * A bare phone number becomes an individual JID; anything already
+     * containing '@' (a real JID, individual or group) is passed through
+     * untouched. The digit-normalization itself (stray formatting
+     * stripped, plus the Indonesian "0812..."/"812..." -> "6281..."
+     * country-code correction) delegates to App\Support\PhoneNumber::
+     * normalize() — the same single source of truth
+     * App\Jobs\Concerns\NormalizesWhatsAppJid and
+     * App\Http\Controllers\Api\GoogleFormWebhookController use — so a
+     * third party posting "081234..." reaches the same recipient a
+     * manually entered "081234..." Buku Telepon/Kontak number would.
      */
     private function normalizeJid(string $to): string
     {
@@ -165,8 +173,6 @@ class WaApiSendMessageController extends Controller
             return $to;
         }
 
-        $digits = preg_replace('/\D/', '', $to);
-
-        return $digits.'@s.whatsapp.net';
+        return PhoneNumber::normalize($to).'@s.whatsapp.net';
     }
 }

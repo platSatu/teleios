@@ -11,23 +11,19 @@
             <div class="alert alert-danger">{{ session('error') }}</div>
         @endif
 
-        {{-- Import result — flashed by PhoneBookController::import(). --}}
+        {{-- Import result — only ever a STALE flash from before imports
+             moved to a background job (see App\Jobs\ProcessPhoneBookImport
+             and PhoneBookController::import()); nothing sets this session
+             key anymore, a fresh import redirects straight to "Riwayat
+             Import" below instead. Kept so an old flash still renders
+             instead of silently vanishing. --}}
         @if (session('importResult'))
             @php $importResult = session('importResult'); @endphp
-            <div class="alert {{ empty($importResult['errors']) ? 'alert-success' : 'alert-warning' }}">
-                <div class="fw-semibold mb-1">
-                    Import selesai: {{ count($importResult['created']) }} kontak berhasil dibuat{{ empty($importResult['errors']) ? '.' : ', ' . count($importResult['errors']) . ' baris gagal.' }}
-                </div>
-                @if (!empty($importResult['errors']))
-                    <details open>
-                        <summary class="small text-muted" style="cursor: pointer;">Lihat baris yang gagal</summary>
-                        <ul class="small mb-0 mt-2">
-                            @foreach ($importResult['errors'] as $err)
-                                <li>Baris {{ $err['row'] }}{{ $err['name'] ? ' (' . $err['name'] . ')' : '' }}: {{ implode(' ', $err['messages']) }}</li>
-                            @endforeach
-                        </ul>
-                    </details>
-                @endif
+            <div class="mb-3">
+                @include('chat.phone-books._import-result', [
+                    'createdCount' => count($importResult['created']),
+                    'errors' => $importResult['errors'],
+                ])
             </div>
         @endif
 
@@ -45,6 +41,9 @@
                         <button type="button" class="btn btn-light" data-bs-toggle="modal" data-bs-target="#importPhoneBookModal">
                             <i class="ri-upload-2-line"></i> Import
                         </button>
+                        <a href="{{ route('chat.phone-books.import-history') }}" class="btn btn-light">
+                            <i class="ri-history-line"></i> Riwayat Import
+                        </a>
                         <a href="{{ route('chat.phone-books.create') }}" class="btn btn-primary">
                             <i class="ri-add-line"></i> Tambah Kontak
                         </a>
@@ -206,7 +205,8 @@
                 <div class="modal-body">
                     <p class="text-muted small">
                         Upload file <code>.xlsx</code>/<code>.xls</code>/<code>.csv</code> untuk menambah banyak
-                        kontak sekaligus.
+                        kontak sekaligus. Import diproses di background — setelah upload kamu akan diarahkan ke
+                        halaman <strong>Riwayat Import</strong> untuk memantau hasilnya.
                     </p>
 
                     {{-- Inline format example — mirrors the columns/example row baked into
@@ -265,7 +265,7 @@
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
                         <div class="form-text">
-                            Maks 2MB, maks {{ \App\Imports\PhoneBookImport::MAX_ROWS }} kontak per file.
+                            Maks 5MB, maks {{ \App\Imports\PhoneBookImport::MAX_ROWS }} kontak per file (baris kosong tidak dihitung).
                         </div>
                     </div>
                 </div>

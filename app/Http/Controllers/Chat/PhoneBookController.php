@@ -7,11 +7,12 @@ use App\Exports\PhoneBookImportTemplateExport;
 use App\Exports\PhoneBooksExport;
 use App\Http\Controllers\Concerns\ResolvesCompanyContext;
 use App\Http\Controllers\Controller;
-use App\Imports\PhoneBookImport;
+use App\Jobs\ProcessPhoneBookImport;
 use App\Models\BranchOffice;
 use App\Models\Company;
 use App\Models\WaCategoryPhoneBook;
 use App\Models\WaPhoneBook;
+use App\Models\WaPhoneBookImport;
 use App\Services\Crm\CustomerIdentityService;
 use App\Services\PackageLimitService;
 use Illuminate\Http\RedirectResponse;
@@ -397,13 +398,25 @@ class PhoneBookController extends Controller
         return Excel::download($export, 'template-import-buku-telepon.xlsx');
     }
 
+    /**
+     * Upload only — the actual parsing/inserting happens off the
+     * request, in App\Jobs\ProcessPhoneBookImport, so a ~1000-row file
+     * can't time out the request and its result can't be lost the
+     * moment a one-shot session flash expires. See
+     * App\Models\WaPhoneBookImport's migration docblock for the full
+     * reasoning.
+     */
     public function import(Request $request): RedirectResponse
     {
         $context = $this->companyContext($request);
         $company = $context->company;
 
         $validator = Validator::make($request->all(), [
-            'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:2048'],
+            // 5MB (was 2MB) — ~1000 contact rows with a few extra
+            // columns can get close to 2MB depending on formatting, so
+            // this leaves real headroom rather than rejecting a
+            // legitimately-sized file.
+            'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:5120'],
         ]);
 
         if ($validator->fails()) {
@@ -412,28 +425,59 @@ class PhoneBookController extends Controller
                 ->withErrors($validator);
         }
 
-        $import = new PhoneBookImport(
-            $company,
-            $this->categoriesFor($company, $context),
-            $this->branchOfficesFor($company, $context),
-            $request->user()?->id,
-            $this->customerIdentity,
-        );
+        // Private disk — this file is only ever read back by
+        // ProcessPhoneBookImport, never served to a browser, same
+        // "private input file for a background process" pattern
+        // Chat\AiBotController::attachFile() uses for attach_file_path.
+        // The job deletes it once processed either way (success or
+        // failure) — see ProcessPhoneBookImport::handle().
+        $path = $request->file('file')->store('phone-book-imports', 'local');
 
-        Excel::import($import, $request->file('file'));
+        $import = WaPhoneBookImport::create([
+            'company_id' => $company->id,
+            'user_id' => $request->user()?->id,
+            'original_filename' => $request->file('file')->getClientOriginalName(),
+            'file_path' => $path,
+            // Snapshot, taken NOW while $context is still available, of
+            // exactly which Kelompok/branch rows the uploading user is
+            // allowed to import against — see
+            // App\Jobs\ProcessPhoneBookImport's docblock for why the
+            // queued job re-fetches by these ids instead of re-deriving
+            // a branch-locked member's scope itself.
+            'allowed_category_ids' => $this->categoriesFor($company, $context)->pluck('id')->all(),
+            'allowed_branch_office_ids' => $this->branchOfficesFor($company, $context)->pluck('id')->all(),
+            'status' => WaPhoneBookImport::STATUS_PENDING,
+        ]);
 
-        if ($import->tooManyRows) {
-            return redirect()
-                ->route('chat.phone-books.index')
-                ->with('error', 'File terlalu banyak baris (maksimal '.PhoneBookImport::MAX_ROWS.' baris per import). Tidak ada data yang disimpan.');
-        }
+        ProcessPhoneBookImport::dispatch($import->id);
 
         return redirect()
-            ->route('chat.phone-books.index')
-            ->with('importResult', [
-                'created' => $import->created,
-                'errors' => $import->errors,
-            ]);
+            ->route('chat.phone-books.import-history')
+            ->with('success', 'Import sedang diproses di background. Hasilnya akan muncul di halaman ini begitu selesai — refresh halaman ini setelah beberapa saat kalau statusnya masih "Diproses".');
+    }
+
+    /**
+     * "Riwayat Import" — every App\Models\WaPhoneBookImport this
+     * company has run, newest first, each showing its own
+     * created/errors/skipped-sheets result (or a failure_message, or
+     * "still processing") once the background job reaches it. Always
+     * scoped to company_id only (an import itself isn't tied to a
+     * branch — the branch scoping that mattered happened once, at
+     * upload time, via allowed_category_ids/allowed_branch_office_ids —
+     * see import() above), same multi-tenant rule every other list in
+     * this controller follows.
+     */
+    public function importHistory(Request $request): View
+    {
+        $context = $this->companyContext($request);
+        $company = $context->company;
+
+        $imports = WaPhoneBookImport::where('company_id', $company->id)
+            ->with('user:id,name')
+            ->orderByDesc('created_at')
+            ->paginate(15);
+
+        return view('chat.phone-books.import-history', compact('imports'));
     }
 
     private function branchOfficesFor(Company $company, $context)

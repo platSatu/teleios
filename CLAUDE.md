@@ -4,30 +4,34 @@ Project: WhatsApp Business Gateway + CRM SaaS (Laravel + backend Go untuk koneks
 
 Dokumen ini adalah instruksi standing yang harus selalu diperhatikan di setiap sesi coding untuk project ini, bukan cuma sekali dibaca lalu dilupakan.
 
-## Checklist Prioritas Kerja Saat Ini (diurutkan, per 21 Agustus 2026)
+## Checklist Prioritas Kerja Saat Ini (diurutkan, per 21 Agustus 2026, update 27 Agustus 2026)
 
 Ini rangkuman semua task terbuka dari seluruh dokumen ini, diurutkan dari yang paling mendesak. Cek dari atas ke bawah tiap mulai sesi baru — jangan loncat ke bawah sebelum yang di atasnya beres, kecuali ada alasan jelas.
 
 - [ ] **1. Commit & push semua perubahan hari ini ke git.** Composer.lock, fix migration (`disableForeignKeyConstraints`), fix seeder (hapus `WithoutModelEvents`), CLAUDE.md, dan `docs/api/wa-api-v1.openapi.json` semuanya masih cuma ada di disk lokal + VPS staging, BELUM ke-commit sama sekali. Ini paling berisiko — kalau ada apa-apa di laptop/VPS, semua kerjaan bisa hilang tanpa jejak. Command lengkap ada di section "Alur Branch & Deploy" langkah 2-4 di bawah.
-- [ ] **2. Sentralisasi proteksi pengiriman WA di `InboxService`** — menutup celah `WaApiSendMessageController` (lihat detail temuan di section "Task Menuju SaaS Siap Pakai" 7.1) sekaligus menghilangkan duplikasi cek di 3 file lain. **Spesifikasi lengkap (siap eksekusi begitu ada instruksi "lanjut kerjakan"):**
+- [ ] **2. `g_backend`: tambahkan panic recovery (`recover()`) di semua goroutine manual + event handler WhatsApp** — saat ini TIDAK ADA satupun `recover()` di codebase Go (lihat 9.1). Kalau 1 device di company manapun memicu panic, SELURUH proses mati dan WA SEMUA company ikut terputus bersamaan — dan karena proses production belum systemd (poin 13 di bawah), tidak auto-restart. Risiko tertinggi di seluruh audit karena dampaknya lintas-tenant, bukan cuma 1 company.
+- [ ] **3. Sentralisasi proteksi pengiriman WA di `InboxService`** — menutup celah `WaApiSendMessageController` (lihat detail temuan di section "Task Menuju SaaS Siap Pakai" 7.1) sekaligus menghilangkan duplikasi cek di 3 file lain. **Scope bertambah per audit 27 Agustus**: `SendChatbotFlowMessages.php` dan `SendCsatSurvey.php` juga ternyata bypass total (lihat 9.5) — begitu sentralisasi ini selesai, keduanya otomatis ikut terlindungi tanpa kode tambahan, sama seperti `WaApiSendMessageController`. **Spesifikasi lengkap (siap eksekusi begitu ada instruksi "lanjut kerjakan"):**
   - Scope: method `send()`, `sendPoll()`, `sendMedia()`, `sendStoredMedia()` di `app/Services/Chat/InboxService.php` — keempatnya benar-benar mengirim ke Go backend.
   - Urutan pengecekan di dalam tiap method itu, SEBELUM panggil Go backend:
     1. `PackageLimitService::requireActivePackage($company)`
     2. `BroadcastThrottleService::attempt($deviceId, $companyId)`
-    3. `PackageLimitService::reserve($company, $metric)` — default metric `broadcast_send`, buat parameter supaya bisa beda per caller (untuk kalau nanti auto-reply/AI bot dapat metric sendiri, lihat poin 4 checklist ini).
+    3. `PackageLimitService::reserve($company, $metric)` — default metric `broadcast_send`, buat parameter supaya bisa beda per caller (untuk kalau nanti auto-reply/AI bot dapat metric sendiri, lihat poin 8 checklist ini).
     4. Kalau kirim ke Go backend gagal → `release()` kuota yang tadi di-reserve; kalau sukses → biarkan.
   - Lempar exception spesifik per jenis kegagalan (package tidak aktif / kuota habis / throttle penuh) supaya tiap pemanggil bisa handle pesannya sesuai konteks (`WaApiSendMessageController` balas JSON 429/403, auto-reply/AI bot cukup skip diam-diam seperti sekarang).
-  - Hapus pengecekan manual yang sekarang dobel di `SendScheduledWaMessage.php`, `SendAutoReplyMessage.php`, `SendAiBotReply.php` (baris `requireActivePackage()`/`reserve()`/`release()`/`throttle->attempt()`) — supaya tidak reserve kuota 2x per pesan. `WaApiSendMessageController` otomatis ikut terlindungi begitu manggil `InboxService::send()` dengan company+deviceId yang benar, tanpa tambahan kode di controller itu sendiri.
-  - WAJIB test di staging sebelum merge ke main: broadcast terjadwal, auto-reply, AI bot, dan WA API pihak ketiga — masing-masing 2 skenario (dalam kuota vs kuota habis, package aktif vs expired) — supaya jalur yang sudah jalan sekarang tidak ikut rusak.
+  - Hapus pengecekan manual yang sekarang dobel di `SendScheduledWaMessage.php`, `SendAutoReplyMessage.php`, `SendAiBotReply.php` (baris `requireActivePackage()`/`reserve()`/`release()`/`throttle->attempt()`) — supaya tidak reserve kuota 2x per pesan. `WaApiSendMessageController`, `SendChatbotFlowMessages`, dan `SendCsatSurvey` otomatis ikut terlindungi begitu manggil `InboxService::send()`/`sendPoll()` dengan company+deviceId yang benar, tanpa tambahan kode di pemanggil itu sendiri.
+  - WAJIB test di staging sebelum merge ke main: broadcast terjadwal, auto-reply, AI bot, chatbot flow, CSAT survey, dan WA API pihak ketiga — masing-masing 2 skenario (dalam kuota vs kuota habis, package aktif vs expired) — supaya jalur yang sudah jalan sekarang tidak ikut rusak.
   - **Belum boleh dikerjakan sebelum ada instruksi eksplisit** — masih tahap diskusi per aturan section "Alur Kerja Kolaborasi".
-- [ ] **3. Cek Superadmin > Package Limit** — pastikan semua paket yang dijual sudah punya angka limit untuk `device_count`, `contact_count`, `branch_count`, `broadcast_send`. Operasional, bukan coding. Selama belum diisi, semua company punya kuota unlimited tanpa disadari (lihat 7.2).
-- [ ] **4. Putuskan kebijakan kuota auto-reply & AI bot reply** — sengaja unlimited (beda kebijakan dari broadcast terjadwal), atau perlu metric baru (`auto_reply_send`/`ai_bot_send`)? Ini nentuin apakah poin 2 di atas perlu metric tambahan (lihat 7.1).
-- [ ] **5. Konsolidasi menu pengiriman pesan** (Visi Produk poin 1) — broadcast terjadwal + chatbot flow + jenis sejenis lain jadi satu form, tinggal pilih jenisnya di dalam. Refactor UX besar, cek dulu kondisi menu/controller aktual sebelum mulai, jangan asumsi.
-- [ ] **6. Konsolidasi menu balas pesan** (Visi Produk poin 2) — AI, chatbot flow, auto-reply, balasan cepat jadi satu menu.
-- [ ] **7. Fix `Superadmin\UserController::reset()`** — ganti update `wallet.balance` langsung jadi lewat `WalletLedgerService::debit()`, supaya konsisten tercatat di `LedgerEntry` seperti perubahan saldo lain (lihat 7.4). Risiko rendah, prioritas rendah.
-- [ ] **8. Refactor `menu.blade.php`** (738 baris/48KB) jadi data-driven (array/config + 1 partial loop) supaya nambah/hapus menu tidak edit HTML manual panjang (lihat 7.3).
-- [ ] **9. Systemd service untuk `g_backend_konexa` production** — saat ini proses jalan unmanaged (bare process sejak 19 Agustus), kalau mati tidak auto-restart (lihat Known Issues).
-- [ ] **10. Tentukan use case & scope function-calling chatbot** (query/update data CRM lewat AI bot) — fitur baru besar, butuh keputusan use-case dulu sebelum desain teknis (lihat 7.5).
+- [ ] **4. Tambah idempotency guard di `GoogleFormWebhookController`** — TIDAK otomatis ketutup oleh poin 3 di atas. Submit form yang terkirim dobel (retry Apps Script, dsb) saat ini bisa bikin pesan WA dobel ke customer. Ikuti pola `Cache::add($lockKey, true, ...)` yang sudah dipakai `WaIncomingMessageWebhookController` (lihat 9.5).
+- [ ] **5. Hash `secret_key`/`token` di `WaApiKey`** — saat ini tersimpan plaintext di DB (lihat 9.3). Kebocoran DB/backup langsung expose semua kredensial API pihak ketiga semua company.
+- [ ] **6. Tambah index `created_at`** pada `audit_logs`, `ledger_entries`, `history_user_login`, `voucher_histories`, `payment_transactions` — kelima tabel ini tumbuh terus lintas semua company dan selalu di-query `->latest()->paginate()` tanpa index (lihat 9.6). Migration tambah index, risiko rendah untuk dikerjakan.
+- [ ] **7. Cek Superadmin > Package Limit** — pastikan semua paket yang dijual sudah punya angka limit untuk `device_count`, `contact_count`, `branch_count`, `broadcast_send`. Operasional, bukan coding. Selama belum diisi, semua company punya kuota unlimited tanpa disadari (lihat 7.2).
+- [ ] **8. Putuskan kebijakan kuota auto-reply & AI bot reply** — sengaja unlimited (beda kebijakan dari broadcast terjadwal), atau perlu metric baru (`auto_reply_send`/`ai_bot_send`)? Ini nentuin apakah poin 3 di atas perlu metric tambahan (lihat 7.1).
+- [ ] **9. Konsolidasi menu pengiriman pesan** (Visi Produk poin 1) — broadcast terjadwal + chatbot flow + jenis sejenis lain jadi satu form, tinggal pilih jenisnya di dalam. Refactor UX besar, cek dulu kondisi menu/controller aktual sebelum mulai, jangan asumsi.
+- [ ] **10. Konsolidasi menu balas pesan** (Visi Produk poin 2) — AI, chatbot flow, auto-reply, balasan cepat jadi satu menu.
+- [ ] **11. Fix `Superadmin\UserController::reset()`** — ganti update `wallet.balance` langsung jadi lewat `WalletLedgerService::debit()`, supaya konsisten tercatat di `LedgerEntry` seperti perubahan saldo lain (lihat 7.4). Risiko rendah, prioritas rendah.
+- [ ] **12. Refactor `menu.blade.php`** (738 baris/48KB) jadi data-driven (array/config + 1 partial loop) supaya nambah/hapus menu tidak edit HTML manual panjang (lihat 7.3).
+- [ ] **13. Systemd service + graceful shutdown untuk `g_backend_konexa` production** — proses jalan unmanaged (bare process sejak 19 Agustus), kalau mati tidak auto-restart (lihat Known Issues). **Digabung dengan 9.2**: tambahkan juga signal handling (SIGTERM/SIGINT) supaya koneksi WA semua device ditutup rapi saat restart/deploy, bukan di-kill paksa.
+- [ ] **14. Tentukan use case & scope function-calling chatbot** (query/update data CRM lewat AI bot) — fitur baru besar, butuh keputusan use-case dulu sebelum desain teknis (lihat 7.5).
 
 ## Visi Produk & Arah Pengembangan (didiskusikan 21 Agustus 2026)
 
@@ -183,7 +187,66 @@ Ini task pengembangan baru (bukan bug):
 - [ ] WAJIB scope ketat semua query/update tool ke `company_id` milik bot itu — jangan sampai chatbot bisa baca/ubah data company lain.
 - [ ] Aksi UPDATE oleh chatbot sebaiknya tercatat di audit log (pola `AuditLog` yang sudah dipakai `DuitkuCallbackController`), jangan silent.
 
-## 9. Known Issues (per audit 14 Agustus 2026, diverifikasi ulang 21 Agustus 2026)
+## 9. Audit Lanjutan — Teleios + g_backend (27 Agustus 2026)
+
+Audit ini mencakup 4 sudut: concurrency & keamanan uang di Laravel, skalabilitas & isolasi multi-tenant di Laravel, keamanan/concurrency di `g_backend` (Go, belum pernah diaudit sedalam ini sebelumnya), dan titik sambung Laravel↔Go + endpoint pihak ketiga. Semua pola production-grade yang sudah diklaim section 7.1-7.4 (PackageLimitService, WalletLedgerService, BroadcastThrottleService, DispatchDueWaMessageSchedules, checkout/voucher, webhook Duitku) **terverifikasi ulang masih benar, tidak ada regresi**. Isolasi multi-tenant Laravel juga secara umum solid (pola scoping `company_id` konsisten). Temuan baru di bawah, diurutkan dari yang paling berisiko.
+
+### 9.1 `g_backend`: tidak ada panic recovery (Risiko Tinggi)
+
+Tidak ada satupun `recover()` di seluruh codebase Go. Recovery middleware Gin cuma melindungi goroutine per-HTTP-request — goroutine manual (`RestoreSessions`, connection watchdog, `eventHandler` whatsmeow, webhook fire-and-forget, dsb) tidak dilindungi sama sekali. Kalau satu device di company manapun memicu panic (misal nil pointer dari event WA yang tidak terduga), **SELURUH proses Go mati** — koneksi WA SEMUA company terputus bersamaan, bukan cuma company yang device-nya bermasalah. Diperparah karena proses production belum systemd (lihat Known Issues) — tidak auto-restart.
+
+Rekomendasi: tambah `defer func(){ if r := recover(); r != nil { log... } }()` di setiap goroutine manual + di dalam `eventHandler` (per-event, bukan per-client), supaya 1 event/device yang error tidak menjatuhkan koneksi device lain. Tetap log panic-nya dengan jelas — `recover()` mencegah proses mati, tapi bukan pengganti perbaikan root cause bug-nya.
+
+### 9.2 `g_backend`: tidak ada graceful shutdown (Risiko Sedang-Tinggi)
+
+Tidak ada signal handling (SIGTERM/SIGINT) di `cmd/server/main.go`. Tiap restart/deploy, proses di-`kill` paksa — semua koneksi WA aktif terputus kasar (bukan logout bersih), termasuk risiko mid-write ke SQLite whatsmeow store. Sebaiknya dikerjakan bareng dengan setup systemd (checklist poin 13).
+
+### 9.3 `WaApiKey`: `secret_key`/`token` disimpan plaintext (Risiko Tinggi)
+
+`app/Models/WaApiKey.php` menyimpan kredensial API pihak ketiga polos di database, tidak di-hash. Kebocoran DB/backup langsung expose semua kredensial API semua company sekaligus. Rekomendasi: hash saat disimpan (pola sama seperti password), tampilkan nilai asli hanya sekali saat digenerate.
+
+### 9.4 `POST /wa-api/v1/send-message`: tidak ada rate limiting sama sekali (Risiko Tinggi)
+
+Dikonfirmasi bukan cuma belum lewat `BroadcastThrottleService` (sudah diketahui, lihat 7.1) — juga TIDAK ADA `throttle:` middleware Laravel maupun limiter apapun di sisi Go untuk endpoint ini. Otomatis ikut tertutup begitu sentralisasi `InboxService` (checklist poin 3) selesai — dicatat di sini supaya masuk scope test staging-nya.
+
+### 9.5 Job/endpoint lain yang bypass proteksi kirim (Risiko Tinggi/Sedang)
+
+Selain `WaApiSendMessageController` (7.1), ditemukan 2 jalur lain yang juga langsung panggil `InboxService` tanpa `requireActivePackage()`/`reserve()`/`BroadcastThrottleService`:
+- **`app/Jobs/SendChatbotFlowMessages.php`** (Tinggi) — volume berpotensi tinggi (tiap step flow terpicu), risiko ban WA + kuota tembus tanpa batas untuk company yang package-nya sudah expired.
+- **`app/Jobs/SendCsatSurvey.php`** (Sedang) — volume rendah (1x per percakapan resolved), risiko lebih kecil tapi pelanggaran pola yang sama.
+- **`app/Http/Controllers/Api/GoogleFormWebhookController.php`** (Tinggi) — sama, DITAMBAH **tidak idempotent** (tidak ada dedup guard sama sekali): submit form yang terkirim dobel bisa bikin pesan WA dobel ke customer asli. Idempotency ini TIDAK otomatis ketutup oleh sentralisasi `InboxService` — perlu ditambah terpisah (checklist poin 4), ikuti pola `Cache::add` per submission id seperti `WaIncomingMessageWebhookController`.
+
+Ketiganya (proteksi kuota/throttle-nya) otomatis terlindungi begitu checklist poin 3 selesai.
+
+### 9.6 Index database untuk tabel log besar (Risiko Tinggi)
+
+Tidak ada index `created_at` di 5 tabel log yang tumbuh terus lintas semua company dan selalu di-query `->latest()->paginate()`: `audit_logs`, `ledger_entries`, `history_user_login`, `voucher_histories`, `payment_transactions`. Kalau sudah jutaan baris, tiap buka halaman list-nya bakal full-table-scan + filesort. Sebagai perbandingan, `wa_conversations`/`wa_message_schedule_logs` sudah punya index yang tepat — tinggal terapkan pola yang sama ke 5 tabel ini (migration tambah index, risiko rendah untuk dikerjakan).
+
+### 9.7 Temuan tambahan (Risiko Sedang/Rendah, dicatat untuk referensi — belum masuk checklist prioritas)
+
+- **`WaApiKeyController::generate()/data()`** tidak cek device yang diminta benar milik company yang login sebelum bikin/baca baris `WaApiKey`. Saat ini masih "selamat" karena ada lapis kedua (`assertOwnership` di Go), tapi bukan defense-in-depth yang sesungguhnya — kalau logic Go itu berubah, celah ini langsung jadi IDOR beneran. (Sedang)
+- Kombinasi `X-API-KEY` shared-secret di `g_backend` + CORS untuk browser — berpotensi bocor ke client-side kalau frontend Next.js benar-benar manggil Go backend langsung tanpa lewat Laravel. Perlu diklarifikasi dulu arsitekturnya sebelum jadi masalah nyata. (Sedang)
+- `WaIncomingMessageWebhookController` log `$request->all()` — isi pesan customer + nomor telepon ter-log mentah, kontras dengan disiplin jalur outbound yang sudah tidak pernah log isi pesan. (Sedang)
+- `DealController::index()` (papan Kanban CRM) fetch semua deal tanpa pagination; `ContactController::list()` cuma hard-cap 500 baris tanpa pagination sungguhan (kontak lama diam-diam tidak pernah muncul di list). (Sedang)
+- Tidak ada timeout/retry eksplisit dari Laravel saat manggil Go backend (`InboxService`/`ConnectDeviceService`/`GolangAuthService`) — bergantung kontrak tak tertulis `sendSlotMaxWait=25s` di sisi Go, rapuh kalau salah satu sisi berubah. (Sedang)
+- Dokumentasi `docs/api/wa-api-v1.openapi.json` untuk response 422 tidak cocok dengan response asli Laravel (`{"message":..., "errors":...}` vs yang didokumentasikan). (Sedang)
+- JWT di `g_backend` (`auth-service.go`) tidak membatasi algoritma secara eksplisit (`jwt.WithValidMethods`) — defense-in-depth murah untuk dikerjakan. (Rendah)
+- Nomor telepon/JID ter-log polos di beberapa tempat di `g_backend` (isi pesan sendiri sudah aman, tidak pernah di-log). (Rendah)
+- Header `Content-Disposition` di `wa-media-controller.go` dibangun tanpa escape nama file. (Rendah)
+- `trigger_count` di 3 tempat (`SendAutoReplyMessage`, `SendAiBotReply`, `GoogleFormWebhookController`) pakai baca-tulis non-atomik alih-alih `->increment()` — murni counter statistik tampilan, dampak kosmetik saja, bukan kuota/uang. (Rendah)
+- `GoogleFormWebhookController` terima payload tanpa batas ukuran/jumlah field — relevan karena pola integrasi ini jadi TEMPLATE untuk integrasi pihak ketiga berikutnya (Visi Produk poin 8). (Rendah-Sedang)
+
+### 9.8 Catatan: kenapa temuan terus berulang tiap audit
+
+Dibahas 27 Agustus 2026 — dicatat supaya jadi konteks di sesi berikutnya, bukan sekadar keluhan. Pola "tiap audit selalu nemu yang baru" di 3 audit sejauh ini (14, 21, 27 Agustus) bukan soal audit kurang teliti — dua sebab konkretnya:
+
+1. Cakupan tiap audit belum pernah sama persis. `g_backend` (Go) misalnya baru diperiksa pertama kali di audit 27 Agustus ini — bukan kelewat, memang belum pernah disentuh sebelumnya.
+2. Proteksi kirim WA (`requireActivePackage`/`reserve`/`BroadcastThrottleService`) saat ini DITEMPEL manual di tiap pemanggil, bukan dipaksa lewat satu titik. Jadi tiap kali ada job/controller baru yang kirim WA (`SendChatbotFlowMessages`, `SendCsatSurvey`, `GoogleFormWebhookController`), developer harus INGAT copy proteksi itu ke file baru — kalau lupa atau fiturnya dibuat buru-buru, bolong lagi. Ini akar kenapa checklist poin 3 (sentralisasi ke `InboxService`) itu prioritas struktural, bukan cuma 1 dari 14 tugas: begitu semua jalur kirim WA WAJIB lewat 1 fungsi, kelas bug "jalur baru yang bypass proteksi" ini seharusnya berhenti muncul di audit-audit berikutnya, bukan lagi ditutup satu-satu tiap ketemu.
+
+**Rekomendasi ke depan**: jalankan section 0 (Prinsip Dasar, 5 pertanyaan) SAAT menulis fitur/job baru yang menyentuh pengiriman WA — bukan menunggu audit berikutnya nemuin belakangan.
+
+
+## 10. Known Issues (per audit 14 Agustus 2026, diverifikasi ulang 21 Agustus 2026)
 
 Catatan untuk sesi mendatang — ini ditemukan lewat investigasi.
 

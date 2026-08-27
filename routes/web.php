@@ -527,6 +527,9 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::post('/{id}/unblacklist', 'unblacklist')->name('chat.phone-books.unblacklist');
                 Route::get('/export', 'export')->name('chat.phone-books.export');
                 Route::get('/import/template', 'importTemplate')->name('chat.phone-books.import-template');
+                // "Riwayat Import" — App\Models\WaPhoneBookImport history/status
+                // page for the async import job (App\Jobs\ProcessPhoneBookImport).
+                Route::get('/import/history', 'importHistory')->name('chat.phone-books.import-history');
                 Route::post('/import', 'import')
                     ->middleware('throttle:10,1')
                     ->name('chat.phone-books.import');

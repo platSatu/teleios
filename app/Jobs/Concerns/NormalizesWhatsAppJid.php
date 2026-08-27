@@ -2,6 +2,8 @@
 
 namespace App\Jobs\Concerns;
 
+use App\Support\PhoneNumber;
+
 /**
  * Used by App\Jobs\SendScheduledWaMessage (covers all 3 WaMessageSchedule
  * types — once/recurring/drip — since the merge that retired the
@@ -11,23 +13,23 @@ namespace App\Jobs\Concerns;
  * leading 0/+) into a full WhatsApp JID. Defensive about stray
  * spaces/dashes/+ since none of these forms validate it as a strict
  * phone format.
+ *
+ * The actual digit-correction (stray formatting stripped, "0812..."/
+ * "812..." rewritten to the "6281..." country-code form) is delegated to
+ * App\Support\PhoneNumber::normalize() — the same single source of truth
+ * App\Http\Controllers\Api\WaApiSendMessageController::normalizeJid() and
+ * App\Http\Controllers\Api\GoogleFormWebhookController use, so a schedule
+ * recipient typed as "0812..." resolves to the exact same JID a manually
+ * entered Buku Telepon/Kontak number with the same digits would.
  */
 trait NormalizesWhatsAppJid
 {
     protected function toIndividualJid(?string $phoneNumber): ?string
     {
-        $digits = preg_replace('/\D+/', '', (string) $phoneNumber);
+        $digits = PhoneNumber::normalize((string) $phoneNumber);
 
         if ($digits === '') {
             return null;
-        }
-
-        // A locally-typed "0812..." without the shared country-code
-        // convention these forms' placeholders assume — normalize it
-        // the same way (Indonesian trunk prefix -> country code 62)
-        // rather than send a malformed JID.
-        if (str_starts_with($digits, '0')) {
-            $digits = '62'.substr($digits, 1);
         }
 
         return $digits.'@s.whatsapp.net';

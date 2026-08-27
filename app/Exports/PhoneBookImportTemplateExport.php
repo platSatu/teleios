@@ -3,20 +3,23 @@
 namespace App\Exports;
 
 use Illuminate\Support\Collection;
-use Maatwebsite\Excel\Concerns\FromArray;
-use Maatwebsite\Excel\Concerns\ShouldAutoSize;
-use Maatwebsite\Excel\Concerns\WithHeadings;
-use Maatwebsite\Excel\Concerns\WithStyles;
-use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 
 /**
- * "Download Template" inside the Buku Telepon import modal — headers +
- * one example row, plus every Kelompok/branch name this specific
- * company can currently import against. See
- * App\Exports\CategoryPhoneBookImportTemplateExport for the same
- * pattern applied to Kelompok itself.
+ * "Download Template" inside the Buku Telepon import modal — two
+ * sheets: a fill-in-the-blanks Template (App\Exports\
+ * PhoneBookImportTemplateSheet) and a Referensi sheet
+ * (App\Exports\PhoneBookImportReferenceSheet) listing every
+ * Kelompok/branch name this specific company can currently import
+ * against — see the individual sheet classes for why they're split
+ * instead of sharing one sheet like before. Same pattern as
+ * App\Exports\CompanyUserImportTemplateExport. See
+ * App\Exports\CategoryPhoneBookImportTemplateExport for the
+ * single-sheet version of this template still used by the "Kelompok"
+ * import (out of scope for this split — that one doesn't have the
+ * phantom-row/MAX_ROWS interaction this one does).
  */
-class PhoneBookImportTemplateExport implements FromArray, WithHeadings, ShouldAutoSize, WithStyles
+class PhoneBookImportTemplateExport implements WithMultipleSheets
 {
     /**
      * @param  Collection<int,string>  $categoryNames
@@ -28,37 +31,11 @@ class PhoneBookImportTemplateExport implements FromArray, WithHeadings, ShouldAu
     ) {
     }
 
-    public function array(): array
-    {
-        $rows = [
-            ['Budi Santoso', '6281234567890', 'budi@contoh.com', $this->categoryNames->first() ?? 'Pelanggan VIP', '', 'active'],
-            [],
-            ['Kelompok yang valid:'],
-        ];
-
-        foreach ($this->categoryNames as $name) {
-            $rows[] = [$name];
-        }
-
-        $rows[] = [];
-        $rows[] = ['Branch yang valid (opsional, boleh dikosongkan):'];
-
-        foreach ($this->branchNames as $name) {
-            $rows[] = [$name];
-        }
-
-        return $rows;
-    }
-
-    public function headings(): array
-    {
-        return ['nama', 'nomor_telepon', 'email', 'kelompok', 'branch', 'status'];
-    }
-
-    public function styles(Worksheet $sheet)
+    public function sheets(): array
     {
         return [
-            1 => ['font' => ['bold' => true]],
+            new PhoneBookImportTemplateSheet($this->categoryNames->first()),
+            new PhoneBookImportReferenceSheet($this->categoryNames, $this->branchNames),
         ];
     }
 }

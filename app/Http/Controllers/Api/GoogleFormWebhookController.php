@@ -8,6 +8,7 @@ use App\Models\WaFormSubmission;
 use App\Models\WaMessageTemplate;
 use App\Services\Chat\InboxService;
 use App\Services\Chat\SystemJwtService;
+use App\Support\PhoneNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -210,9 +211,12 @@ class GoogleFormWebhookController extends Controller
      * Case-insensitive, trimmed key lookup — the field name saved on the
      * integration has to match a Google Form question title exactly by
      * meaning, but "Nomor HP" vs "nomor hp" vs " Nomor HP " shouldn't be
-     * treated as three different fields. Only digits/+ survive into the
-     * final number; anything that normalizes to nothing is treated as
-     * missing.
+     * treated as three different fields. The match is normalized through
+     * App\Support\PhoneNumber::normalize() — same single source of truth
+     * every JID builder in this app delegates to — so a form answer typed
+     * as "0812..."/"812..." resolves to the same "6281..." number a
+     * manually entered Buku Telepon/Kontak contact with the same digits
+     * would; anything that normalizes to nothing is treated as missing.
      *
      * @param  array<string, mixed>  $payload
      */
@@ -232,9 +236,9 @@ class GoogleFormWebhookController extends Controller
             return null;
         }
 
-        $digits = preg_replace('/\D/', '', (string) $raw);
+        $normalized = PhoneNumber::normalize((string) $raw);
 
-        return $digits !== '' ? $digits : null;
+        return $normalized !== '' ? $normalized : null;
     }
 
     /**
@@ -273,8 +277,9 @@ class GoogleFormWebhookController extends Controller
     /**
      * Same bare-number-to-JID normalization as
      * WaApiSendMessageController::normalizeJid() — target_number here is
-     * always already digits-only (see extractTargetNumber()), so this
-     * only ever appends the individual-chat suffix.
+     * always already run through App\Support\PhoneNumber::normalize()
+     * (see extractTargetNumber() above), so this only ever appends the
+     * individual-chat suffix.
      */
     private function toIndividualJid(string $number): string
     {
