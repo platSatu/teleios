@@ -31,7 +31,10 @@
             <div class="card-body">
                 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
                     <div>
-                        <h4 class="mb-1">Buku Telepon</h4>
+                        <h4 class="mb-1">
+                            Buku Telepon
+                            <span class="badge bg-primary-subtle text-primary ms-1">{{ number_format($phoneBooks->total(), 0, ',', '.') }} kontak</span>
+                        </h4>
                         <p class="text-muted mb-0">Kontak yang kamu kelola sendiri — dipakai sebagai tujuan pengiriman WA Template / Pesan Terjadwal.</p>
                     </div>
                     <div class="d-flex gap-2 flex-wrap">
