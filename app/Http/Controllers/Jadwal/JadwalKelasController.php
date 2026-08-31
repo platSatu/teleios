@@ -71,7 +71,17 @@ class JadwalKelasController extends Controller
             $query->where('status', $request->string('status'));
         }
 
-        $kelasList = $query->orderByRaw('start_time IS NULL, start_time DESC')
+        // Diurutkan per pengajar+mata pelajaran dulu (bukan per waktu)
+        // supaya baris-baris sejenis bersebelahan -- index-nya
+        // menggabungkan sel Pengajar & Mata Pelajaran / Bidang ala Excel
+        // untuk baris-baris berurutan yang pengajar+mata-pelajaran-nya
+        // sama (lihat jadwal-kelas/index.blade.php), meniru tampilan
+        // rekap kehadiran per kelas walau datanya tetap 1 baris per
+        // student.
+        $kelasList = $query
+            ->orderBy('pengajar_id')
+            ->orderByRaw('jadwal_mata_pelajaran_id IS NULL, jadwal_mata_pelajaran_id')
+            ->orderByRaw('start_time IS NULL, start_time DESC')
             ->paginate(15)
             ->withQueryString()
             ->onEachSide(1);
@@ -208,6 +218,32 @@ class JadwalKelasController extends Controller
         return redirect()
             ->route('jadwal.kelas.index', ['student_id' => $studentId])
             ->with('success', 'Jadwal Kelas berhasil dihapus.');
+    }
+
+    /**
+     * Update cepat status kehadiran + keterangan dari index (tombol/
+     * dropdown per baris -- lihat jadwal-kelas/index.blade.php), tanpa
+     * lewat halaman Edit. Sengaja endpoint terpisah dari update() supaya
+     * validasinya ringan (cuma 2 field ini) dan tidak menyentuh field
+     * jadwal lain (waktu, pengajar, dst).
+     */
+    public function updateAttendance(Request $request, string $id): RedirectResponse
+    {
+        $context = $this->companyContext($request);
+
+        $kelas = $this->findOrFail($context, $id);
+
+        $validated = $request->validate([
+            'attendance_status' => ['nullable', 'in:hadir,tidak_hadir'],
+            'attendance_notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $kelas->update([
+            'attendance_status' => $validated['attendance_status'] ?? null,
+            'attendance_notes' => $validated['attendance_notes'] ?? null,
+        ]);
+
+        return back()->with('success', 'Status kehadiran "'.$kelas->student?->name.'" berhasil diperbarui.');
     }
 
     /**

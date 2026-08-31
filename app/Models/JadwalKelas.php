@@ -12,6 +12,15 @@ use Illuminate\Database\Eloquent\Model;
  * `pengajar_id` FK ke `users`, `student_id` FK ke App\Models\
  * JadwalStudent (roster sendiri, bukan `users`) — lihat migration
  * create_jadwal_kelas_table.php's docblock.
+ *
+ * `attendance_status`/`attendance_notes`: kehadiran student di sesi
+ * ini (lihat migration add_attendance_to_jadwal_kelas_table.php's
+ * docblock) — terpisah dari `status` yang artinya jadwal ini
+ * aktif/nonaktif, bukan soal hadir/tidak. Index-nya (lihat
+ * jadwal-kelas/index.blade.php) menampilkan baris-baris dengan
+ * pengajar+mata-pelajaran sama sebagai satu grup (sel Pengajar/Mata
+ * Pelajaran digabung ala Excel) walau datanya tetap 1 baris per
+ * student -- bukan restrukturisasi ke "kelas grup".
  */
 class JadwalKelas extends Model
 {
@@ -25,6 +34,12 @@ class JadwalKelas extends Model
 
     public const STATUSES = [self::STATUS_ACTIVE, self::STATUS_INACTIVE];
 
+    public const ATTENDANCE_HADIR = 'hadir';
+
+    public const ATTENDANCE_TIDAK_HADIR = 'tidak_hadir';
+
+    public const ATTENDANCE_STATUSES = [self::ATTENDANCE_HADIR, self::ATTENDANCE_TIDAK_HADIR];
+
     protected $fillable = [
         'company_id',
         'branch_office_id',
@@ -34,6 +49,8 @@ class JadwalKelas extends Model
         'start_time',
         'end_time',
         'status',
+        'attendance_status',
+        'attendance_notes',
         'description',
     ];
 

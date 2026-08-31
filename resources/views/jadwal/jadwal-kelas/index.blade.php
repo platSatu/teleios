@@ -28,7 +28,7 @@
                 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
                     <div>
                         <h4 class="mb-1">Jadwal Kelas{{ $student ? ' — '.$student->name : '' }}</h4>
-                        <p class="text-muted mb-0">Jadwal kelas kursus — pengajar, murid, dan waktu pelaksanaannya.</p>
+                        <p class="text-muted mb-0">Jadwal kelas kursus — pengajar, murid, waktu, dan kehadiran. Baris dengan pengajar &amp; mata pelajaran yang sama digabung selnya seperti di Excel.</p>
                     </div>
                     <div class="d-flex flex-wrap gap-2">
                         @if($student)
@@ -71,31 +71,81 @@
                     @endif
                 </form>
 
+                @php
+                    // Excel-style merge: baris berurutan dengan pengajar +
+                    // mata pelajaran yang SAMA digabung jadi satu sel di
+                    // kolom Pengajar & Mata Pelajaran / Bidang. Query di
+                    // controller sudah diurutkan supaya baris sejenis
+                    // bersebelahan (lihat JadwalKelasController::index()).
+                    // Data-nya sendiri tetap 1 baris = 1 pengajar + 1
+                    // student, ini murni tampilan.
+                    $kelasItems = $kelasList->items();
+                    $groupKey = fn ($k) => $k->pengajar_id.'|'.$k->jadwal_mata_pelajaran_id;
+                    $rowSpans = [];
+                    $skipRows = [];
+                    foreach ($kelasItems as $idx => $kelas) {
+                        if (in_array($idx, $skipRows, true)) {
+                            continue;
+                        }
+                        $span = 1;
+                        for ($j = $idx + 1; $j < count($kelasItems); $j++) {
+                            if ($groupKey($kelasItems[$j]) === $groupKey($kelas)) {
+                                $span++;
+                                $skipRows[] = $j;
+                            } else {
+                                break;
+                            }
+                        }
+                        $rowSpans[$idx] = $span;
+                    }
+                    $emptyColspan = 8 + ($student ? 0 : 1);
+                @endphp
+
                 <div class="table-responsive">
-                    <table class="table table-centered table-hover align-middle mb-0">
+                    <table class="table table-bordered table-centered align-middle mb-0">
                         <thead class="table-light">
                             <tr>
-                                <th>Mata Pelajaran / Bidang</th>
+                                <th style="width: 40px;">No</th>
                                 <th>Pengajar</th>
+                                <th>Mata Pelajaran / Bidang</th>
                                 @unless($student)
                                     <th>Murid</th>
                                 @endunless
                                 <th>Mulai</th>
                                 <th>Selesai</th>
+                                <th style="min-width: 220px;">Kehadiran</th>
                                 <th>Status</th>
                                 <th class="text-end">Aksi</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @forelse($kelasList as $kelas)
+                            @forelse($kelasItems as $idx => $kelas)
                                 <tr>
-                                    <td>{{ $kelas->mataPelajaran->name ?? '-' }}</td>
-                                    <td>{{ $kelas->pengajar->name ?? '-' }}</td>
+                                    <td>{{ $kelasList->firstItem() + $idx }}</td>
+                                    @if(isset($rowSpans[$idx]))
+                                        <td rowspan="{{ $rowSpans[$idx] }}" class="align-middle">{{ $kelas->pengajar->name ?? '-' }}</td>
+                                        <td rowspan="{{ $rowSpans[$idx] }}" class="align-middle">{{ $kelas->mataPelajaran->name ?? '-' }}</td>
+                                    @endif
                                     @unless($student)
                                         <td>{{ $kelas->student->name ?? '-' }}</td>
                                     @endunless
                                     <td>{{ $kelas->start_time?->format('d/m/Y H:i') ?? '-' }}</td>
                                     <td>{{ $kelas->end_time?->format('d/m/Y H:i') ?? '-' }}</td>
+                                    <td>
+                                        <form action="{{ route('jadwal.kelas.attendance.update', $kelas->id) }}" method="POST" class="d-flex flex-column gap-1">
+                                            @csrf
+                                            @method('PATCH')
+                                            <select name="attendance_status" class="form-select form-select-sm" onchange="this.form.submit()">
+                                                <option value="" @selected(!$kelas->attendance_status)>Belum Diabsen</option>
+                                                <option value="hadir" @selected($kelas->attendance_status === 'hadir')>Hadir</option>
+                                                <option value="tidak_hadir" @selected($kelas->attendance_status === 'tidak_hadir')>Tidak Hadir</option>
+                                            </select>
+                                            <div class="input-group input-group-sm">
+                                                <input type="text" name="attendance_notes" value="{{ $kelas->attendance_notes }}" class="form-control form-control-sm" placeholder="Keterangan (opsional)">
+                                                <button type="submit" class="btn btn-outline-secondary" title="Simpan keterangan"><i class="ri-save-line"></i></button>
+                                            </div>
+                                        </form>
+                                    </td>
                                     <td>
                                         <span class="badge {{ $kelas->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $kelas->status }}</span>
                                     </td>
@@ -112,7 +162,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="{{ $student ? 6 : 7 }}" class="text-center text-muted py-4">Belum ada Jadwal Kelas. Klik "Tambah Jadwal Kelas" untuk membuat yang pertama.</td>
+                                    <td colspan="{{ $emptyColspan }}" class="text-center text-muted py-4">Belum ada Jadwal Kelas. Klik "Tambah Jadwal Kelas" untuk membuat yang pertama.</td>
                                 </tr>
                             @endforelse
                         </tbody>

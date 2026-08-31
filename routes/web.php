@@ -241,6 +241,9 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::get('/{id}/edit', 'edit')->name('jadwal.kelas.edit');
                 Route::put('/{id}', 'update')->name('jadwal.kelas.update');
                 Route::delete('/{id}', 'destroy')->name('jadwal.kelas.destroy');
+                // Update cepat kehadiran dari index -- lihat
+                // JadwalKelasController::updateAttendance()'s docblock.
+                Route::patch('/{id}/attendance', 'updateAttendance')->name('jadwal.kelas.attendance.update');
             });
     });
 
