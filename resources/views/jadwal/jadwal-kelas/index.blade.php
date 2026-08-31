@@ -47,28 +47,47 @@
                     </div>
                 </div>
 
-                <form method="GET" class="d-flex flex-wrap gap-2 mb-3">
+                @php
+                    $hasActiveFilter = request('search') || request('status') || request('jadwal_mata_pelajaran_id')
+                        || request('date_filter') || request('date_from') || request('date_to');
+                @endphp
+                <form method="GET" class="mb-3">
                     @if($studentId)
                         <input type="hidden" name="student_id" value="{{ $studentId }}">
                     @endif
-                    <div class="input-group" style="max-width: 260px;">
-                        <input type="text" name="search" class="form-control" placeholder="Cari pengajar/murid/mata pelajaran..." value="{{ request('search') }}">
-                        <button type="submit" class="btn btn-outline-secondary"><i class="ri-search-line"></i></button>
+                    <div class="d-flex flex-wrap gap-2 mb-2">
+                        <div class="input-group" style="max-width: 260px;">
+                            <input type="text" name="search" class="form-control" placeholder="Cari pengajar/murid/mata pelajaran..." value="{{ request('search') }}">
+                            <button type="submit" class="btn btn-outline-secondary"><i class="ri-search-line"></i></button>
+                        </div>
+                        <select name="jadwal_mata_pelajaran_id" class="form-select" style="max-width: 220px;" onchange="this.form.submit()">
+                            <option value="">Semua Mata Pelajaran / Bidang</option>
+                            @foreach ($mataPelajarans as $mp)
+                                <option value="{{ $mp->id }}" @selected(request('jadwal_mata_pelajaran_id') == $mp->id)>{{ $mp->name }}</option>
+                            @endforeach
+                        </select>
+                        <select name="status" class="form-select" style="max-width: 180px;" onchange="this.form.submit()">
+                            <option value="">Semua Status</option>
+                            <option value="active" @selected(request('status') == 'active')>Active</option>
+                            <option value="inactive" @selected(request('status') == 'inactive')>Inactive</option>
+                        </select>
                     </div>
-                    <select name="jadwal_mata_pelajaran_id" class="form-select" style="max-width: 220px;" onchange="this.form.submit()">
-                        <option value="">Semua Mata Pelajaran / Bidang</option>
-                        @foreach ($mataPelajarans as $mp)
-                            <option value="{{ $mp->id }}" @selected(request('jadwal_mata_pelajaran_id') == $mp->id)>{{ $mp->name }}</option>
-                        @endforeach
-                    </select>
-                    <select name="status" class="form-select" style="max-width: 180px;" onchange="this.form.submit()">
-                        <option value="">Semua Status</option>
-                        <option value="active" @selected(request('status') == 'active')>Active</option>
-                        <option value="inactive" @selected(request('status') == 'inactive')>Inactive</option>
-                    </select>
-                    @if(request('search') || request('status') || request('jadwal_mata_pelajaran_id'))
-                        <a href="{{ route('jadwal.kelas.index', array_filter(['student_id' => $studentId])) }}" class="btn btn-light">Reset</a>
-                    @endif
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <select name="date_filter" class="form-select" style="max-width: 180px;" onchange="this.form.submit()">
+                            <option value="">Semua Tanggal</option>
+                            <option value="today" @selected(request('date_filter') == 'today')>Hari Ini</option>
+                            <option value="this_week" @selected(request('date_filter') == 'this_week')>Minggu Ini</option>
+                            <option value="this_month" @selected(request('date_filter') == 'this_month')>Bulan Ini</option>
+                        </select>
+                        <span class="text-muted small">atau rentang tanggal:</span>
+                        <input type="date" name="date_from" class="form-control" style="max-width: 170px;" value="{{ request('date_from') }}" title="Dari tanggal">
+                        <span class="text-muted small">s/d</span>
+                        <input type="date" name="date_to" class="form-control" style="max-width: 170px;" value="{{ request('date_to') }}" title="Sampai tanggal">
+                        <button type="submit" class="btn btn-outline-primary btn-sm">Terapkan</button>
+                        @if($hasActiveFilter)
+                            <a href="{{ route('jadwal.kelas.index', array_filter(['student_id' => $studentId])) }}" class="btn btn-light btn-sm">Reset Semua Filter</a>
+                        @endif
+                    </div>
                 </form>
 
                 @php

@@ -71,6 +71,28 @@ class JadwalKelasController extends Controller
             $query->where('status', $request->string('status'));
         }
 
+        // Filter tanggal: preset ('today'/'this_week'/'this_month') selalu
+        // menang atas rentang custom (date_from/date_to) kalau dua-duanya
+        // ke-isi -- lebih predictable daripada digabung. Tanpa preset,
+        // date_from/date_to dipakai independen (boleh isi salah satu saja,
+        // mis. cuma "dari tanggal" tanpa batas atas).
+        $dateFilter = $request->query('date_filter');
+
+        if ($dateFilter === 'today') {
+            $query->whereDate('start_time', now()->toDateString());
+        } elseif ($dateFilter === 'this_week') {
+            $query->whereBetween('start_time', [now()->startOfWeek(), now()->endOfWeek()]);
+        } elseif ($dateFilter === 'this_month') {
+            $query->whereBetween('start_time', [now()->startOfMonth(), now()->endOfMonth()]);
+        } else {
+            if ($request->filled('date_from')) {
+                $query->whereDate('start_time', '>=', $request->string('date_from'));
+            }
+            if ($request->filled('date_to')) {
+                $query->whereDate('start_time', '<=', $request->string('date_to'));
+            }
+        }
+
         // Diurutkan per pengajar+mata pelajaran dulu (bukan per waktu)
         // supaya baris-baris sejenis bersebelahan -- index-nya
         // menggabungkan sel Pengajar & Mata Pelajaran / Bidang ala Excel
