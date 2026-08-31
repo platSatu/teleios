@@ -33,9 +33,19 @@ use Symfony\Component\HttpFoundation\Response;
  * Optionally restrict to specific package categories by name, e.g.
  * 'active.package:Chat,WhatsApp' — only a voucher whose package belongs
  * to a category_application named "Chat" or "WhatsApp" counts. Omit the
- * argument to accept ANY currently active package regardless of category
- * (used below, since this codebase doesn't yet tag category_applications
- * with a stable slug/code to match against safely).
+ * argument to accept ANY currently active package regardless of category.
+ *
+ * Backward-compat rule (Tahap 4 integrasi Chat<->Jadwal): a package that
+ * has never been tagged with ANY category_application (category_application_id
+ * still NULL — every package created before this app started tagging
+ * categories) counts as passing EVERY category filter, not just some
+ * default one. Without this, turning on 'active.package:Chat,WhatsApp'
+ * for the Chat route group would have instantly locked out every
+ * customer whose still-active package predates the category feature —
+ * they never touched a "category" concept, so it would be wrong to
+ * treat them as belonging to none. A package explicitly tagged to a
+ * DIFFERENT category (e.g. a "Jadwal" package) is NOT covered by this —
+ * it has a category, just not one of the ones being asked for here.
  */
 class EnsureActivePackage
 {
@@ -97,10 +107,15 @@ class EnsureActivePackage
             // have.
             ->where('valid_until', '>=', now())
             ->when($categories !== [], function ($query) use ($categories) {
-                $query->whereHas(
-                    'package.categoryApplication',
-                    fn ($q) => $q->whereIn('name', $categories)
-                );
+                $query->where(function ($q) use ($categories) {
+                    $q->whereHas(
+                        'package.categoryApplication',
+                        fn ($qq) => $qq->whereIn('name', $categories)
+                    )
+                        // Backward-compat fallback -- lihat docblock class
+                        // ini di atas.
+                        ->orWhereDoesntHave('package.categoryApplication');
+                });
             })
             ->exists();
 

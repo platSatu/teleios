@@ -80,7 +80,15 @@ class PackageLimitService
      *
      * Same active-voucher shape as resolveActiveVoucher() above, plus
      * the category_application.name filter -- mirrors exactly how
-     * EnsureActivePackage's own optional category argument is matched.
+     * EnsureActivePackage's own optional category argument is matched,
+     * INCLUDING its backward-compat fallback (Tahap 4): a package never
+     * tagged with any category (category_application_id still NULL --
+     * every package that existed before category tagging was a thing)
+     * counts as passing this filter too, same reasoning as
+     * EnsureActivePackage's docblock. In practice this means a
+     * long-time WhatsApp customer's untagged package keeps working for
+     * Jadwal reminders exactly like it already does for Chat, without
+     * needing anyone to go back and manually tag it first.
      */
     public function hasActiveCategoryPackage(Company $company, array $categoryNames): bool
     {
@@ -90,10 +98,13 @@ class PackageLimitService
             ->whereNotNull('valid_until')
             ->where('valid_from', '<=', now())
             ->where('valid_until', '>=', now())
-            ->whereHas(
-                'package.categoryApplication',
-                fn ($q) => $q->whereIn('name', $categoryNames)
-            )
+            ->where(function ($q) use ($categoryNames) {
+                $q->whereHas(
+                    'package.categoryApplication',
+                    fn ($qq) => $qq->whereIn('name', $categoryNames)
+                )
+                    ->orWhereDoesntHave('package.categoryApplication');
+            })
             ->exists();
     }
 

@@ -281,16 +281,27 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
             });
     });
 
-    // Gated behind an active package: once every voucher this user holds
-    // has expired (or none was ever redeemed), 'active.package' blocks
-    // every route below — including any added here later, since it's
-    // applied at the group level instead of per-route. See
-    // App\Http\Middleware\EnsureActivePackage for what "active" means.
+    // Gated behind an active package IN THE "Chat"/"WhatsApp" CATEGORY
+    // specifically (Tahap 4 integrasi Chat<->Jadwal) — once every
+    // Chat/WhatsApp-category voucher this user holds has expired (or
+    // none was ever redeemed/tagged), 'active.package:Chat,WhatsApp'
+    // blocks every route below — including any added here later, since
+    // it's applied at the group level instead of per-route. See
+    // App\Http\Middleware\EnsureActivePackage for what "active" means
+    // and its docblock's backward-compat rule (an untagged legacy
+    // package still counts, so no already-paying customer got locked
+    // out the moment this category filter was turned on). Previously
+    // this was bare 'active.package' (any package at all, any
+    // category) — changed so a company that only ever bought a
+    // "Jadwal" package is correctly NOT treated as Chat/WhatsApp-
+    // entitled, matching App\Services\PackageLimitService::
+    // hasActiveCategoryPackage() used by the Jadwal side of this same
+    // integration.
     // 'menu.access' backstops what App\Models\CompanyRoleMenu already
     // governs in the sidebar — see App\Http\Middleware\EnsureMenuAccess.
     // Only ever restricts a non-owner member; the company owner is
     // unaffected, same as 'active.package' above it.
-    Route::prefix('chat')->middleware(['active.package', 'menu.access'])->group(function () {
+    Route::prefix('chat')->middleware(['active.package:Chat,WhatsApp', 'menu.access'])->group(function () {
         Route::prefix('inbox/{device}')
             ->controller(InboxController::class)
             ->group(function () {
