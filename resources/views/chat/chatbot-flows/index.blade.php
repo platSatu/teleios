@@ -154,11 +154,13 @@
                             <option value="set_status_resolved">Tandai Selesai</option>
                             <option value="add_label">Tambah Label</option>
                             <option value="handoff_human">Alihkan ke Agent (akhiri bot)</option>
+                            <option value="create_jadwal_reschedule_request">Buat Permintaan Reschedule Jadwal</option>
                         </select>
                     </div>
                     <div class="col-6">
                         <label class="form-label">Nilai (ID User / Label, opsional)</label>
                         <input type="text" id="wa-step-form-action-value" class="form-control" placeholder="Kosongkan untuk otomatis">
+                        <div class="form-text">Tidak dipakai untuk "Buat Permintaan Reschedule Jadwal" -- kosongkan saja.</div>
                     </div>
                 </div>
 

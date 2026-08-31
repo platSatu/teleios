@@ -3,14 +3,18 @@
 namespace App\Services\Chat;
 
 use App\Models\Company;
+use App\Models\JadwalKelasRescheduleRequest;
+use App\Models\JadwalStudent;
 use App\Models\WaChatbotFlow;
 use App\Models\WaChatbotFlowStep;
 use App\Models\WaChatbotState;
 use App\Models\WaChatLabelAssignment;
 use App\Models\WaConversation;
+use App\Support\PhoneNumber;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * Executes App\Models\WaChatbotFlow trees — Fitur #6's engine. Called
@@ -403,8 +407,95 @@ class ChatbotFlowService
             WaChatbotFlowStep::ACTION_SET_STATUS_RESOLVED => $this->conversations->setStatus($conversation, WaConversation::STATUS_RESOLVED),
             WaChatbotFlowStep::ACTION_ADD_LABEL => $this->addLabel($conversation, $step->action_value),
             WaChatbotFlowStep::ACTION_HANDOFF_HUMAN => $this->conversations->setStatus($conversation, WaConversation::STATUS_PENDING),
+            WaChatbotFlowStep::ACTION_CREATE_JADWAL_RESCHEDULE_REQUEST => $this->createJadwalRescheduleRequest($state, $step),
             default => null,
         };
+    }
+
+    /**
+     * Tahap 3 integrasi Chat<->Jadwal -- mencatat App\Models\
+     * JadwalKelasRescheduleRequest dari sesi flow ini, murni tambahan,
+     * tidak mengubah action lain di atas. Sengaja TIDAK mencoba
+     * mencocokkan ke satu baris App\Models\JadwalKelas yang spesifik
+     * (lihat migration-nya) -- staff yang melakukan itu saat review di
+     * App\Http\Controllers\Jadwal\JadwalRescheduleRequestController.
+     * Best-effort seperti action lain di atas: kalau flow/company tidak
+     * valid, dilewati saja tanpa menggagalkan flow.
+     */
+    private function createJadwalRescheduleRequest(WaChatbotState $state, WaChatbotFlowStep $step): void
+    {
+        $flow = $step->flow;
+        $company = $flow?->company;
+
+        if (! $company) {
+            Log::warning('chatbot-flow: create_jadwal_reschedule_request skipped, flow/company invalid', ['step_id' => $step->id]);
+
+            return;
+        }
+
+        $phone = PhoneNumber::normalize(Str::before($state->chat_jid, '@'));
+
+        // Tebakan terbaik siapa pengirimnya -- cocokkan ke nomor HP
+        // orang tua ATAU murid manapun yang tersimpan di company ini
+        // (lihat App\Models\JadwalStudent's docblock soal kedua field
+        // ini). Dibandingkan lewat App\Support\PhoneNumber::normalize()
+        // di PHP (bukan raw SQL) supaya persis sama sumber kebenarannya
+        // dengan cara nomor lain di app ini dinormalisasi -- jumlah
+        // Student per company biasanya kecil, jadi loop di PHP aman.
+        // Bisa null (tidak ketemu) -- staff yang menentukan lewat
+        // detail_request kalau gagal ditebak otomatis.
+        $student = null;
+
+        if ($phone !== '') {
+            $student = JadwalStudent::where('company_id', $company->id)
+                ->where(function ($q) {
+                    $q->whereNotNull('parent_phone_number')->orWhereNotNull('student_phone_number');
+                })
+                ->get(['id', 'parent_phone_number', 'student_phone_number'])
+                ->first(fn (JadwalStudent $s) => ($s->parent_phone_number && PhoneNumber::normalize($s->parent_phone_number) === $phone)
+                    || ($s->student_phone_number && PhoneNumber::normalize($s->student_phone_number) === $phone));
+        }
+
+        JadwalKelasRescheduleRequest::create([
+            'company_id' => $company->id,
+            'jadwal_student_id' => $student?->id,
+            'device_id' => $state->device_id,
+            'chat_jid' => $state->chat_jid,
+            'requester_phone' => $phone !== '' ? $phone : null,
+            'detail_request' => $this->buildTranscript($state, $flow),
+            'status' => JadwalKelasRescheduleRequest::STATUS_PENDING,
+        ]);
+
+        Log::info('chatbot-flow: Jadwal reschedule request dicatat', [
+            'flow_id' => $flow->id,
+            'company_id' => $company->id,
+            'matched_student_id' => $student?->id,
+        ]);
+    }
+
+    /**
+     * Transkrip pertanyaan+jawaban sejauh ini dalam sesi -- setiap step
+     * message/choice yang punya jawaban tersimpan di $state->variables
+     * (keyed by step id, lihat continueFlow()), dirender jadi "pesan
+     * step: jawaban" per baris, diurutkan sesuai posisi step. Generik,
+     * tidak berasumsi step mana artinya "jadwal yang mana" vs "waktu
+     * baru" -- staff yang membaca & menafsirkan teksnya saat review.
+     */
+    private function buildTranscript(WaChatbotState $state, ?WaChatbotFlow $flow): string
+    {
+        if (! $flow) {
+            return '';
+        }
+
+        $variables = $state->variables ?? [];
+
+        return $flow->steps()
+            ->whereIn('step_type', [WaChatbotFlowStep::TYPE_MESSAGE, WaChatbotFlowStep::TYPE_CHOICE])
+            ->get()
+            ->filter(fn (WaChatbotFlowStep $s) => array_key_exists($s->id, $variables))
+            ->map(fn (WaChatbotFlowStep $s) => trim(($s->message ? $s->message.': ' : '').$variables[$s->id]))
+            ->implode("
+");
     }
 
     private function addLabel(WaConversation $conversation, ?string $labelId): void

@@ -127,6 +127,7 @@ use App\Http\Controllers\Jadwal\JadwalPengajarController;
 use App\Http\Controllers\Jadwal\JadwalStudentController;
 use App\Http\Controllers\Jadwal\JadwalKelasController;
 use App\Http\Controllers\Jadwal\JadwalReminderSettingController;
+use App\Http\Controllers\Jadwal\JadwalRescheduleRequestController;
 use App\Http\Controllers\Chat\CategoryPhoneBookController;
 use App\Http\Controllers\Chat\PhoneBookController;
 use App\Http\Controllers\Chat\WaGroupController;
@@ -261,6 +262,22 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
             ->group(function () {
                 Route::get('/', 'edit')->name('jadwal.settings.edit');
                 Route::put('/', 'update')->name('jadwal.settings.update');
+            });
+
+        // Tahap 3 integrasi Chat<->Jadwal -- review permintaan reschedule
+        // dari orang tua/murid (lihat App\Models\
+        // JadwalKelasRescheduleRequest & App\Services\Chat\
+        // ChatbotFlowService::createJadwalRescheduleRequest()). Sama
+        // seperti grup 'settings' di atas: TETAP di grup 'jadwal', TANPA
+        // 'active.package' di level route -- controller yang menentukan
+        // apa yang boleh dilakukan (mis. kirim konfirmasi WA) berdasarkan
+        // package aktif.
+        Route::prefix('reschedule-requests')
+            ->controller(JadwalRescheduleRequestController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('jadwal.reschedule-requests.index');
+                Route::post('/{id}/approve', 'approve')->name('jadwal.reschedule-requests.approve');
+                Route::post('/{id}/reject', 'reject')->name('jadwal.reschedule-requests.reject');
             });
     });
 

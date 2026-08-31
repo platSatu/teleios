@@ -50,12 +50,24 @@ class WaChatbotFlowStep extends Model
      */
     public const ACTION_HANDOFF_HUMAN = 'handoff_human';
 
+    /**
+     * Mencatat App\Models\JadwalKelasRescheduleRequest dari transkrip
+     * sesi chatbot flow ini (semua jawaban step message/choice sejauh
+     * ini -- lihat App\Services\Chat\ChatbotFlowService's docblock
+     * untuk kenapa TIDAK mencoba menebak baris Jadwal Kelas yang
+     * spesifik). Bagian dari Tahap 3 integrasi Chat<->Jadwal --
+     * murni tambahan, tidak mengubah action lain yang sudah ada.
+     * action_value tidak dipakai untuk action ini (dikosongkan saja).
+     */
+    public const ACTION_CREATE_JADWAL_RESCHEDULE_REQUEST = 'create_jadwal_reschedule_request';
+
     public const ACTIONS = [
         self::ACTION_ASSIGN_CONVERSATION,
         self::ACTION_SET_STATUS_PENDING,
         self::ACTION_SET_STATUS_RESOLVED,
         self::ACTION_ADD_LABEL,
         self::ACTION_HANDOFF_HUMAN,
+        self::ACTION_CREATE_JADWAL_RESCHEDULE_REQUEST,
     ];
 
     protected $fillable = [

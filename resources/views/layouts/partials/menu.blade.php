@@ -95,6 +95,11 @@
                                     Pengaturan Pengingat
                                 </a>
                             </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('jadwal.reschedule-requests.index') }}" class="pe-nav-link">
+                                    Permintaan Reschedule
+                                </a>
+                            </li>
                         @endif
                     </ul>
                 </li>
