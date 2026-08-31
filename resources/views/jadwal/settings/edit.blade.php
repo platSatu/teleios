@@ -78,9 +78,9 @@
                                 <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
                             <div class="form-text">
-                                Tag yang tersedia di pesan: <code>{{ '{{nama_murid}}' }}</code>, <code>{{ '{{nama_pengajar}}' }}</code>,
-                                <code>{{ '{{mata_pelajaran}}' }}</code>, <code>{{ '{{tanggal}}' }}</code>, <code>{{ '{{jam_mulai}}' }}</code>,
-                                <code>{{ '{{jam_selesai}}' }}</code>, <code>{{ '{{nama_perusahaan}}' }}</code>.
+                                Tag yang tersedia di pesan: <code>@{{nama_murid}}</code>, <code>@{{nama_pengajar}}</code>,
+                                <code>@{{mata_pelajaran}}</code>, <code>@{{tanggal}}</code>, <code>@{{jam_mulai}}</code>,
+                                <code>@{{jam_selesai}}</code>, <code>@{{nama_perusahaan}}</code>.
                                 Lampiran pada template (kalau ada) tidak ikut terkirim untuk pengingat Jadwal, hanya teksnya.
                             </div>
                         </div>
