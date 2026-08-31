@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\JadwalReminderSetting;
 use App\Models\Voucher;
 use App\Services\Company\CompanyContextResolver;
 use Illuminate\Support\Facades\Auth;
@@ -93,7 +94,33 @@ class AppServiceProvider extends ServiceProvider
                 }
             }
 
+            // Category-scoped version of $hasActivePackage above, dipakai
+            // menu "Pengaturan Pengingat" Jadwal (lihat
+            // App\Services\PackageLimitService::hasActiveCategoryPackage()'s
+            // docblock untuk kenapa ini query terpisah, bukan filter
+            // tambahan ke $hasActivePackage yang sudah ada) -- sengaja
+            // dihitung dengan query company_id langsung (bukan lewat
+            // $billingUserId/user_id di atas), konsisten dengan pola
+            // PackageLimitService yang lain (resolveActiveVoucher() dkk),
+            // supaya cara menghitungnya tetap satu sumber kebenaran kalau
+            // dipanggil ulang dari controller/job.
+            $hasActiveChatPackage = false;
+
+            if ($user) {
+                if ($user->user_type === 'SUPERADMIN') {
+                    $hasActiveChatPackage = true;
+                } else {
+                    $chatContext = app(CompanyContextResolver::class)->resolve($user);
+
+                    if ($chatContext?->company) {
+                        $hasActiveChatPackage = app(\App\Services\PackageLimitService::class)
+                            ->hasActiveCategoryPackage($chatContext->company, JadwalReminderSetting::CHAT_CATEGORY_NAMES);
+                    }
+                }
+            }
+
             $view->with('hasActivePackage', $hasActivePackage);
+            $view->with('hasActiveChatPackage', $hasActiveChatPackage);
             $view->with('allowedChatRouteNames', $allowedChatRouteNames);
         });
     }

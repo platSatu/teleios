@@ -64,6 +64,40 @@ class PackageLimitService
     }
 
     /**
+     * Category-SCOPED version of activePackage()/requireActivePackage()
+     * above -- those two only ask "does this company have ANY active
+     * package at all", which is deliberately what App\Http\Middleware     * EnsureActivePackage's Chat gate still uses today (see that
+     * class's docblock: existing category_applications aren't reliably
+     * tagged across every customer's package yet, so filtering the
+     * long-standing Chat gate by category risks locking out already-
+     * paying customers). A brand-new, category-gated feature has no
+     * such legacy customers to break, so it can safely ask the sharper
+     * question from day one: "does this company have an active package
+     * that belongs to one of THESE categories specifically" -- e.g.
+     * App\Models\JadwalReminderSetting::CHAT_CATEGORY_NAMES, so a
+     * company that only ever bought a "Jadwal" package (no "Chat"/
+     * "WhatsApp" category) never gets treated as WhatsApp-entitled.
+     *
+     * Same active-voucher shape as resolveActiveVoucher() above, plus
+     * the category_application.name filter -- mirrors exactly how
+     * EnsureActivePackage's own optional category argument is matched.
+     */
+    public function hasActiveCategoryPackage(Company $company, array $categoryNames): bool
+    {
+        return Voucher::where('company_id', $company->id)
+            ->where('status', 'active')
+            ->whereNotNull('valid_from')
+            ->whereNotNull('valid_until')
+            ->where('valid_from', '<=', now())
+            ->where('valid_until', '>=', now())
+            ->whereHas(
+                'package.categoryApplication',
+                fn ($q) => $q->whereIn('name', $categoryNames)
+            )
+            ->exists();
+    }
+
+    /**
      * Throws PackageLimitExceededException if the company has NO active
      * package at all right now — deliberately the opposite failure mode
      * from assertWithinLimit()/reserve()/consume() below, which all

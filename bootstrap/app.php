@@ -34,6 +34,18 @@ return Application::configure(basePath: dirname(__DIR__))
             ->everyMinute()
             ->withoutOverlapping();
 
+        // Pengingat WA Jadwal Kelas -- lihat App\Console\Commands\
+        // DispatchDueJadwalReminders. Sengaja terpisah total dari
+        // wa-schedules:dispatch-due di atas (beda tabel, beda job,
+        // gating package kategori Chat/WhatsApp sendiri) supaya kalau
+        // ada masalah di salah satu, yang lain tidak ikut terdampak.
+        // Setiap 5 menit cukup -- jendela pengingat (remind_value/
+        // remind_unit per company) biasanya dalam hitungan jam/hari,
+        // bukan sesuatu yang butuh presisi per menit seperti SLA chat.
+        $schedule->command('jadwal:dispatch-due-reminders')
+            ->everyFiveMinutes()
+            ->withoutOverlapping();
+
         // H-7/H-3/H-1/H0 package expiry reminder emails — see
         // App\Console\Commands\SendPackageExpiryReminders for the full
         // logic (idempotent per voucher+milestone, skips already-renewed

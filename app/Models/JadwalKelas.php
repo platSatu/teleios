@@ -83,4 +83,16 @@ class JadwalKelas extends Model
     {
         return $this->belongsTo(JadwalStudent::class, 'student_id');
     }
+
+    /**
+     * Jejak klaim/kirim pengingat WA untuk baris ini -- lihat
+     * App\Models\JadwalKelasReminderLog & App\Console\Commands\
+     * DispatchDueJadwalReminders. Selalu paling banyak satu (unique
+     * jadwal_kelas_id), karena satu Jadwal Kelas = satu sesi yang cuma
+     * butuh satu pengingat, bukan jadwal berulang.
+     */
+    public function reminderLog()
+    {
+        return $this->hasOne(JadwalKelasReminderLog::class);
+    }
 }

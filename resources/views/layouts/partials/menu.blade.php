@@ -77,6 +77,25 @@
                                 Jadwal Kelas
                             </a>
                         </li>
+                        {{-- Cuma tampil kalau company punya package aktif
+                                 kategori Chat/WhatsApp secara spesifik --
+                                 BUKAN $hasActivePackage yang dipakai menu
+                                 Chat di bawah (itu "punya package apa
+                                 saja"). Lihat App\Services\
+                                 PackageLimitService::hasActiveCategoryPackage()
+                                 & App\Models\JadwalReminderSetting::
+                                 CHAT_CATEGORY_NAMES. Company yang cuma
+                                 subscribe Jadwal tidak melihat item ini
+                                 sama sekali -- konsisten dengan
+                                 JadwalReminderSettingController yang juga
+                                 menolak akses langsung ke route-nya. --}}
+                        @if ($hasActiveChatPackage)
+                            <li class="pe-slide-item">
+                                <a href="{{ route('jadwal.settings.edit') }}" class="pe-nav-link">
+                                    Pengaturan Pengingat
+                                </a>
+                            </li>
+                        @endif
                     </ul>
                 </li>
 

@@ -126,6 +126,7 @@ use App\Http\Controllers\Jadwal\JadwalMataPelajaranController;
 use App\Http\Controllers\Jadwal\JadwalPengajarController;
 use App\Http\Controllers\Jadwal\JadwalStudentController;
 use App\Http\Controllers\Jadwal\JadwalKelasController;
+use App\Http\Controllers\Jadwal\JadwalReminderSettingController;
 use App\Http\Controllers\Chat\CategoryPhoneBookController;
 use App\Http\Controllers\Chat\PhoneBookController;
 use App\Http\Controllers\Chat\WaGroupController;
@@ -244,6 +245,22 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 // Update cepat kehadiran dari index -- lihat
                 // JadwalKelasController::updateAttendance()'s docblock.
                 Route::patch('/{id}/attendance', 'updateAttendance')->name('jadwal.kelas.attendance.update');
+            });
+
+        // Pengaturan pengingat WA Jadwal (Tahap 2 integrasi Chat<->Jadwal)
+        // -- satu baris per company (bukan CRUD list), lihat
+        // App\Http\Controllers\Jadwal\JadwalReminderSettingController.
+        // TETAP di dalam grup 'jadwal' (bukan 'chat') & TANPA
+        // 'active.package' di level route -- gate-nya category-aware
+        // (Chat/WhatsApp secara spesifik, bukan "package apa saja") dan
+        // dilakukan DI DALAM controller/view supaya company Jadwal-only
+        // dapat pesan yang jelas, bukan sekadar 403. Lihat App\Services\
+        // PackageLimitService::hasActiveCategoryPackage().
+        Route::prefix('settings')
+            ->controller(JadwalReminderSettingController::class)
+            ->group(function () {
+                Route::get('/', 'edit')->name('jadwal.settings.edit');
+                Route::put('/', 'update')->name('jadwal.settings.update');
             });
     });
 
