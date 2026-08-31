@@ -284,7 +284,7 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
     // Gated behind an active package IN THE "Chat"/"WhatsApp" CATEGORY
     // specifically (Tahap 4 integrasi Chat<->Jadwal) — once every
     // Chat/WhatsApp-category voucher this user holds has expired (or
-    // none was ever redeemed/tagged), 'active.package:Chat,WhatsApp'
+    // none was ever redeemed/tagged), 'active.package:Chat,WhatsApp,Whatsapp Blast'
     // blocks every route below — including any added here later, since
     // it's applied at the group level instead of per-route. See
     // App\Http\Middleware\EnsureActivePackage for what "active" means
@@ -301,7 +301,7 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
     // governs in the sidebar — see App\Http\Middleware\EnsureMenuAccess.
     // Only ever restricts a non-owner member; the company owner is
     // unaffected, same as 'active.package' above it.
-    Route::prefix('chat')->middleware(['active.package:Chat,WhatsApp', 'menu.access'])->group(function () {
+    Route::prefix('chat')->middleware(['active.package:Chat,WhatsApp,Whatsapp Blast', 'menu.access'])->group(function () {
         Route::prefix('inbox/{device}')
             ->controller(InboxController::class)
             ->group(function () {

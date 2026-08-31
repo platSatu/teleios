@@ -34,7 +34,7 @@ class JadwalReminderSetting extends Model
 
     protected $table = 'jadwal_reminder_settings';
 
-    public const CHAT_CATEGORY_NAMES = ['Chat', 'WhatsApp'];
+    public const CHAT_CATEGORY_NAMES = ['Chat', 'WhatsApp', 'Whatsapp Blast'];
 
     public const TARGET_PARENT = 'parent';
 
