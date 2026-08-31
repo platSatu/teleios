@@ -68,6 +68,11 @@
                             </a>
                         </li>
                         <li class="pe-slide-item">
+                            <a href="{{ route('jadwal.student.index') }}" class="pe-nav-link">
+                                Student
+                            </a>
+                        </li>
+                        <li class="pe-slide-item">
                             <a href="{{ route('jadwal.kelas.index') }}" class="pe-nav-link">
                                 Jadwal Kelas
                             </a>

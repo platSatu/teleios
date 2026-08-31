@@ -212,13 +212,21 @@ class JadwalStudentController extends Controller
      * Dropdown bebas untuk saat create()/edit() TIDAK datang dengan
      * konteks terkunci (lihat class docblock) — mata pelajaran, pengajar,
      * dan branch, semuanya di-scope ke company/branch yang sama seperti
-     * modul Jadwal lain.
+     * modul Jadwal lain. `branchOffices` dipakai jadi select manual di
+     * form (lihat jadwal-student/_form.blade.php) — akses langsung
+     * lewat menu sidebar "Student" (bukan drill-down dari Pengajar)
+     * butuh semua langkah (branch, mata pelajaran, pengajar) bisa
+     * dipilih sendiri tanpa harus lewat Branch/Pengajar dulu.
      */
     private function formData($context): array
     {
         $branchOfficeId = $context->isLockedToBranch() ? $context->branchOffice?->id : null;
 
         return [
+            'branchOffices' => BranchOffice::where('company_id', $context->company->id)
+                ->when($branchOfficeId, fn ($q) => $q->where('id', $branchOfficeId))
+                ->orderBy('name')
+                ->get(['id', 'name']),
             'mataPelajarans' => JadwalMataPelajaran::where('company_id', $context->company->id)
                 ->where('status', 'active')
                 ->orderBy('name')
