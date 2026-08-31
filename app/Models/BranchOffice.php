@@ -44,6 +44,16 @@ class BranchOffice extends Model
         return $this->belongsTo(Company::class);
     }
 
+    /**
+     * Mata Pelajaran / Bidang milik fitur Jadwal yang di-set ke branch
+     * ini — dipakai App\Http\Controllers\Jadwal\JadwalBranchController
+     * untuk kolom jumlah di index-nya.
+     */
+    public function jadwalMataPelajarans()
+    {
+        return $this->hasMany(JadwalMataPelajaran::class, 'branch_office_id');
+    }
+
     public function units()
     {
         return $this->hasMany(BranchOfficeUnit::class);

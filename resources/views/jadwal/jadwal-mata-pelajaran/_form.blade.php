@@ -34,12 +34,30 @@
     <div class="form-text">Format jpg/jpeg/png/webp, maksimal 2MB.</div>
 </div>
 
+@php
+    // Locked-vs-free (pola "ina" project's University Album create()):
+    // kalau create() dibuka dengan ?branch_office_id=... (tombol "+ Add
+    // Mata Pelajaran / Bidang" di index Branch), branch dikunci. Tanpa
+    // itu -- atau saat edit(), yang tidak pernah mengirim
+    // $selectedBranchOfficeId -- tetap dropdown/forced-single seperti
+    // sebelumnya.
+    $lockedBranchOfficeId = old('branch_office_id', $selectedBranchOfficeId ?? null);
+    $lockedBranch = $lockedBranchOfficeId ? $branchOffices->firstWhere('id', $lockedBranchOfficeId) : null;
+@endphp
 <div class="mb-3">
     <label class="form-label">Branch (opsional)</label>
-    @if ($branchOffices->count() <= 1 && $branchOffices->isNotEmpty())
-        {{-- Branch-locked member: exactly one option, so it's effectively
-             forced — same "no picker, straight to the one they're allowed"
-             treatment as Chat\CategoryPhoneBookController's forms. --}}
+    @if ($lockedBranch && !$errors->has('branch_office_id'))
+        <input type="text" class="form-control" value="{{ $lockedBranch->name }}" disabled readonly>
+        <input type="hidden" name="branch_office_id" value="{{ $lockedBranch->id }}">
+        <div class="form-text">
+            Mata Pelajaran / Bidang ini akan dikaitkan ke branch di atas.
+            @if ($branchOffices->count() > 1)
+                <a href="{{ route('jadwal.mata-pelajaran.create') }}">Ganti branch</a>
+            @endif
+        </div>
+    @elseif ($branchOffices->count() <= 1 && $branchOffices->isNotEmpty())
+        {{-- Branch-locked member: satu-satunya opsi otomatis dipakai --
+             sama perlakuan seperti form-form lain di modul Jadwal/Chat. --}}
         <input type="hidden" name="branch_office_id" value="{{ $branchOffices->first()->id }}">
         <input type="text" class="form-control" value="{{ $branchOffices->first()->name }}" disabled>
         <div class="form-text">Otomatis terkunci ke branch Anda.</div>

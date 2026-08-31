@@ -121,7 +121,10 @@ use App\Http\Controllers\Crm\CustomerSegmentController;
 use App\Http\Controllers\Crm\CustomerTagController;
 use App\Http\Controllers\Crm\CustomerTaskController;
 use App\Http\Controllers\Crm\DealController;
+use App\Http\Controllers\Jadwal\JadwalBranchController;
 use App\Http\Controllers\Jadwal\JadwalMataPelajaranController;
+use App\Http\Controllers\Jadwal\JadwalPengajarController;
+use App\Http\Controllers\Jadwal\JadwalStudentController;
 use App\Http\Controllers\Jadwal\JadwalKelasController;
 use App\Http\Controllers\Chat\CategoryPhoneBookController;
 use App\Http\Controllers\Chat\PhoneBookController;
@@ -197,6 +200,12 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
     // urutannya sama dengan sidebar (lihat resources/views/layouts/
     // partials/menu.blade.php).
     Route::prefix('jadwal')->middleware(['menu.access'])->group(function () {
+        // Drill-down: Branch -> Mata Pelajaran / Bidang -> Pengajar ->
+        // Student -> Jadwal Kelas (lihat App\Http\Controllers\Jadwal\
+        // JadwalBranchController's docblock, mengikuti pola "ina"
+        // project's University -> Album -> Photo).
+        Route::get('branch', [JadwalBranchController::class, 'index'])->name('jadwal.branch.index');
+
         Route::prefix('mata-pelajaran')
             ->controller(JadwalMataPelajaranController::class)
             ->group(function () {
@@ -206,6 +215,21 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::get('/{id}/edit', 'edit')->name('jadwal.mata-pelajaran.edit');
                 Route::put('/{id}', 'update')->name('jadwal.mata-pelajaran.update');
                 Route::delete('/{id}', 'destroy')->name('jadwal.mata-pelajaran.destroy');
+            });
+
+        // Read-only -- tidak ada tabel/CRUD sendiri, lihat
+        // JadwalPengajarController's docblock.
+        Route::get('pengajar', [JadwalPengajarController::class, 'index'])->name('jadwal.pengajar.index');
+
+        Route::prefix('student')
+            ->controller(JadwalStudentController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('jadwal.student.index');
+                Route::get('/create', 'create')->name('jadwal.student.create');
+                Route::post('/', 'store')->name('jadwal.student.store');
+                Route::get('/{id}/edit', 'edit')->name('jadwal.student.edit');
+                Route::put('/{id}', 'update')->name('jadwal.student.update');
+                Route::delete('/{id}', 'destroy')->name('jadwal.student.destroy');
             });
 
         Route::prefix('kelas')

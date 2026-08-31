@@ -58,6 +58,11 @@
                     </a>
                     <ul class="pe-slide-menu collapse" id="collapseJadwal">
                         <li class="pe-slide-item">
+                            <a href="{{ route('jadwal.branch.index') }}" class="pe-nav-link">
+                                Branch
+                            </a>
+                        </li>
+                        <li class="pe-slide-item">
                             <a href="{{ route('jadwal.mata-pelajaran.index') }}" class="pe-nav-link">
                                 Mata Pelajaran / Bidang
                             </a>

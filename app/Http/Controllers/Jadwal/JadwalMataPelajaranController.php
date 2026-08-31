@@ -32,6 +32,8 @@ class JadwalMataPelajaranController extends Controller
         $context = $this->companyContext($request);
         $company = $context->company;
 
+        $branchOfficeId = $request->query('branch_office_id');
+
         $query = JadwalMataPelajaran::where('company_id', $company->id)
             ->withCount('kelas')
             ->with('branchOffice:id,name');
@@ -41,6 +43,10 @@ class JadwalMataPelajaranController extends Controller
                 $q->where('branch_office_id', $context->branchOffice?->id)
                     ->orWhereNull('branch_office_id');
             });
+        } elseif ($branchOfficeId) {
+            // Index ini dibuka scoped dari index Branch (tombol "+ Add
+            // Mata Pelajaran / Bidang") — lihat JadwalBranchController.
+            $query->where('branch_office_id', $branchOfficeId);
         }
 
         if ($request->filled('search')) {
@@ -53,7 +59,14 @@ class JadwalMataPelajaranController extends Controller
 
         $mataPelajarans = $query->latest()->paginate(15)->withQueryString()->onEachSide(1);
 
-        return view('jadwal.jadwal-mata-pelajaran.index', compact('mataPelajarans'));
+        // Konteks Branch (kalau index ini dibuka scoped) — dipakai untuk
+        // breadcrumb + tombol "Back to Branch" + mengunci branch_office_id
+        // di tombol "+ Add Mata Pelajaran / Bidang".
+        $branch = $branchOfficeId
+            ? BranchOffice::where('company_id', $company->id)->where('id', $branchOfficeId)->first()
+            : null;
+
+        return view('jadwal.jadwal-mata-pelajaran.index', compact('mataPelajarans', 'branch', 'branchOfficeId'));
     }
 
     public function create(Request $request): View
@@ -62,6 +75,7 @@ class JadwalMataPelajaranController extends Controller
 
         return view('jadwal.jadwal-mata-pelajaran.create', [
             'mataPelajaran' => null,
+            'selectedBranchOfficeId' => $request->query('branch_office_id'),
             'branchOffices' => $this->branchOfficesFor($context->company, $context),
         ]);
     }
@@ -79,7 +93,7 @@ class JadwalMataPelajaranController extends Controller
 
         if ($validator->fails()) {
             return redirect()
-                ->route('jadwal.mata-pelajaran.create')
+                ->route('jadwal.mata-pelajaran.create', array_filter(['branch_office_id' => $request->input('branch_office_id')]))
                 ->withErrors($validator)
                 ->withInput();
         }
@@ -97,8 +111,11 @@ class JadwalMataPelajaranController extends Controller
             'status' => $validated['status'] ?? 'active',
         ]);
 
+        // Kembali ke index yang sudah di-scope ke branch itu (bukan index
+        // global) kalau memang dibuat dengan konteks branch — sesuai alur
+        // "ina": create -> kembali ke index yang scoped ke parent-nya.
         return redirect()
-            ->route('jadwal.mata-pelajaran.index')
+            ->route('jadwal.mata-pelajaran.index', array_filter(['branch_office_id' => $validated['branch_office_id'] ?? null]))
             ->with('success', 'Mata Pelajaran / Bidang berhasil ditambahkan.');
     }
 

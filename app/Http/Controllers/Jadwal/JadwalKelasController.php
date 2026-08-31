@@ -8,21 +8,26 @@ use App\Models\BranchOffice;
 use App\Models\Company;
 use App\Models\JadwalKelas;
 use App\Models\JadwalMataPelajaran;
+use App\Models\JadwalStudent;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\View\View;
 
 /**
- * CRUD for "Jadwal Kelas" (Jadwal > Jadwal Kelas) — one row per class
- * session: teacher, student, and its time range, optionally tied to one
- * App\Models\JadwalMataPelajaran. Branch scoping mirrors every other
- * Jadwal/Chat controller (see Jadwal\JadwalMataPelajaranController).
+ * CRUD for "Jadwal Kelas" (Jadwal > Jadwal Kelas) — satu baris per sesi
+ * kelas: pengajar, murid (App\Models\JadwalStudent), dan rentang
+ * waktunya, opsional terhubung ke satu App\Models\JadwalMataPelajaran.
+ * Tingkat terakhir/terdalam drill-down Jadwal (Branch -> Mata Pelajaran
+ * / Bidang -> Pengajar -> Student -> Jadwal).
  *
- * create() accepts an optional `?mata_pelajaran=<id>` query param — the
- * "+ Add Class" button on the Mata Pelajaran index links here with it
- * pre-filled, so starting a class from a subject doesn't require
- * re-picking it on the next screen.
+ * create() mengunci SEMUA 4 field (branch, mata pelajaran, pengajar,
+ * student) kalau semuanya ada & valid di query string — selalu begitu
+ * kalau datang dari tombol "+ Add Jadwal" di index Student (lihat
+ * JadwalStudentController). Tanpa konteks lengkap itu, tetap bisa
+ * dibuat "bebas" lewat dropdown biasa (mis. dari menu top-level "Jadwal
+ * Kelas" langsung) — sama pola locked-vs-free seperti level Jadwal
+ * lainnya, mengikuti "ina" project.
  */
 class JadwalKelasController extends Controller
 {
@@ -33,6 +38,8 @@ class JadwalKelasController extends Controller
         $context = $this->companyContext($request);
         $company = $context->company;
 
+        $studentId = $request->query('student_id');
+
         $query = JadwalKelas::where('company_id', $company->id)
             ->with(['mataPelajaran:id,name', 'pengajar:id,name', 'student:id,name']);
 
@@ -41,6 +48,10 @@ class JadwalKelasController extends Controller
                 $q->where('branch_office_id', $context->branchOffice?->id)
                     ->orWhereNull('branch_office_id');
             });
+        }
+
+        if ($studentId) {
+            $query->where('student_id', $studentId);
         }
 
         if ($request->filled('search')) {
@@ -69,7 +80,14 @@ class JadwalKelasController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        return view('jadwal.jadwal-kelas.index', compact('kelasList', 'mataPelajarans'));
+        // Konteks Student (kalau index ini dibuka scoped dari index
+        // Student) — dipakai untuk breadcrumb + tombol "Back" & "+ Add
+        // Jadwal" yang tetap membawa konteksnya.
+        $student = $studentId
+            ? JadwalStudent::where('company_id', $company->id)->where('id', $studentId)->first()
+            : null;
+
+        return view('jadwal.jadwal-kelas.index', compact('kelasList', 'mataPelajarans', 'student', 'studentId'));
     }
 
     public function create(Request $request): View
@@ -78,7 +96,10 @@ class JadwalKelasController extends Controller
 
         return view('jadwal.jadwal-kelas.create', [
             'kelas' => null,
-            'selectedMataPelajaranId' => $request->query('mata_pelajaran'),
+            'selectedBranchOfficeId' => $request->query('branch_office_id'),
+            'selectedMataPelajaranId' => $request->query('jadwal_mata_pelajaran_id'),
+            'selectedPengajarId' => $request->query('pengajar_id'),
+            'selectedStudentId' => $request->query('student_id'),
         ] + $this->formData($context));
     }
 
@@ -95,7 +116,9 @@ class JadwalKelasController extends Controller
 
         if ($validator->fails()) {
             return redirect()
-                ->route('jadwal.kelas.create')
+                ->route('jadwal.kelas.create', $request->only([
+                    'branch_office_id', 'jadwal_mata_pelajaran_id', 'pengajar_id', 'student_id',
+                ]))
                 ->withErrors($validator)
                 ->withInput();
         }
@@ -114,8 +137,11 @@ class JadwalKelasController extends Controller
             'description' => $validated['description'] ?? null,
         ]);
 
+        // Kembali ke index yang sudah di-scope ke student itu (bukan
+        // index global) — sesuai alur "ina": create -> kembali ke index
+        // yang scoped ke parent-nya.
         return redirect()
-            ->route('jadwal.kelas.index')
+            ->route('jadwal.kelas.index', ['student_id' => $validated['student_id']])
             ->with('success', 'Jadwal Kelas berhasil ditambahkan.');
     }
 
@@ -125,9 +151,11 @@ class JadwalKelasController extends Controller
 
         $kelas = $this->findOrFail($context, $id);
 
+        // TIDAK mengunci field apa pun di sini (selalu dropdown bebas) --
+        // locking hanya berlaku di create(), sama seperti pola "ina"
+        // project's University Album Photo edit() (lihat class docblock).
         return view('jadwal.jadwal-kelas.edit', [
             'kelas' => $kelas,
-            'selectedMataPelajaranId' => $kelas->jadwal_mata_pelajaran_id,
         ] + $this->formData($context));
     }
 
@@ -165,7 +193,7 @@ class JadwalKelasController extends Controller
         ]);
 
         return redirect()
-            ->route('jadwal.kelas.index')
+            ->route('jadwal.kelas.index', ['student_id' => $kelas->student_id])
             ->with('success', 'Jadwal Kelas berhasil diperbarui.');
     }
 
@@ -174,30 +202,44 @@ class JadwalKelasController extends Controller
         $context = $this->companyContext($request);
 
         $kelas = $this->findOrFail($context, $id);
+        $studentId = $kelas->student_id;
         $kelas->delete();
 
         return redirect()
-            ->route('jadwal.kelas.index')
+            ->route('jadwal.kelas.index', ['student_id' => $studentId])
             ->with('success', 'Jadwal Kelas berhasil dihapus.');
     }
 
     /**
-     * Shared create()/edit() form data: subject picker + the two
-     * "pengajar"/"student" pickers — both sourced from
-     * companyTeamMembers() (owner + active CompanyToUser members), since
-     * this app has no roster separate from its own registered users
-     * (per the `student_id` spec: "ambil dari table user").
+     * Shared create()/edit() form data untuk mode BEBAS (tanpa konteks
+     * terkunci — lihat class docblock): mata pelajaran + pengajar
+     * (companyTeamMembers, sama seperti sebelumnya) + student (sekarang
+     * dari App\Models\JadwalStudent, BUKAN lagi companyTeamMembers —
+     * lihat migration create_jadwal_kelas_table.php's docblock untuk
+     * kenapa `student_id` pindah FK).
      */
     private function formData($context): array
     {
         $branchOfficeId = $context->isLockedToBranch() ? $context->branchOffice?->id : null;
 
         return [
+            'branchOffices' => BranchOffice::where('company_id', $context->company->id)
+                ->when($branchOfficeId, fn ($q) => $q->where('id', $branchOfficeId))
+                ->orderBy('name')
+                ->get(['id', 'name']),
             'mataPelajarans' => JadwalMataPelajaran::where('company_id', $context->company->id)
                 ->where('status', 'active')
                 ->orderBy('name')
                 ->get(['id', 'name']),
             'teamMembers' => $this->companyTeamMembers($context->company, $branchOfficeId),
+            // Label deskriptif ("Ana — Piano (diajar Sarah)") supaya mode
+            // bebas tetap bisa langsung pilih student tanpa perlu
+            // cascading select (pilih mata pelajaran -> pengajar dulu).
+            'students' => JadwalStudent::where('company_id', $context->company->id)
+                ->where('status', 'active')
+                ->with(['mataPelajaran:id,name', 'pengajar:id,name'])
+                ->orderBy('name')
+                ->get(),
         ];
     }
 
@@ -228,7 +270,14 @@ class JadwalKelasController extends Controller
                 },
             ],
             'pengajar_id' => ['required', 'uuid', 'exists:users,id'],
-            'student_id' => ['required', 'uuid', 'exists:users,id'],
+            'student_id' => [
+                'required', 'uuid', 'exists:jadwal_student,id',
+                function ($attribute, $value, $fail) use ($company) {
+                    if ($value && ! JadwalStudent::where('company_id', $company->id)->where('id', $value)->exists()) {
+                        $fail('Student tidak valid.');
+                    }
+                },
+            ],
             'start_time' => ['nullable', 'date'],
             'end_time' => ['nullable', 'date', 'after_or_equal:start_time'],
             'status' => ['nullable', 'in:active,inactive'],

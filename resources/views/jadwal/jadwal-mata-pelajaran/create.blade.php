@@ -7,7 +7,7 @@
             <h4 class="mb-1">Tambah Mata Pelajaran / Bidang</h4>
             <p class="text-muted mb-0">Bidang kursus baru — bisa dipakai untuk musik, bahasa, atau bidang pendidikan lainnya.</p>
         </div>
-        <a href="{{ route('jadwal.mata-pelajaran.index') }}" class="btn btn-light">
+        <a href="{{ route('jadwal.mata-pelajaran.index', array_filter(['branch_office_id' => $selectedBranchOfficeId ?? null])) }}" class="btn btn-light">
             <i class="ri-arrow-left-line"></i> Kembali
         </a>
     </div>
@@ -32,7 +32,7 @@
 
                         <div class="d-flex gap-2">
                             <button type="submit" class="btn btn-primary">Simpan</button>
-                            <a href="{{ route('jadwal.mata-pelajaran.index') }}" class="btn btn-light">Batal</a>
+                            <a href="{{ route('jadwal.mata-pelajaran.index', array_filter(['branch_office_id' => $selectedBranchOfficeId ?? null])) }}" class="btn btn-light">Batal</a>
                         </div>
                     </form>
                 </div>

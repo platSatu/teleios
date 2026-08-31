@@ -4,10 +4,10 @@
 <div class="col-12">
     <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
         <div>
-            <h4 class="mb-1">Tambah Jadwal Kelas</h4>
-            <p class="text-muted mb-0">Jadwalkan satu sesi kelas — pengajar, murid, dan waktunya.</p>
+            <h4 class="mb-1">Edit Student</h4>
+            <p class="text-muted mb-0">Perbarui "{{ $student->name }}".</p>
         </div>
-        <a href="{{ route('jadwal.kelas.index', array_filter(['student_id' => $selectedStudentId ?? null])) }}" class="btn btn-light">
+        <a href="{{ route('jadwal.student.index', array_filter(['jadwal_mata_pelajaran_id' => $student->jadwal_mata_pelajaran_id, 'pengajar_id' => $student->pengajar_id])) }}" class="btn btn-light">
             <i class="ri-arrow-left-line"></i> Kembali
         </a>
     </div>
@@ -23,16 +23,17 @@
     @endif
 
     <div class="row justify-content-center">
-        <div class="col-lg-7">
+        <div class="col-lg-6">
             <div class="card border-0 shadow-sm">
                 <div class="card-body">
-                    <form action="{{ route('jadwal.kelas.store') }}" method="POST">
+                    <form action="{{ route('jadwal.student.update', $student->id) }}" method="POST">
                         @csrf
-                        @include('jadwal.jadwal-kelas._form', ['kelas' => null])
+                        @method('PUT')
+                        @include('jadwal.jadwal-student._form')
 
                         <div class="d-flex gap-2">
-                            <button type="submit" class="btn btn-primary">Simpan</button>
-                            <a href="{{ route('jadwal.kelas.index', array_filter(['student_id' => $selectedStudentId ?? null])) }}" class="btn btn-light">Batal</a>
+                            <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
+                            <a href="{{ route('jadwal.student.index', array_filter(['jadwal_mata_pelajaran_id' => $student->jadwal_mata_pelajaran_id, 'pengajar_id' => $student->pengajar_id])) }}" class="btn btn-light">Batal</a>
                         </div>
                     </form>
                 </div>

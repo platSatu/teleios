@@ -12,15 +12,13 @@ use Illuminate\Support\Facades\Schema;
  * create_jadwal_mata_pelajaran_table di atasnya) sesuai spec yang
  * diminta; kelas dengan banyak murid berarti beberapa baris.
  *
- * `pengajar_id` & `student_id` sama-sama foreign key ke `users` (persis
- * seperti diminta di spec: "ambil dari table user") — belum ada tabel
- * murid/siswa terpisah di app ini, jadi keduanya dipilih dari daftar
- * user perusahaan yang sama yang sudah dipakai modul lain untuk
- * "assignee" (lihat App\Http\Controllers\Concerns\
- * ResolvesCompanyContext::companyTeamMembers(), dipakai juga oleh
- * Crm\CustomerTaskController). Kalau ke depannya butuh roster
- * murid/pelanggan yang benar-benar terpisah dari user staff, itu
- * perubahan lanjutan.
+ * `pengajar_id` FK ke `users` (dipilih dari App\Http\Controllers\
+ * Concerns\ResolvesCompanyContext::companyTeamMembers(), sama seperti
+ * modul lain). `student_id` FK ke `jadwal_student` (BUKAN `users` lagi
+ * seperti desain awal) — Student sekarang entitas roster sendiri (lihat
+ * migration create_jadwal_student_table.php, dijalankan sebelum
+ * migration ini justru supaya FK ini valid), supaya seorang murid tidak
+ * harus punya akun login untuk bisa dijadwalkan.
  */
 return new class extends Migration
 {
@@ -44,14 +42,15 @@ return new class extends Migration
                 ->nullOnDelete();
 
             // Wajib diisi (tidak nullable) — restrictOnDelete supaya
-            // user pengajar/murid tidak bisa terhapus diam-diam selama
-            // masih punya jadwal kelas (harus dipindah/dibatalkan dulu).
+            // user pengajar / baris jadwal_student tidak bisa terhapus
+            // diam-diam selama masih punya jadwal kelas (harus
+            // dipindah/dibatalkan dulu).
             $table->foreignUuid('pengajar_id')
                 ->constrained('users')
                 ->restrictOnDelete();
 
             $table->foreignUuid('student_id')
-                ->constrained('users')
+                ->constrained('jadwal_student')
                 ->restrictOnDelete();
 
             $table->dateTime('start_time')->nullable();

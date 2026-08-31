@@ -11,19 +11,39 @@
             <div class="alert alert-danger">{{ session('error') }}</div>
         @endif
 
+        @if($branch)
+            <nav aria-label="breadcrumb" class="mb-2">
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item"><a href="{{ route('jadwal.branch.index') }}">Branch</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">{{ $branch->name }}</li>
+                    <li class="breadcrumb-item active" aria-current="page">Mata Pelajaran / Bidang</li>
+                </ol>
+            </nav>
+        @endif
+
         <div class="card">
             <div class="card-body">
                 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
                     <div>
-                        <h4 class="mb-1">Mata Pelajaran / Bidang</h4>
+                        <h4 class="mb-1">Mata Pelajaran / Bidang{{ $branch ? ' — '.$branch->name : '' }}</h4>
                         <p class="text-muted mb-0">Katalog bidang kursus (musik, bahasa, dll.) yang dipakai untuk mengelompokkan Jadwal Kelas.</p>
                     </div>
-                    <a href="{{ route('jadwal.mata-pelajaran.create') }}" class="btn btn-primary">
-                        <i class="ri-add-line"></i> Tambah Mata Pelajaran / Bidang
-                    </a>
+                    <div class="d-flex flex-wrap gap-2">
+                        @if($branch)
+                            <a href="{{ route('jadwal.branch.index') }}" class="btn btn-light">
+                                <i class="ri-arrow-left-line"></i> Kembali ke Branch
+                            </a>
+                        @endif
+                        <a href="{{ route('jadwal.mata-pelajaran.create', array_filter(['branch_office_id' => $branchOfficeId])) }}" class="btn btn-primary">
+                            <i class="ri-add-line"></i> Tambah Mata Pelajaran / Bidang
+                        </a>
+                    </div>
                 </div>
 
                 <form method="GET" class="d-flex flex-wrap gap-2 mb-3">
+                    @if($branchOfficeId)
+                        <input type="hidden" name="branch_office_id" value="{{ $branchOfficeId }}">
+                    @endif
                     <div class="input-group" style="max-width: 260px;">
                         <input type="text" name="search" class="form-control" placeholder="Cari nama..." value="{{ request('search') }}">
                         <button type="submit" class="btn btn-outline-secondary"><i class="ri-search-line"></i></button>
@@ -34,7 +54,7 @@
                         <option value="inactive" @selected(request('status') == 'inactive')>Inactive</option>
                     </select>
                     @if(request('search') || request('status'))
-                        <a href="{{ route('jadwal.mata-pelajaran.index') }}" class="btn btn-light">Reset</a>
+                        <a href="{{ route('jadwal.mata-pelajaran.index', array_filter(['branch_office_id' => $branchOfficeId])) }}" class="btn btn-light">Reset</a>
                     @endif
                 </form>
 
@@ -69,8 +89,8 @@
                                         <span class="badge {{ $mataPelajaran->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $mataPelajaran->status }}</span>
                                     </td>
                                     <td class="text-end">
-                                        <a href="{{ route('jadwal.kelas.create', ['mata_pelajaran' => $mataPelajaran->id]) }}" class="btn btn-sm btn-outline-primary">
-                                            <i class="ri-add-line"></i> Add Class
+                                        <a href="{{ route('jadwal.pengajar.index', ['jadwal_mata_pelajaran_id' => $mataPelajaran->id]) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="ri-add-line"></i> Add Pengajar
                                         </a>
                                         <a href="{{ route('jadwal.mata-pelajaran.edit', $mataPelajaran->id) }}" class="btn btn-sm btn-light">
                                             <i class="ri-edit-line"></i>

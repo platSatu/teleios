@@ -6,18 +6,19 @@ use App\Models\Concerns\HasUuidPrimaryKey;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Satu baris jadwal kelas kursus — 1 pengajar + 1 murid + rentang
- * waktu, terhubung opsional ke satu App\Models\JadwalMataPelajaran.
- * Lihat App\Http\Controllers\Jadwal\JadwalKelasController untuk CRUD-nya.
- * `pengajar_id` FK ke `users`, `student_id` FK ke App\Models\
- * JadwalStudent (roster sendiri, bukan `users`) — lihat migration
- * create_jadwal_kelas_table.php's docblock.
+ * Satu murid — letaknya di antara App\Models\JadwalMataPelajaran/
+ * pengajar dan App\Models\JadwalKelas dalam alur drill-down Jadwal
+ * (Branch -> Mata Pelajaran / Bidang -> Pengajar -> Student -> Jadwal).
+ * `name` bebas teks — murid TIDAK harus punya akun `users` sendiri,
+ * beda dari `pengajar_id` yang tetap FK ke `users` (lihat App\Http\
+ * Controllers\Jadwal\JadwalStudentController & the migration's
+ * docblock).
  */
-class JadwalKelas extends Model
+class JadwalStudent extends Model
 {
     use HasUuidPrimaryKey;
 
-    protected $table = 'jadwal_kelas';
+    protected $table = 'jadwal_student';
 
     public const STATUS_ACTIVE = 'active';
 
@@ -30,16 +31,8 @@ class JadwalKelas extends Model
         'branch_office_id',
         'jadwal_mata_pelajaran_id',
         'pengajar_id',
-        'student_id',
-        'start_time',
-        'end_time',
+        'name',
         'status',
-        'description',
-    ];
-
-    protected $casts = [
-        'start_time' => 'datetime',
-        'end_time' => 'datetime',
     ];
 
     public function company()
@@ -62,8 +55,8 @@ class JadwalKelas extends Model
         return $this->belongsTo(User::class, 'pengajar_id');
     }
 
-    public function student()
+    public function jadwalKelas()
     {
-        return $this->belongsTo(JadwalStudent::class, 'student_id');
+        return $this->hasMany(JadwalKelas::class, 'student_id');
     }
 }
