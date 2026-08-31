@@ -91,7 +91,7 @@
             <select name="student_id" class="form-select @error('student_id') is-invalid @enderror" required>
                 <option value="">- Pilih Murid -</option>
                 @foreach ($students as $s)
-                    <option value="{{ $s->id }}" @selected(old('student_id', $kelas->student_id ?? '') == $s->id)>{{ $s->name }}@if($s->mataPelajaran) — {{ $s->mataPelajaran->name }}@endif@if($s->pengajar) (diajar {{ $s->pengajar->name }})@endif</option>
+                    <option value="{{ $s->id }}" @selected(old('student_id', $kelas->student_id ?? '') == $s->id)>{{ $s->name }} @if($s->mataPelajaran) — {{ $s->mataPelajaran->name }} @endif @if($s->pengajar) (diajar {{ $s->pengajar->name }}) @endif</option>
                 @endforeach
             </select>
             @error('student_id')
