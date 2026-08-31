@@ -1,7 +1,7 @@
 <aside class="pe-app-sidebar" id="sidebar">
     <div class="pe-app-sidebar-logo px-5 d-flex align-items-center position-relative">
         <!--begin::Brand Image-->
-        <a href="index.html" class="d-flex gap-2 logo-main">
+        <a href="{{ route('dashboard') }}" class="d-flex gap-2 logo-main">
             <img height="33" width="33" class="logo-dark" alt="Dark Logo"
                 src="{{ asset('be') }}/assets/images/favicon.png">
             <h3 class="text-white text-opacity-80 mb-0 lh-base fw-semibold">Konexa</h3>
@@ -33,6 +33,42 @@
                     </a>
                 </li>
                 <li class="pe-menu-title">Apps</li>
+
+                {{--
+                    Menu "Jadwal" -- jadwal kelas kursus, generik lintas
+                    bidang pendidikan (musik, bahasa, dll.), lihat
+                    App\Http\Controllers\Jadwal\*. Diletakkan di atas
+                    "Chat" (bukan di dalamnya) karena bukan bagian dari
+                    fitur/paket Chat -- makanya juga TIDAK dibungkus
+                    kondisi "$hasActivePackage" seperti Chat di bawah. Belum
+                    ada filter per-role ($canSeeChatMenu-equivalent) di
+                    sini -- App\Http\Middleware\EnsureMenuAccess tetap
+                    jadi backstop di level route (lihat routes/web.php),
+                    ini cuma belum ada baris App\Models\ApplicationMenu
+                    untuk dibatasi. Tambahkan filter serupa Chat kalau
+                    nanti fitur ini butuh pembatasan per-role.
+                --}}
+                <li class="pe-slide pe-has-sub">
+                    <a href="#collapseJadwal" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
+                        aria-controls="collapseJadwal">
+                        <i class="uil uil-calendar-alt pe-nav-icon"></i>
+                        <span class="pe-nav-content">Jadwal</span>
+                        <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
+                        <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
+                    </a>
+                    <ul class="pe-slide-menu collapse" id="collapseJadwal">
+                        <li class="pe-slide-item">
+                            <a href="{{ route('jadwal.mata-pelajaran.index') }}" class="pe-nav-link">
+                                Mata Pelajaran / Bidang
+                            </a>
+                        </li>
+                        <li class="pe-slide-item">
+                            <a href="{{ route('jadwal.kelas.index') }}" class="pe-nav-link">
+                                Jadwal Kelas
+                            </a>
+                        </li>
+                    </ul>
+                </li>
 
                 {{-- Chat menu (and its whole "Pengaturan" sub-tree) only
                          shown while the user has at least one active,

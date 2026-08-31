@@ -121,6 +121,8 @@ use App\Http\Controllers\Crm\CustomerSegmentController;
 use App\Http\Controllers\Crm\CustomerTagController;
 use App\Http\Controllers\Crm\CustomerTaskController;
 use App\Http\Controllers\Crm\DealController;
+use App\Http\Controllers\Jadwal\JadwalMataPelajaranController;
+use App\Http\Controllers\Jadwal\JadwalKelasController;
 use App\Http\Controllers\Chat\CategoryPhoneBookController;
 use App\Http\Controllers\Chat\PhoneBookController;
 use App\Http\Controllers\Chat\WaGroupController;
@@ -183,6 +185,40 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
     // it regardless of package/menu-access status, same as the rest of
     // the Dashboard shell.
     Route::get('/summary', [DashboardController::class, 'summary'])->name('dashboard.summary');
+
+    // Fitur "Jadwal" -- jadwal kelas kursus, generik lintas bidang
+    // pendidikan (musik, bahasa, dll.), lihat App\Http\Controllers\
+    // Jadwal\*. Bukan bagian dari langganan paket 'chat' -- makanya di
+    // luar prefix 'chat' di bawah dan TANPA 'active.package'. 'menu.access'
+    // tetap dipasang (backstop yang sama seperti grup 'chat' di bawah)
+    // meski belum ada baris App\Models\ApplicationMenu untuk 'jadwal.*'
+    // -- middleware itu fail-open kalau menu belum dikatalogkan, jadi
+    // aman dipasang dari awal. Diletakkan SEBELUM grup 'chat' supaya
+    // urutannya sama dengan sidebar (lihat resources/views/layouts/
+    // partials/menu.blade.php).
+    Route::prefix('jadwal')->middleware(['menu.access'])->group(function () {
+        Route::prefix('mata-pelajaran')
+            ->controller(JadwalMataPelajaranController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('jadwal.mata-pelajaran.index');
+                Route::get('/create', 'create')->name('jadwal.mata-pelajaran.create');
+                Route::post('/', 'store')->name('jadwal.mata-pelajaran.store');
+                Route::get('/{id}/edit', 'edit')->name('jadwal.mata-pelajaran.edit');
+                Route::put('/{id}', 'update')->name('jadwal.mata-pelajaran.update');
+                Route::delete('/{id}', 'destroy')->name('jadwal.mata-pelajaran.destroy');
+            });
+
+        Route::prefix('kelas')
+            ->controller(JadwalKelasController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('jadwal.kelas.index');
+                Route::get('/create', 'create')->name('jadwal.kelas.create');
+                Route::post('/', 'store')->name('jadwal.kelas.store');
+                Route::get('/{id}/edit', 'edit')->name('jadwal.kelas.edit');
+                Route::put('/{id}', 'update')->name('jadwal.kelas.update');
+                Route::delete('/{id}', 'destroy')->name('jadwal.kelas.destroy');
+            });
+    });
 
     // Gated behind an active package: once every voucher this user holds
     // has expired (or none was ever redeemed), 'active.package' blocks
