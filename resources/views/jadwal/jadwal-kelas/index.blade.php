@@ -102,20 +102,20 @@
                 @endphp
 
                 <div class="table-responsive">
-                    <table class="table table-bordered table-centered align-middle mb-0">
+                    <table class="table table-bordered table-centered align-middle mb-0" style="min-width: 1200px;">
                         <thead class="table-light">
                             <tr>
-                                <th style="width: 40px;">No</th>
-                                <th>Pengajar</th>
-                                <th>Mata Pelajaran / Bidang</th>
+                                <th class="text-nowrap" style="width: 40px;">No</th>
+                                <th class="text-nowrap">Pengajar</th>
+                                <th class="text-nowrap">Mata Pelajaran / Bidang</th>
                                 @unless($student)
-                                    <th>Murid</th>
+                                    <th class="text-nowrap">Murid</th>
                                 @endunless
-                                <th>Mulai</th>
-                                <th>Selesai</th>
-                                <th style="min-width: 220px;">Kehadiran</th>
-                                <th>Status</th>
-                                <th class="text-end">Aksi</th>
+                                <th class="text-nowrap">Mulai</th>
+                                <th class="text-nowrap">Selesai</th>
+                                <th class="text-nowrap" style="min-width: 340px;">Kehadiran</th>
+                                <th class="text-nowrap">Status</th>
+                                <th class="text-end text-nowrap">Aksi</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -123,25 +123,25 @@
                                 <tr>
                                     <td>{{ $kelasList->firstItem() + $idx }}</td>
                                     @if(isset($rowSpans[$idx]))
-                                        <td rowspan="{{ $rowSpans[$idx] }}" class="align-middle">{{ $kelas->pengajar->name ?? '-' }}</td>
-                                        <td rowspan="{{ $rowSpans[$idx] }}" class="align-middle">{{ $kelas->mataPelajaran->name ?? '-' }}</td>
+                                        <td rowspan="{{ $rowSpans[$idx] }}" class="align-middle text-nowrap">{{ $kelas->pengajar->name ?? '-' }}</td>
+                                        <td rowspan="{{ $rowSpans[$idx] }}" class="align-middle text-nowrap">{{ $kelas->mataPelajaran->name ?? '-' }}</td>
                                     @endif
                                     @unless($student)
-                                        <td>{{ $kelas->student->name ?? '-' }}</td>
+                                        <td class="text-nowrap">{{ $kelas->student->name ?? '-' }}</td>
                                     @endunless
-                                    <td>{{ $kelas->start_time?->format('d/m/Y H:i') ?? '-' }}</td>
-                                    <td>{{ $kelas->end_time?->format('d/m/Y H:i') ?? '-' }}</td>
+                                    <td class="text-nowrap">{{ $kelas->start_time?->format('d/m/Y H:i') ?? '-' }}</td>
+                                    <td class="text-nowrap">{{ $kelas->end_time?->format('d/m/Y H:i') ?? '-' }}</td>
                                     <td>
-                                        <form action="{{ route('jadwal.kelas.attendance.update', $kelas->id) }}" method="POST" class="d-flex flex-column gap-1">
+                                        <form action="{{ route('jadwal.kelas.attendance.update', $kelas->id) }}" method="POST" class="d-flex flex-nowrap align-items-center gap-2">
                                             @csrf
                                             @method('PATCH')
-                                            <select name="attendance_status" class="form-select form-select-sm" onchange="this.form.submit()">
+                                            <select name="attendance_status" class="form-select form-select-sm" style="width: 130px; flex: 0 0 auto;" onchange="this.form.submit()">
                                                 <option value="" @selected(!$kelas->attendance_status)>Belum Diabsen</option>
                                                 <option value="hadir" @selected($kelas->attendance_status === 'hadir')>Hadir</option>
                                                 <option value="tidak_hadir" @selected($kelas->attendance_status === 'tidak_hadir')>Tidak Hadir</option>
                                             </select>
-                                            <div class="input-group input-group-sm">
-                                                <input type="text" name="attendance_notes" value="{{ $kelas->attendance_notes }}" class="form-control form-control-sm" placeholder="Keterangan (opsional)">
+                                            <div class="input-group input-group-sm" style="width: 180px; flex: 0 0 auto;">
+                                                <input type="text" name="attendance_notes" value="{{ $kelas->attendance_notes }}" class="form-control form-control-sm" placeholder="Keterangan">
                                                 <button type="submit" class="btn btn-outline-secondary" title="Simpan keterangan"><i class="ri-save-line"></i></button>
                                             </div>
                                         </form>
@@ -149,7 +149,7 @@
                                     <td>
                                         <span class="badge {{ $kelas->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $kelas->status }}</span>
                                     </td>
-                                    <td class="text-end">
+                                    <td class="text-end text-nowrap">
                                         <a href="{{ route('jadwal.kelas.edit', $kelas->id) }}" class="btn btn-sm btn-light">
                                             <i class="ri-edit-line"></i>
                                         </a>
