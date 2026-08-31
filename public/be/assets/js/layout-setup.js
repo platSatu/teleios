@@ -76,7 +76,13 @@ function updateMenuClick() {
 function updateSidebarClick() {
   const sideBarMenus = document.getElementById("sidebar-simplebar");
   if (sideBarMenus) {
-    const menuItems = sideBarMenus.querySelectorAll("ul.pe-main-menu > li > a");
+    // Hanya intercept klik untuk item yang benar-benar toggle submenu
+    // (punya data-bs-toggle="collapse"). Sebelumnya selector ini
+    // menangkap SEMUA link top-level termasuk yang tidak punya
+    // submenu (mis. "Dashboards"), lalu selalu memanggil
+    // e.preventDefault() di bawah -- akibatnya link biasa itu tidak
+    // pernah benar-benar navigasi walau href-nya valid.
+    const menuItems = sideBarMenus.querySelectorAll('ul.pe-main-menu > li > a[data-bs-toggle="collapse"]');
     menuItems.forEach((item) => {
       item.addEventListener("click", (e) => {
         e.preventDefault();

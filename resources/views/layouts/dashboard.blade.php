@@ -66,6 +66,23 @@
     
     <!-- App Css-->
     <link href="{{asset('be')}}/assets/css/app.min.css" id="app-style" rel="stylesheet" type="text/css">
+
+    {{--
+        Fix: item menu "Dashboards" di sidebar itu link biasa (tanpa
+        submenu), tapi rule bawaan tema untuk menyembunyikan teks saat
+        sidebar mode "icon" (terlipat) cuma menyasar `.pe-slide.pe-has-sub`
+        (item yang punya submenu). Karena Dashboards tidak punya submenu,
+        teksnya ('Dashboards') tidak ikut disembunyikan dan malah
+        terpotong jadi 'D' oleh lebar sidebar yang sempit saat terlipat.
+        Rule di bawah menambahkan perilaku sembunyi-teks yang sama untuk
+        item pe-slide TANPA submenu, supaya saat terlipat cuma ikonnya
+        yang tampil, konsisten dengan menu lain.
+    --}}
+    <style>
+        [data-sidebar="icon"] .pe-app-sidebar .pe-main-menu > li.pe-slide:not(.pe-has-sub) > .pe-nav-link .pe-nav-content {
+            display: none;
+        }
+    </style>
 </head>
 
 <body>
