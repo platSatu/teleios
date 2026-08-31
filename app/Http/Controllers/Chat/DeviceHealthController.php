@@ -63,8 +63,14 @@ class DeviceHealthController extends Controller
         $context = $this->companyContext($request);
         $branchOfficeId = $context->isLockedToBranch() ? $context->branchOffice?->id : null;
 
+        // Widget dashboard cuma butuh rekomendasi teratas (device paling
+        // sehat & paling tidak sibuk), bukan seluruh device perusahaan --
+        // rankDevicesForBroadcast() sudah mengurutkan best-health-first,
+        // jadi take(5) di sini otomatis berarti 'top 5 tersehat'.
         return response()->json([
-            'devices' => $this->health->rankDevicesForBroadcast($context->company->id, $branchOfficeId)->values(),
+            'devices' => $this->health->rankDevicesForBroadcast($context->company->id, $branchOfficeId)
+                ->take(5)
+                ->values(),
         ]);
     }
 

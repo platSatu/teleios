@@ -313,7 +313,11 @@
 
         function renderBroadcastChart(bc) {
             const options = {
-                chart: { type: 'radialBar', height: 224, toolbar: { show: false } },
+                // width disamakan dengan height (persegi) supaya ukuran
+                // teks 'Read Rate' & persentase di tengah donut selalu
+                // konsisten, tidak ikut membesar mengikuti lebar kolom
+                // .col-6 yang bisa berubah-ubah tergantung breakpoint.
+                chart: { type: 'radialBar', height: 224, width: 224, toolbar: { show: false } },
                 series: [bc.delivery_rate || 0, bc.read_rate || 0],
                 labels: ['Delivery', 'Read'],
                 colors: ['#28a745', '#17a2b8'],
@@ -321,12 +325,12 @@
                     radialBar: {
                         hollow: { size: '35%' },
                         dataLabels: {
-                            name: { fontSize: '11px' },
-                            value: { fontSize: '13px', formatter: function (val) { return val + '%'; } },
+                            name: { fontSize: '9px' },
+                            value: { fontSize: '11px', formatter: function (val) { return val + '%'; } },
                             total: {
                                 show: true,
                                 label: 'Read Rate',
-                                fontSize: '10px',
+                                fontSize: '9px',
                                 fontWeight: 500,
                                 color: '#6c757d',
                                 formatter: function () { return (bc.read_rate || 0) + '%'; }
