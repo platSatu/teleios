@@ -16,10 +16,18 @@
             <ul class="pe-main-menu list-unstyled">
                 <!-- Main Menu -->
                 <li class="pe-menu-title">Main</li>
-                <li class="pe-slide pe-has-sub">
-                    <a href="{{ route('dashboard') }}" class="pe-nav-link" data-bs-toggle="collapse"
-                        aria-expanded="false" aria-controls="collapseDashboards"
-                        onclick="toggleCollapse('collapseAuth', this)">
+                <li class="pe-slide">
+                    {{--
+                        Link biasa ke route('dashboard'), BUKAN toggle
+                        submenu -- sebelumnya ada atribut collapse
+                        Bootstrap (data-bs-toggle="collapse" dkk.) yang
+                        seharusnya cuma dipakai item yang punya submenu.
+                        "Dashboards" tidak punya submenu, jadi Bootstrap's
+                        collapse JS selalu preventDefault() klik-nya dan
+                        link ini tidak pernah benar-benar navigasi.
+                        Dihapus supaya klik biasa jalan normal.
+                    --}}
+                    <a href="{{ route('dashboard') }}" class="pe-nav-link">
                         <i class="uil uil-tachometer-fast-alt pe-nav-icon"></i>
                         <span class="pe-nav-content">Dashboards</span>
                     </a>
