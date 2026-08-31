@@ -77,6 +77,7 @@
                                     <th>Pengajar</th>
                                 @endunless
                                 <th>Branch</th>
+                                <th>No. HP</th>
                                 <th>Status</th>
                                 <th class="text-end">Aksi</th>
                             </tr>
@@ -92,6 +93,13 @@
                                         <td>{{ $student->pengajar->name ?? '-' }}</td>
                                     @endunless
                                     <td>{{ $student->branchOffice->name ?? '-' }}</td>
+                                    <td class="text-nowrap">
+                                        @if($student->parent_phone_number || $student->student_phone_number)
+                                            <span title="{{ $student->parent_phone_number ? 'Orang tua' : 'Murid' }}">{{ $student->parent_phone_number ?: $student->student_phone_number }}</span>
+                                        @else
+                                            <span class="text-muted">-</span>
+                                        @endif
+                                    </td>
                                     <td>
                                         <span class="badge {{ $student->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $student->status }}</span>
                                     </td>
@@ -116,7 +124,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="{{ 4 + ($mataPelajaran ? 0 : 1) + ($pengajar ? 0 : 1) }}" class="text-center text-muted py-4">Belum ada Student. Klik "Tambah Student" untuk membuat yang pertama.</td>
+                                    <td colspan="{{ 5 + ($mataPelajaran ? 0 : 1) + ($pengajar ? 0 : 1) }}" class="text-center text-muted py-4">Belum ada Student. Klik "Tambah Student" untuk membuat yang pertama.</td>
                                 </tr>
                             @endforelse
                         </tbody>

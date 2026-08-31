@@ -13,6 +13,10 @@ use Illuminate\Database\Eloquent\Model;
  * beda dari `pengajar_id` yang tetap FK ke `users` (lihat App\Http\
  * Controllers\Jadwal\JadwalStudentController & the migration's
  * docblock).
+ *
+ * `parent_phone_number`/`student_phone_number` opsional, independen
+ * satu sama lain — disiapkan untuk fitur pengingat WA & permintaan
+ * reschedule Jadwal (belum dipakai fitur mana pun saat ini).
  */
 class JadwalStudent extends Model
 {
@@ -32,6 +36,8 @@ class JadwalStudent extends Model
         'jadwal_mata_pelajaran_id',
         'pengajar_id',
         'name',
+        'parent_phone_number',
+        'student_phone_number',
         'status',
     ];
 

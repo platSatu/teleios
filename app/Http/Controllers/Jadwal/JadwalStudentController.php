@@ -122,6 +122,8 @@ class JadwalStudentController extends Controller
             'jadwal_mata_pelajaran_id' => $validated['jadwal_mata_pelajaran_id'],
             'pengajar_id' => $validated['pengajar_id'],
             'name' => $validated['name'],
+            'parent_phone_number' => $validated['parent_phone_number'] ?? null,
+            'student_phone_number' => $validated['student_phone_number'] ?? null,
             'status' => $validated['status'] ?? 'active',
         ]);
 
@@ -178,6 +180,8 @@ class JadwalStudentController extends Controller
             'jadwal_mata_pelajaran_id' => $validated['jadwal_mata_pelajaran_id'],
             'pengajar_id' => $validated['pengajar_id'],
             'name' => $validated['name'],
+            'parent_phone_number' => $validated['parent_phone_number'] ?? null,
+            'student_phone_number' => $validated['student_phone_number'] ?? null,
             'status' => $validated['status'] ?? 'active',
         ]);
 
@@ -263,6 +267,12 @@ class JadwalStudentController extends Controller
             ],
             'pengajar_id' => ['required', 'uuid', 'exists:users,id'],
             'name' => ['required', 'string', 'max:255'],
+            // Format nomor tidak dipaksakan ketat di sini (angka/+/spasi
+            // semua diterima) -- normalisasi ke format WA (62xxx) baru
+            // dilakukan nanti di titik pengiriman (tahap pengingat WA),
+            // bukan di titik input data.
+            'parent_phone_number' => ['nullable', 'string', 'max:32'],
+            'student_phone_number' => ['nullable', 'string', 'max:32'],
             'status' => ['nullable', 'in:active,inactive'],
             // exists: alone only checks the row is real, not that it
             // belongs to THIS company — sama rule seperti Jadwal\

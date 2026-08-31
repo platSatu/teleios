@@ -106,6 +106,27 @@
     @enderror
 </div>
 
+<div class="row">
+    <div class="col-md-6 mb-3">
+        <label class="form-label">No. HP Orang Tua (opsional)</label>
+        <input type="text" name="parent_phone_number" class="form-control @error('parent_phone_number') is-invalid @enderror"
+            value="{{ old('parent_phone_number', $student->parent_phone_number ?? '') }}" placeholder="Contoh: 6281234567890">
+        @error('parent_phone_number')
+            <div class="invalid-feedback">{{ $message }}</div>
+        @enderror
+        <div class="form-text">Dipakai untuk pengingat &amp; notifikasi WhatsApp (kalau layanan Chat aktif).</div>
+    </div>
+
+    <div class="col-md-6 mb-3">
+        <label class="form-label">No. HP Murid (opsional)</label>
+        <input type="text" name="student_phone_number" class="form-control @error('student_phone_number') is-invalid @enderror"
+            value="{{ old('student_phone_number', $student->student_phone_number ?? '') }}" placeholder="Contoh: 6281234567890">
+        @error('student_phone_number')
+            <div class="invalid-feedback">{{ $message }}</div>
+        @enderror
+    </div>
+</div>
+
 <div class="mb-3">
     <label class="form-label">Status</label>
     <select name="status" class="form-select @error('status') is-invalid @enderror">
