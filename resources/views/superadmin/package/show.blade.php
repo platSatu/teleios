@@ -45,6 +45,16 @@
                     </td>
                 </tr>
                 <tr>
+                    <td class="text-muted">Terpopuler</td>
+                    <td>
+                        @if ($package->is_featured)
+                            <span class="badge bg-primary-subtle text-primary">Ya</span>
+                        @else
+                            <span class="text-muted">Tidak</span>
+                        @endif
+                    </td>
+                </tr>
+                <tr>
                     <td class="text-muted">Dibuat</td>
                     <td>{{ $package->created_at->format('d M Y H:i') }}</td>
                 </tr>

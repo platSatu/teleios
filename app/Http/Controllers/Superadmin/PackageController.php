@@ -88,7 +88,7 @@ class PackageController extends Controller
      */
     private function validated(Request $request): array
     {
-        return $request->validate([
+        $validated = $request->validate([
             'user_id' => ['nullable', 'uuid', 'exists:users,id'],
             'category_application_id' => ['required', 'uuid', 'exists:category_applications,id'],
             'name' => ['required', 'string', 'max:255'],
@@ -97,6 +97,14 @@ class PackageController extends Controller
             'price' => ['required', 'numeric', 'min:0'],
             'status' => ['required', 'in:active,inactive'],
         ]);
+
+        // $request->boolean() (bukan lewat validate() di atas) supaya
+        // checkbox yang di-uncheck (jadi TIDAK ikut terkirim sama sekali
+        // di form POST) tetap kebaca sebagai false alih-alih diam-diam
+        // tidak berubah dari nilai lama saat update.
+        $validated['is_featured'] = $request->boolean('is_featured');
+
+        return $validated;
     }
 
     /**

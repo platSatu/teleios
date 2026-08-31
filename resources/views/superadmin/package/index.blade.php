@@ -49,6 +49,9 @@
                                     <span class="badge {{ $item->status === 'active' ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger' }}">
                                         {{ ucfirst($item->status) }}
                                     </span>
+                                    @if ($item->is_featured)
+                                        <span class="badge bg-primary-subtle text-primary">Terpopuler</span>
+                                    @endif
                                 </td>
                                 <td class="text-end">
                                     {{-- The delete <form> used to wrap the button, which took it out

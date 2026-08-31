@@ -28,10 +28,13 @@ use Illuminate\Http\JsonResponse;
  * no PackageLimit rows just gets an empty `limits` array; the frontend
  * falls back to generic copy in that case.
  *
- * Ordered by price (ascending) rather than name — the frontend derives
- * its "paket unggulan/TERPOPULER" badge from position in this list
- * (middle item), matching the cheapest-to-priciest layout of the KVM-
- * hosting-style reference design it was modeled after.
+ * Ordered by price (ascending) rather than name, matching the
+ * cheapest-to-priciest layout of the KVM-hosting-style reference design
+ * it was modeled after. `is_featured` (set manually per package in
+ * Superadmin > Package) is what the frontend uses to render the
+ * "TERPOPULER" badge — previously this was a position-in-list heuristic
+ * (always the middle item), replaced 2026-08-31 so Superadmin can pick
+ * any package(s) explicitly instead.
  */
 class PackageController extends Controller
 {
@@ -45,7 +48,7 @@ class PackageController extends Controller
                 'limits.limitMetric:id,key,name,unit',
             ])
             ->orderBy('price')
-            ->get(['id', 'category_application_id', 'name', 'description', 'duration', 'price']);
+            ->get(['id', 'category_application_id', 'name', 'description', 'duration', 'price', 'is_featured']);
 
         return response()->json(['data' => $packages]);
     }

@@ -58,12 +58,21 @@
     </select>
 </div>
 
-<div class="mb-4">
+<div class="mb-3">
     <label for="status" class="form-label">Status <span class="text-danger">*</span></label>
     <select name="status" id="status" class="form-select" required>
         <option value="active" @selected(old('status', $package->status ?? 'active') === 'active')>Active</option>
         <option value="inactive" @selected(old('status', $package->status ?? '') === 'inactive')>Inactive</option>
     </select>
+</div>
+
+<div class="mb-4 form-check">
+    <input type="checkbox" name="is_featured" id="is_featured" class="form-check-input" value="1"
+        @checked(old('is_featured', $package->is_featured ?? false))>
+    <label for="is_featured" class="form-check-label">
+        Tandai sebagai "TERPOPULER" di halaman depan (fe-konexa)
+    </label>
+    <div class="form-text">Boleh lebih dari satu package ditandai sekaligus kalau memang perlu.</div>
 </div>
 
 <div class="d-flex gap-2">
