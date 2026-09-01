@@ -27,7 +27,6 @@
                         <tr>
                             <th style="min-width: 150px;">Nama</th>
                             <th style="min-width: 150px;">Perusahaan</th>
-                            <th style="min-width: 90px;">Bahasa</th>
                             <th style="min-width: 220px;">Isi Pesan</th>
                             <th style="min-width: 110px;">Status</th>
                             <th style="min-width: 150px;">Review AI</th>
@@ -38,7 +37,6 @@
                             <tr>
                                 <td class="fw-semibold">{{ $template->name }}</td>
                                 <td class="text-muted">{{ $template->company->name ?? '—' }}</td>
-                                <td class="text-uppercase text-muted small">{{ $template->language }}</td>
                                 <td class="text-muted">{{ \Illuminate\Support\Str::limit($template->template, 90) }}</td>
                                 <td>
                                     <span class="badge {{ $template->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $template->status }}</span>
@@ -55,7 +53,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="text-center text-muted py-4">Tidak ada template tanpa kategori.</td>
+                                <td colspan="5" class="text-center text-muted py-4">Tidak ada template tanpa kategori.</td>
                             </tr>
                         @endforelse
                     </tbody>

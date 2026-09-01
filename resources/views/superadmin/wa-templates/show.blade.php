@@ -57,7 +57,6 @@
                     <thead class="table-light">
                         <tr>
                             <th style="min-width: 150px;">Nama</th>
-                            <th style="min-width: 90px;">Bahasa</th>
                             <th style="min-width: 220px;">Isi Pesan</th>
                             <th style="min-width: 130px;">Tombol</th>
                             <th style="min-width: 110px;">Status</th>
@@ -68,7 +67,6 @@
                         @forelse ($templates as $template)
                             <tr>
                                 <td class="fw-semibold">{{ $template->name }}</td>
-                                <td class="text-uppercase text-muted small">{{ $template->language }}</td>
                                 <td class="text-muted" style="max-width:280px">
                                     @if ($template->header)
                                         <div class="fw-semibold small">{{ $template->header }}</div>
@@ -98,7 +96,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="text-center text-muted py-4">Belum ada template di kategori ini.</td>
+                                <td colspan="5" class="text-center text-muted py-4">Belum ada template di kategori ini.</td>
                             </tr>
                         @endforelse
                     </tbody>

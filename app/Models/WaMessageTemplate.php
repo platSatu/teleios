@@ -18,10 +18,16 @@ use Illuminate\Support\Str;
  *
  * `status` (active|inactive) and `review_status` (draft|in_review|
  * approved|rejected) are independent axes — see the migration that
- * added the builder columns (category/language/header/footer/buttons/
+ * added the builder columns (category/header/footer/buttons/
  * review_status) for the full reasoning. usable() below is the one
  * query every "can this actually be sent" caller should go through
  * rather than re-deriving the same two-column check inline.
+ *
+ * `language` sempat ada di sini (lihat migration
+ * drop_language_from_wa_message_templates_table.php) tapi dihapus --
+ * tidak pernah benar-benar dipakai di manapun (bukan buat filter,
+ * bukan buat moderasi, bukan buat pemilihan template), murni field
+ * dekoratif yang tidak berpengaruh ke fungsi apa pun.
  */
 class WaMessageTemplate extends Model
 {
@@ -35,7 +41,6 @@ class WaMessageTemplate extends Model
         'company_id',
         'wa_category_template_id',
         'name',
-        'language',
         'header',
         'template',
         'footer',

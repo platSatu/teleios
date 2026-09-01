@@ -10,7 +10,7 @@
 @endphp
 
 {{-- ============================================================
-     Card 1 — Informasi dasar: nama, kategori, bahasa, jenis konten.
+     Card 1 — Informasi dasar: nama, kategori, jenis konten.
 ============================================================ --}}
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-header bg-transparent">
@@ -24,28 +24,18 @@
             @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
         </div>
 
-        <div class="row">
-            <div class="col-sm-7 mb-3">
-                <label class="form-label">Kategori</label>
-                <select name="wa_category_template_id" class="form-select @error('wa_category_template_id') is-invalid @enderror">
-                    <option value="">Tanpa kategori</option>
-                    @foreach ($categories as $category)
-                        <option value="{{ $category->id }}" @selected(old('wa_category_template_id', $template->wa_category_template_id ?? '') == $category->id)>
-                            {{ $category->name }}
-                        </option>
-                    @endforeach
-                </select>
-                <div class="form-text">Hanya kategori yang sudah lolos moderasi AI yang muncul di sini.</div>
-                @error('wa_category_template_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
-            </div>
-            <div class="col-sm-5 mb-3">
-                <label class="form-label">Bahasa</label>
-                <select name="language" id="tpl-language" class="form-select @error('language') is-invalid @enderror">
-                    <option value="id" @selected(old('language', $template->language ?? 'id') == 'id')>Indonesia</option>
-                    <option value="en" @selected(old('language', $template->language ?? '') == 'en')>English</option>
-                </select>
-                @error('language')<div class="invalid-feedback">{{ $message }}</div>@enderror
-            </div>
+        <div class="mb-3">
+            <label class="form-label">Kategori</label>
+            <select name="wa_category_template_id" class="form-select @error('wa_category_template_id') is-invalid @enderror">
+                <option value="">Tanpa kategori</option>
+                @foreach ($categories as $category)
+                    <option value="{{ $category->id }}" @selected(old('wa_category_template_id', $template->wa_category_template_id ?? '') == $category->id)>
+                        {{ $category->name }}
+                    </option>
+                @endforeach
+            </select>
+            <div class="form-text">Hanya kategori yang sudah lolos moderasi AI yang muncul di sini.</div>
+            @error('wa_category_template_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
         </div>
 
         {{-- ============================================================

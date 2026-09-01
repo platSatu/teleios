@@ -37,7 +37,7 @@ use Illuminate\View\View;
  * `category_schedule` for manual messages — see WaMessageTemplate::
  * CONTENT_TYPES.
  *
- * Builder fields (category, language, header/footer, buttons, variables,
+ * Builder fields (category, header/footer, buttons, variables,
  * content_type, link, attachment) mirror WhatsApp Business's own template
  * shape. Any edit to a reviewable field re-runs App\Services\Moderation\
  * TemplateModerationService — see contentFieldsChanged() below — so an
@@ -47,11 +47,11 @@ use Illuminate\View\View;
  * moderates, only what it says.
  *
  * The AI only ever judges/corrects the free-text header/body/footer
- * (see moderateContent()) — buttons, link, category, and language still
- * trigger a fresh moderation pass when changed, but aren't themselves
- * rewritten by it. There is no more manual superadmin approve/reject
- * queue for this resource (see Superadmin\WaTemplateReviewController,
- * now read-only oversight).
+ * (see moderateContent()) — buttons, link, and category still trigger a
+ * fresh moderation pass when changed, but aren't themselves rewritten by
+ * it. There is no more manual superadmin approve/reject queue for this
+ * resource (see Superadmin\WaTemplateReviewController, now read-only
+ * oversight).
  */
 class MessageTemplateController extends Controller
 {
@@ -69,7 +69,6 @@ class MessageTemplateController extends Controller
      */
     private const REVIEWABLE_FIELDS = [
         'wa_category_template_id',
-        'language',
         'header',
         'template',
         'footer',
@@ -273,9 +272,9 @@ class MessageTemplateController extends Controller
      * TemplateModerationService, and — only when the AI actually
      * corrected something — writes the corrected text straight back
      * into $validated (by reference) before it's saved. Buttons/link/
-     * category/language are deliberately NOT included here (see the
-     * class docblock): they still trigger this call via
-     * contentFieldsChanged(), but aren't themselves rewritten by it.
+     * category are deliberately NOT included here (see the class
+     * docblock): they still trigger this call via contentFieldsChanged(),
+     * but aren't themselves rewritten by it.
      */
     private function moderateContent(array &$validated): ModerationResult
     {
@@ -504,7 +503,6 @@ class MessageTemplateController extends Controller
                 ),
             ],
             'name' => ['required', 'string', 'max:255'],
-            'language' => ['required', 'string', 'in:id,en'],
             'content_type' => ['required', Rule::in(WaMessageTemplate::CONTENT_TYPES)],
             'header' => ['nullable', 'string', 'max:60'],
             'template' => ['required', 'string', 'max:1024'],
