@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\HistoryUserLogin;
+use App\Models\ReferralCode;
 use App\Models\User;
 use App\Models\WebTermCondition;
 use App\Rules\Turnstile;
@@ -14,6 +15,7 @@ use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\RateLimiter;
@@ -81,6 +83,20 @@ class AuthController extends Controller
     private const EMAIL_ACTION_MAX_ATTEMPTS = 2;
 
     private const EMAIL_ACTION_DECAY_SECONDS = 900; // 15 minutes
+
+    /**
+     * Nama & masa berlaku cookie yang menyimpan kode referral dari link
+     * (…/auth/register?ref=KODE) — lihat rememberReferralCodeFromLink()
+     * di bawah. Dashboard\PackageCheckoutController::show() membaca
+     * cookie yang sama lewat nama literal yang identik ('referral_code')
+     * — di-hardcode di dua tempat, bukan dibagi lewat satu konstanta
+     * bersama, karena kedua controller ini tidak punya parent class yang
+     * pas untuk saling share-nya (sama seperti duplikasi kecil lain di
+     * app ini, mis. uniqueSlug() di Superadmin\CompanyController).
+     */
+    private const REFERRAL_COOKIE_NAME = 'referral_code';
+
+    private const REFERRAL_COOKIE_DAYS = 60;
 
     public function __construct(
         protected GolangAuthService $golangAuth,
@@ -295,8 +311,10 @@ class AuthController extends Controller
     // REGISTER
     // =========================================================
 
-    public function showRegister(): View
+    public function showRegister(Request $request): View
     {
+        $this->rememberReferralCodeFromLink($request);
+
         return view('auth.register', [
             'currentTerms' => WebTermCondition::current(),
         ]);
@@ -531,6 +549,46 @@ class AuthController extends Controller
     // =========================================================
     // PRIVATE HELPERS
     // =========================================================
+
+    /**
+     * Sekali link referral (…/auth/register?ref=KODE) diklik, kode yang
+     * masih valid & aktif disimpan ke cookie selama REFERRAL_COOKIE_DAYS
+     * hari — supaya Dashboard\PackageCheckoutController::show() bisa
+     * mengisikannya otomatis ke form checkout kapan pun user itu akhirnya
+     * beli package (bisa berhari-hari kemudian, setelah verifikasi email
+     * & login pertama kali). TIDAK mengunci apa pun ke database di sini
+     * — itu tetap baru terjadi lewat validateReferral()/store() yang
+     * sudah ada di PackageCheckoutController, sama sekali tidak diubah
+     * oleh method ini.
+     *
+     * Kode divalidasi ada & berstatus aktif dulu sebelum disimpan (bukan
+     * disalin mentah dari query string) supaya form checkout nanti tidak
+     * pernah ke-prefill kode basi/typo yang ujungnya cuma bikin bingung
+     * user — dan supaya cookie ini tidak bisa dipakai menaruh sembarang
+     * string tanpa lolos cek apa pun.
+     */
+    private function rememberReferralCodeFromLink(Request $request): void
+    {
+        $code = $request->string('ref')->trim()->value();
+
+        if ($code === '') {
+            return;
+        }
+
+        $isValidActiveCode = ReferralCode::where('code', $code)
+            ->where('status', 'active')
+            ->exists();
+
+        if (! $isValidActiveCode) {
+            return;
+        }
+
+        Cookie::queue(
+            self::REFERRAL_COOKIE_NAME,
+            $code,
+            self::REFERRAL_COOKIE_DAYS * 24 * 60
+        );
+    }
 
     /**
      * Closes the user's currently-open login history entry (if any) and

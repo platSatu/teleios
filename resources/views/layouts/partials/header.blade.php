@@ -201,6 +201,29 @@
                                     {{ Auth::user()->email }}
                                 </small>
 
+                                @if (Auth::user()->referralCode)
+                                    {{-- Kode + link referral milik user ini sendiri, supaya
+                                         gampang dibagikan (mis. oleh agen). Link-nya menuju
+                                         halaman register dengan ?ref=KODE, yang otomatis
+                                         mengisi kolom kode referral di checkout siapa pun yang
+                                         daftar lewat link itu — lihat Auth\AuthController::
+                                         rememberReferralCodeFromLink() dan Dashboard\
+                                         PackageCheckoutController::show(). Tidak mengubah cara
+                                         kerja kode referral itu sendiri sama sekali, ini murni
+                                         jalan pintas berbagi. --}}
+                                    <div class="d-flex align-items-center gap-1 mt-2" id="referral-share-block" data-referral-link="{{ route('register', ['ref' => Auth::user()->referralCode->code]) }}">
+                                        <span class="badge bg-primary-subtle text-primary fw-semibold fs-11 text-nowrap">
+                                            {{ Auth::user()->referralCode->code }}
+                                        </span>
+                                        <button type="button" class="btn btn-icon btn-outline-secondary btn-sm rounded-circle" id="referral-copy-btn" title="Salin link referral" style="width: 24px; height: 24px;">
+                                            <i class="ri-file-copy-line fs-11"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-icon btn-outline-secondary btn-sm rounded-circle d-none" id="referral-share-btn" title="Bagikan link referral" style="width: 24px; height: 24px;">
+                                            <i class="ri-share-forward-line fs-11"></i>
+                                        </button>
+                                    </div>
+                                @endif
+
                                 <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
                                     <span class="fw-semibold fs-12 text-body text-nowrap">
                                         Rp {{ number_format(Auth::user()->wallet?->balance ?? 0, 0, ',', '.') }}
@@ -412,6 +435,44 @@
 
         poll();
         setInterval(poll, 15000);
+    })();
+
+    // Tombol copy/share link referral di dropdown profil (lihat markup
+    // #referral-share-block di atas) — pola copy-to-clipboard-nya sama
+    // persis dengan .wa-copy-btn di resources/views/chat/konekdevice/
+    // api-key.blade.php: klik -> navigator.clipboard.writeText(), ikon
+    // berubah jadi centang hijau sebentar sebagai feedback.
+    (function () {
+        var shareBlock = document.getElementById('referral-share-block');
+        if (!shareBlock) return;
+
+        var link = shareBlock.getAttribute('data-referral-link');
+        var copyBtn = document.getElementById('referral-copy-btn');
+        var shareBtn = document.getElementById('referral-share-btn');
+
+        function flashCopied(btn) {
+            var icon = btn.querySelector('i');
+            var original = icon.className;
+            icon.className = 'ri-check-line text-success fs-11';
+            setTimeout(function () { icon.className = original; }, 1200);
+        }
+
+        copyBtn.addEventListener('click', function () {
+            navigator.clipboard.writeText(link).then(function () {
+                flashCopied(copyBtn);
+            });
+        });
+
+        // Native share sheet (WhatsApp/dll) kalau browser-nya dukung --
+        // kebanyakan di HP, jarang di desktop -- makanya tombolnya
+        // disembunyikan (class d-none di markup) sampai dukungannya
+        // dipastikan ada di sini.
+        if (navigator.share) {
+            shareBtn.classList.remove('d-none');
+            shareBtn.addEventListener('click', function () {
+                navigator.share({ url: link }).catch(function () {});
+            });
+        }
     })();
 </script>
 @endauth

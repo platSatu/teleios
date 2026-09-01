@@ -57,7 +57,7 @@ use RuntimeException;
  */
 class PackageCheckoutController extends Controller
 {
-    public function show(Package $package): View|RedirectResponse
+    public function show(Request $request, Package $package): View|RedirectResponse
     {
         abort_unless($package->status === 'active', 404);
 
@@ -82,7 +82,19 @@ class PackageCheckoutController extends Controller
         // commission automatically, nothing left for this user to type.
         $linkedReferrer = $user->referrer_id ? $user->referrer()->with('referralCode')->first() : null;
 
-        return view('dashboard.package.checkout', compact('package', 'wallet', 'linkedReferrer'));
+        // Kode dari link referral yang pernah diklik user ini — lihat
+        // Auth\AuthController::rememberReferralCodeFromLink() (cookie
+        // 'referral_code', nama sama persis, hardcoded di kedua tempat,
+        // lihat komentar konstanta REFERRAL_COOKIE_NAME di sana untuk
+        // alasannya). Ini CUMA jadi nilai default input di
+        // checkout.blade.php supaya user tidak perlu ketik manual —
+        // bukan validasi maupun penguncian apa pun. validateReferral()/
+        // store() di bawah tetap jalan persis seperti sebelum ini ada,
+        // sama sekali tidak berubah. Tidak relevan lagi begitu user
+        // sudah terkunci ke satu referrer ($linkedReferrer di atas).
+        $suggestedReferralCode = $linkedReferrer ? null : $request->cookie('referral_code');
+
+        return view('dashboard.package.checkout', compact('package', 'wallet', 'linkedReferrer', 'suggestedReferralCode'));
     }
 
     public function applyPromo(Request $request, Package $package): JsonResponse

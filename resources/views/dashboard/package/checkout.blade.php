@@ -119,7 +119,7 @@
                             </div>
                         @else
                             <div class="input-group code-input-group">
-                                <input type="text" id="kode_referral" name="kode_referral" class="form-control" placeholder="Masukkan kode referral" autocomplete="off">
+                                <input type="text" id="kode_referral" name="kode_referral" class="form-control" placeholder="Masukkan kode referral" autocomplete="off" value="{{ old('kode_referral', $suggestedReferralCode ?? '') }}">
                                 <button type="button" class="btn btn-outline-primary" id="btn-apply-referral">
                                     <span class="btn-label">Gunakan</span>
                                 </button>
@@ -283,6 +283,18 @@
                     recalculate();
                 });
             });
+
+            // Kode dari link referral (lihat PackageCheckoutController::
+            // show()) sudah otomatis mengisi nilai input-nya lewat Blade
+            // di atas (value="...") -- ini cuma memicu tombol "Gunakan"
+            // yang sama begitu halaman selesai dimuat, supaya user tidak
+            // perlu ketik atau klik apa pun manual. Sepenuhnya lewat alur
+            // validasi yang sama seperti klik manual: kalau kodenya
+            // ternyata sudah tidak berlaku (kadaluarsa/diblokir sejak
+            // link dibagikan), pesan errornya tetap muncul seperti biasa.
+            if (document.getElementById('kode_referral').value.trim() !== '') {
+                btnApplyReferral.click();
+            }
         }
     });
     </script>
