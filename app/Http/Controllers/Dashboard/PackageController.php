@@ -35,7 +35,18 @@ class PackageController extends Controller
         $categoryId = $request->string('category')->value() ?: null;
 
         $packages = Package::query()
-            ->with('categoryApplication')
+            ->with([
+                'categoryApplication',
+                // Buat daftar spesifikasi berikon di tiap kartu package
+                // (lihat resources/views/dashboard/package/index.blade.php)
+                // -- desain kartunya disamakan dengan pricing card
+                // fe-konexa, yang eager-load 'limits.limitMetric' persis
+                // sama (lihat App\Http\Controllers\Api\Frontend\
+                // PackageController). Diurutkan naik biar limit terkecil
+                // (biasanya yang paling "dasar") tampil duluan.
+                'limits' => fn ($query) => $query->orderBy('max_value'),
+                'limits.limitMetric',
+            ])
             ->where('status', 'active')
             ->when($categoryId, fn ($query) => $query->where('category_application_id', $categoryId))
             ->when($search, function ($query) use ($search) {
