@@ -12,6 +12,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * docblock. Diproses manual oleh staff di App\Http\Controllers\Jadwal\
  * JadwalRescheduleRequestController -- baris ini sendiri TIDAK PERNAH
  * mengubah App\Models\JadwalKelas secara otomatis.
+ *
+ * `requested_new_start_time`/`requested_new_end_time` (nullable) diisi
+ * OTOMATIS kalau flow-nya pakai step pilihan jam kosong (lihat migration
+ * add_requested_schedule_to_..._table.php) -- sekadar apa yang DIMINTA
+ * murid, bukan keputusan; staff tetap yang menentukan jadwal final
+ * lewat form approve().
  */
 class JadwalKelasRescheduleRequest extends Model
 {
@@ -35,6 +41,8 @@ class JadwalKelasRescheduleRequest extends Model
         'chat_jid',
         'requester_phone',
         'detail_request',
+        'requested_new_start_time',
+        'requested_new_end_time',
         'status',
         'staff_notes',
         'reviewed_by',
@@ -42,6 +50,8 @@ class JadwalKelasRescheduleRequest extends Model
     ];
 
     protected $casts = [
+        'requested_new_start_time' => 'datetime',
+        'requested_new_end_time' => 'datetime',
         'reviewed_at' => 'datetime',
     ];
 

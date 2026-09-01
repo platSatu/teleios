@@ -70,11 +70,33 @@ class WaChatbotFlowStep extends Model
         self::ACTION_CREATE_JADWAL_RESCHEDULE_REQUEST,
     ];
 
+    /**
+     * Opsi step 'choice' ini diambil dari jadwal murid yang sedang chat
+     * (bukan ditulis manual admin) -- lihat App\Services\Chat     * ChatbotFlowService::resolveOptions() untuk cara kerjanya, dan
+     * migration add_options_source_to_wa_chatbot_flow_steps_table
+     * untuk kenapa ini kolom terpisah dari `options`.
+     */
+    public const OPTIONS_SOURCE_MY_JADWAL = 'my_jadwal';
+
+    /**
+     * Opsi step 'choice' ini diambil dari jam-jam kosong pengajar yang
+     * sama dengan jadwal yang dipilih murid di step OPTIONS_SOURCE_
+     * MY_JADWAL sebelumnya (belum bentrok jadwal murid lain) -- lihat
+     * ChatbotFlowService::openSlotOptions().
+     */
+    public const OPTIONS_SOURCE_OPEN_SLOTS_SAME_PENGAJAR = 'open_slots_same_pengajar';
+
+    public const OPTIONS_SOURCES = [
+        self::OPTIONS_SOURCE_MY_JADWAL,
+        self::OPTIONS_SOURCE_OPEN_SLOTS_SAME_PENGAJAR,
+    ];
+
     protected $fillable = [
         'wa_chatbot_flow_id',
         'step_type',
         'message',
         'options',
+        'options_source',
         'action',
         'action_value',
         'default_next_step_id',

@@ -45,7 +45,18 @@ class JadwalRescheduleRequestController extends Controller
         $status = $request->query('status', JadwalKelasRescheduleRequest::STATUS_PENDING);
 
         $query = JadwalKelasRescheduleRequest::where('company_id', $company->id)
-            ->with(['jadwalStudent:id,name,jadwal_mata_pelajaran_id,pengajar_id', 'jadwalStudent.mataPelajaran:id,name', 'jadwalStudent.pengajar:id,name', 'reviewer:id,name']);
+            ->with([
+                'jadwalStudent:id,name,jadwal_mata_pelajaran_id,pengajar_id',
+                'jadwalStudent.mataPelajaran:id,name',
+                'jadwalStudent.pengajar:id,name',
+                'reviewer:id,name',
+                // Sekarang lebih sering terisi otomatis oleh flow chat
+                // (lihat App\Services\Chat\ChatbotFlowService::
+                // createJadwalRescheduleRequest()) -- di-eager-load supaya
+                // baris "Terhubung ke Jadwal Kelas" di index.blade.php tidak
+                // memicu query N+1 per baris.
+                'jadwalKelas:id,start_time,end_time',
+            ]);
 
         if (in_array($status, JadwalKelasRescheduleRequest::STATUSES, true)) {
             $query->where('status', $status);

@@ -239,6 +239,12 @@ class ChatbotFlowController extends Controller
             'options.*.label' => ['required_with:options', 'string', 'max:200'],
             'options.*.value' => ['nullable', 'string', 'max:200'],
             'options.*.next_step_id' => ['nullable', 'string'],
+            // Sumber pilihan OTOMATIS untuk step 'choice' -- kalau diisi,
+            // daftar pilihan di-generate saat runtime dari data Jadwal
+            // (lihat App\Services\Chat\ChatbotFlowService::resolveOptions())
+            // dan kolom 'options' di atas boleh kosong (lihat after() hook
+            // di bawah).
+            'options_source' => ['nullable', Rule::in(WaChatbotFlowStep::OPTIONS_SOURCES)],
             'action' => ['nullable', Rule::in(WaChatbotFlowStep::ACTIONS)],
             'action_value' => ['nullable', 'string', 'max:255'],
             'default_next_step_id' => ['nullable', 'string'],
@@ -248,8 +254,11 @@ class ChatbotFlowController extends Controller
         $validator->after(function (ValidatorContract $v) use ($request, $flow, $editing) {
             $stepType = $request->input('step_type');
 
-            if ($stepType === WaChatbotFlowStep::TYPE_CHOICE && empty($request->input('options'))) {
-                $v->errors()->add('options', 'Step tipe "choice" wajib memiliki minimal 1 opsi.');
+            if ($stepType === WaChatbotFlowStep::TYPE_CHOICE
+                && ! $request->input('options_source')
+                && empty($request->input('options'))
+            ) {
+                $v->errors()->add('options', 'Step tipe "choice" wajib memiliki minimal 1 opsi (atau pilih Sumber Pilihan otomatis).');
             }
 
             if ($stepType === WaChatbotFlowStep::TYPE_ACTION && ! $request->input('action')) {

@@ -3,6 +3,7 @@
 namespace App\Services\Chat;
 
 use App\Models\Company;
+use App\Models\JadwalKelas;
 use App\Models\JadwalKelasRescheduleRequest;
 use App\Models\JadwalStudent;
 use App\Models\WaChatbotFlow;
@@ -11,10 +12,12 @@ use App\Models\WaChatbotState;
 use App\Models\WaChatLabelAssignment;
 use App\Models\WaConversation;
 use App\Support\PhoneNumber;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Throwable;
 
 /**
  * Executes App\Models\WaChatbotFlow trees — Fitur #6's engine. Called
@@ -35,7 +38,17 @@ use Illuminate\Support\Str;
  * steps stop and wait for the customer's next reply. This is what lets
  * one flow definition mix pure automation ("tag this chat, assign it to
  * Budi") with actual back-and-forth conversation in any order a company
- * wants.
+ * wants. A few actions (currently just create_jadwal_reschedule_request)
+ * can instead abort the whole session with their own message -- see
+ * executeAction()'s return value.
+ *
+ * A 'choice' step's options are normally static, written by the admin
+ * in the flow builder (WaChatbotFlowStep::$options) -- but a step can
+ * opt into DYNAMIC options instead (WaChatbotFlowStep::options_source),
+ * generated at reply-time from the sending customer's own Jadwal data
+ * (see resolveOptions()). Both kinds flow through the exact same
+ * render/match code below; only where the option list comes from
+ * differs.
  */
 class ChatbotFlowService
 {
@@ -241,7 +254,21 @@ class ChatbotFlowService
             $nextStepId = $currentStep->default_next_step_id;
 
             if ($currentStep->step_type === WaChatbotFlowStep::TYPE_CHOICE) {
-                $matched = $this->matchChoiceOption($currentStep, $body);
+                $options = $this->resolveOptions($currentStep, $locked);
+
+                // Opsi dinamis (lihat resolveOptions()) yang datanya sudah
+                // habis di tengah sesi -- mis. jadwal yang mau dijawab
+                // sudah dihapus/diubah di antara render & balasan ini --
+                // tidak boleh dibiarkan reprompt selamanya karena tidak
+                // akan pernah ada angka yang cocok. Sama seperti di walk(),
+                // langsung akhiri sesi dengan pesan yang jelas.
+                if ($currentStep->options_source && $options === []) {
+                    $locked->delete();
+
+                    return ['messages' => [$this->emptyDynamicOptionsMessage($currentStep)], 'ended' => true];
+                }
+
+                $matched = $this->matchChoiceOption($options, $body);
 
                 if ($matched === null) {
                     // Sengaja TIDAK meng-update last_interaction_at di sini --
@@ -255,13 +282,24 @@ class ChatbotFlowService
                     $reprompt = trim(
                         'Maaf, pilihan tidak dikenali. '
                         .$this->renderStepMessage($currentStep, $currentStep->flow?->company)
-                        ."\n".$this->renderChoiceOptions($currentStep)
+                        ."\n".$this->renderChoiceOptions($options)
                     );
 
                     return ['messages' => [$reprompt], 'ended' => false];
                 }
 
                 $variables[$currentStep->id] = $matched['label'] ?? ($matched['value'] ?? null);
+
+                // Nilai mentah opsi yang dipilih (mis. jadwal_kelas_id, atau
+                // rentang waktu slot kosong) -- dibaca lagi lewat
+                // findChosenValue() oleh step 'choice' dinamis berikutnya
+                // dan createJadwalRescheduleRequest(). Key terpisah
+                // (bukan menimpa $variables[$currentStep->id]) supaya
+                // buildTranscript() -- yang cuma baca key persis
+                // $s->id -- tidak ikut menampilkan value mentah ini ke
+                // transkrip yang dibaca staff.
+                $variables[$currentStep->id.'_value'] = $matched['value'] ?? null;
+
                 $nextStepId = $matched['next_step_id'] ?? $currentStep->default_next_step_id;
             } else {
                 // 'message' step — free-text reply, stored as-is.
@@ -312,9 +350,26 @@ class ChatbotFlowService
             // generic renderStepMessage() push below so the body text
             // isn't sent twice.
             if ($step->step_type === WaChatbotFlowStep::TYPE_CHOICE) {
+                $options = $this->resolveOptions($step, $state);
+
+                // Step 'choice' dengan opsi dinamis (lihat resolveOptions())
+                // yang ternyata tidak ada apa-apa untuk ditampilkan -- mis.
+                // nomor pengirim tidak terdaftar sebagai murid manapun, atau
+                // muridnya tidak punya jadwal akan datang. Menunggu balasan
+                // di sini percuma karena tidak akan pernah ada angka yang
+                // cocok dengan daftar kosong, jadi langsung akhiri sesi
+                // dengan pesan yang jelas alih-alih membiarkan customer
+                // menjawab ke pertanyaan yang tidak punya pilihan.
+                if ($step->options_source && $options === []) {
+                    $messages[] = $this->emptyDynamicOptionsMessage($step);
+                    $state->delete();
+
+                    return ['messages' => $messages, 'ended' => true];
+                }
+
                 $combined = trim(
                     $this->renderStepMessage($step, $company)
-                    ."\n".$this->renderChoiceOptions($step)
+                    ."\n".$this->renderChoiceOptions($options)
                 );
 
                 if ($combined !== '') {
@@ -339,7 +394,22 @@ class ChatbotFlowService
             }
 
             if ($step->step_type === WaChatbotFlowStep::TYPE_ACTION) {
-                $this->executeAction($state, $step);
+                $abortMessage = $this->executeAction($state, $step);
+
+                // Sebagian aksi (mis. create_jadwal_reschedule_request saat
+                // nomor pengirim tidak terdaftar) perlu menolak & mengakhiri
+                // sesi dengan pesan sendiri, bukan diam-diam lanjut seperti
+                // aksi otomatis lain (tugaskan percakapan, tambah label,
+                // dst). executeAction() balik string non-null hanya untuk
+                // kasus itu -- setiap aksi lain tetap balik null seperti
+                // sebelumnya, jadi ini tidak mengubah perilaku aksi manapun
+                // yang sudah ada.
+                if ($abortMessage !== null) {
+                    $messages[] = $abortMessage;
+                    $state->delete();
+
+                    return ['messages' => $messages, 'ended' => true];
+                }
 
                 if ($step->action === WaChatbotFlowStep::ACTION_HANDOFF_HUMAN) {
                     $step = null; // handing off to a human always ends the bot session
@@ -374,32 +444,36 @@ class ChatbotFlowService
     }
 
     /**
-     * Numbered list built from a 'choice' step's options, matching what
-     * matchChoiceOption() below accepts as a reply ("1", "2", ...).
+     * Numbered list built from a 'choice' step's options (array shape:
+     * list<array{label: string, value?: ?string, next_step_id?: ?string}>,
+     * either $step->options as-is or generated by resolveOptions()),
+     * matching what matchChoiceOption() below accepts as a reply
+     * ("1", "2", ...).
      */
-    private function renderChoiceOptions(WaChatbotFlowStep $step): string
+    private function renderChoiceOptions(array $options): string
     {
-        $options = collect($step->options ?? [])->values();
-
-        if ($options->isEmpty()) {
+        if (empty($options)) {
             return '';
         }
 
-        return $options->map(fn ($opt, int $i) => ($i + 1).'. '.($opt['label'] ?? ''))->implode("\n");
+        return collect($options)->values()
+            ->map(fn ($opt, int $i) => ($i + 1).'. '.($opt['label'] ?? ''))
+            ->implode("\n");
     }
 
     /**
-     * Matches a reply against a 'choice' step's options either by number
-     * (the primary expected way, matching renderChoiceOptions()'s
-     * numbered list) or by the option's own label typed out verbatim
-     * (case-insensitive) — some customers reply with the word instead of
-     * the number. Returns null when neither matches.
+     * Matches a reply against a 'choice' step's options (same shape as
+     * renderChoiceOptions() above) either by number (the primary
+     * expected way, matching renderChoiceOptions()'s numbered list) or
+     * by the option's own label typed out verbatim (case-insensitive) —
+     * some customers reply with the word instead of the number. Returns
+     * null when neither matches.
      *
      * @return array{label?: string, value?: string, next_step_id?: ?string}|null
      */
-    private function matchChoiceOption(WaChatbotFlowStep $step, string $body): ?array
+    private function matchChoiceOption(array $options, string $body): ?array
     {
-        $options = collect($step->options ?? [])->values();
+        $options = collect($options)->values();
         $normalized = mb_strtolower(trim($body));
 
         if (ctype_digit($normalized)) {
@@ -415,14 +489,247 @@ class ChatbotFlowService
     }
 
     /**
+     * Daftar opsi untuk step 'choice' -- statis (kolom `options`, ditulis
+     * admin di flow builder, default) atau DINAMIS (diambil dari data
+     * Jadwal murid yang sedang chat, lihat App\Models\WaChatbotFlowStep::
+     * OPTIONS_SOURCE_*) kalau step-nya diset `options_source`. Sengaja
+     * dipisah dari renderChoiceOptions()/matchChoiceOption() di atas
+     * supaya keduanya tidak perlu tahu asal opsinya statis atau dinamis
+     * -- mereka cuma menerima array opsi jadi apa adanya.
+     *
+     * @return list<array{label: string, value?: ?string, next_step_id?: ?string}>
+     */
+    private function resolveOptions(WaChatbotFlowStep $step, WaChatbotState $state): array
+    {
+        return match ($step->options_source) {
+            WaChatbotFlowStep::OPTIONS_SOURCE_MY_JADWAL => $this->myJadwalOptions($state),
+            WaChatbotFlowStep::OPTIONS_SOURCE_OPEN_SLOTS_SAME_PENGAJAR => $this->openSlotOptions($step, $state),
+            default => collect($step->options ?? [])->values()->all(),
+        };
+    }
+
+    /**
+     * Pesan saat step 'choice' dinamis tidak punya apa-apa untuk
+     * ditampilkan -- lihat walk()/continueFlow()'s pemakaiannya. Per
+     * sumber, supaya customer tahu kenapa (nomor belum terdaftar, vs.
+     * memang tidak ada jam kosong) alih-alih pesan generik yang
+     * membingungkan.
+     */
+    private function emptyDynamicOptionsMessage(WaChatbotFlowStep $step): string
+    {
+        return match ($step->options_source) {
+            WaChatbotFlowStep::OPTIONS_SOURCE_MY_JADWAL => 'Maaf, kami tidak menemukan data jadwal untuk nomor Anda. Pastikan nomor ini terdaftar sebagai orang tua/murid, atau hubungi admin kami.',
+            WaChatbotFlowStep::OPTIONS_SOURCE_OPEN_SLOTS_SAME_PENGAJAR => 'Maaf, tidak ada jam kosong yang bisa kami tawarkan dalam waktu dekat. Silakan hubungi admin kami secara langsung.',
+            default => 'Maaf, tidak ada pilihan yang bisa ditampilkan saat ini.',
+        };
+    }
+
+    /**
+     * Opsi dinamis untuk WaChatbotFlowStep::OPTIONS_SOURCE_MY_JADWAL --
+     * jadwal kelas milik murid yang cocok dengan nomor HP pengirim,
+     * maksimal 5 yang akan datang, terdekat dulu. `value` diisi
+     * jadwal_kelas_id-nya -- dibaca lagi lewat findChosenValue() oleh
+     * openSlotOptions() & createJadwalRescheduleRequest(). Kosong kalau
+     * nomor tidak cocok murid manapun ATAU muridnya tidak punya jadwal
+     * akan datang -- ditangani sebagai alasan mengakhiri sesi di
+     * walk()/continueFlow() (lihat emptyDynamicOptionsMessage()).
+     *
+     * @return list<array{label: string, value: string}>
+     */
+    private function myJadwalOptions(WaChatbotState $state): array
+    {
+        $company = $state->flow?->company;
+
+        if (! $company) {
+            return [];
+        }
+
+        $student = $this->findStudentByPhone($company->id, $this->senderPhone($state));
+
+        if (! $student) {
+            return [];
+        }
+
+        return JadwalKelas::where('student_id', $student->id)
+            ->where('status', JadwalKelas::STATUS_ACTIVE)
+            ->where('start_time', '>', now())
+            ->orderBy('start_time')
+            ->limit(5)
+            ->get()
+            ->map(fn (JadwalKelas $k) => [
+                'label' => trim(($k->mataPelajaran?->name ?? 'Kelas').' - '.$k->start_time->translatedFormat('l, d M').' '.$k->start_time->format('H:i').'-'.$k->end_time->format('H:i')),
+                'value' => $k->id,
+            ])
+            ->all();
+    }
+
+    /**
+     * Opsi dinamis untuk WaChatbotFlowStep::OPTIONS_SOURCE_OPEN_SLOTS_
+     * SAME_PENGAJAR -- jam-jam lain milik PENGAJAR YANG SAMA dengan
+     * jadwal lama yang dipilih murid di step OPTIONS_SOURCE_MY_JADWAL
+     * sebelumnya (lihat findChosenValue()), yang belum bentrok dengan
+     * jadwal murid lain manapun milik pengajar itu. `value` diisi
+     * "<mulai ISO8601>|<selesai ISO8601>" -- dipecah lagi oleh
+     * parseSlotValue() saat createJadwalRescheduleRequest() menyimpan
+     * request-nya. Kosong kalau flow-nya tidak melalui step
+     * OPTIONS_SOURCE_MY_JADWAL dulu (jadi tidak tahu jadwal lama mana
+     * yang dimaksud), atau memang tidak ada jam kosong ditemukan.
+     *
+     * @return list<array{label: string, value: string}>
+     */
+    private function openSlotOptions(WaChatbotFlowStep $step, WaChatbotState $state): array
+    {
+        $flow = $step->flow;
+
+        if (! $flow) {
+            return [];
+        }
+
+        $originalId = $this->findChosenValue($flow, WaChatbotFlowStep::OPTIONS_SOURCE_MY_JADWAL, $state->variables ?? []);
+        $original = $originalId ? JadwalKelas::find($originalId) : null;
+
+        if (! $original) {
+            return [];
+        }
+
+        return $this->findOpenSlots($original)
+            ->map(fn (array $slot) => [
+                'label' => $slot['start']->translatedFormat('l, d M').' '.$slot['start']->format('H:i').'-'.$slot['end']->format('H:i'),
+                'value' => $slot['start']->toIso8601String().'|'.$slot['end']->toIso8601String(),
+            ])
+            ->all();
+    }
+
+    /**
+     * Heuristik sederhana untuk "jam kosong pengajar yang sama" -- coba
+     * jam & durasi yang SAMA dengan $original, mundur maju sampai 14
+     * hari ke depan, berhenti begitu dapat $limit kandidat yang tidak
+     * bentrok dengan JadwalKelas manapun milik pengajar itu (murid
+     * manapun, company yang sama). BUKAN sistem ketersediaan pengajar
+     * yang sesungguhnya (sistem ini belum punya konsep "jam kerja
+     * pengajar" tersendiri) -- cukup untuk menyodorkan beberapa
+     * kandidat wajar tanpa perlu tabel/konsep baru.
+     *
+     * @return \Illuminate\Support\Collection<int, array{start: Carbon, end: Carbon}>
+     */
+    private function findOpenSlots(JadwalKelas $original, int $limit = 5): \Illuminate\Support\Collection
+    {
+        $durationMinutes = $original->start_time->diffInMinutes($original->end_time);
+        $candidates = collect();
+
+        for ($daysAhead = 1; $daysAhead <= 14 && $candidates->count() < $limit; $daysAhead++) {
+            $start = $original->start_time->copy()->addDays($daysAhead);
+            $end = $start->copy()->addMinutes($durationMinutes);
+
+            $conflict = JadwalKelas::where('company_id', $original->company_id)
+                ->where('pengajar_id', $original->pengajar_id)
+                ->where('status', JadwalKelas::STATUS_ACTIVE)
+                ->where('start_time', '<', $end)
+                ->where('end_time', '>', $start)
+                ->exists();
+
+            if (! $conflict) {
+                $candidates->push(['start' => $start, 'end' => $end]);
+            }
+        }
+
+        return $candidates;
+    }
+
+    /**
+     * Nilai (kolom `value` opsi) yang dipilih customer di step choice
+     * SEBELUMNYA dalam flow yang sama yang `options_source`-nya
+     * $optionsSource -- dicari lewat step id-nya (bukan diasumsikan
+     * urutan tetap), lalu dibaca dari $variables[$stepId.'_value']
+     * (lihat continueFlow()). Dipakai openSlotOptions() untuk tahu
+     * jadwal_kelas_id mana yang dipilih di step "jadwal saya", dan
+     * createJadwalRescheduleRequest() untuk membaca keduanya (jadwal
+     * lama & slot baru) sekaligus.
+     */
+    private function findChosenValue(WaChatbotFlow $flow, string $optionsSource, array $variables): ?string
+    {
+        $step = $flow->steps()->where('options_source', $optionsSource)->first();
+
+        if (! $step) {
+            return null;
+        }
+
+        return $variables[$step->id.'_value'] ?? null;
+    }
+
+    /**
+     * Pecah nilai opsi WaChatbotFlowStep::OPTIONS_SOURCE_OPEN_SLOTS_
+     * SAME_PENGAJAR ("<mulai ISO8601>|<selesai ISO8601>", lihat
+     * openSlotOptions()) jadi dua Carbon, atau [null, null] kalau tidak
+     * ada/tidak valid (mis. flow-nya tidak pakai step itu).
+     *
+     * @return array{0: ?Carbon, 1: ?Carbon}
+     */
+    private function parseSlotValue(?string $value): array
+    {
+        if (! $value || ! str_contains($value, '|')) {
+            return [null, null];
+        }
+
+        [$start, $end] = explode('|', $value, 2);
+
+        try {
+            return [Carbon::parse($start), Carbon::parse($end)];
+        } catch (Throwable) {
+            return [null, null];
+        }
+    }
+
+    /**
+     * Nomor HP pengirim pesan ini, dinormalisasi -- potongan sebelum
+     * "@" pada chat_jid (lihat App\Support\PhoneNumber::normalize()).
+     */
+    private function senderPhone(WaChatbotState $state): string
+    {
+        return PhoneNumber::normalize(Str::before($state->chat_jid, '@'));
+    }
+
+    /**
+     * Tebakan terbaik siapa pengirim pesan ini, dicocokkan ke nomor HP
+     * orang tua ATAU murid manapun milik company ini (lihat App\Models\
+     * JadwalStudent's docblock). Satu sumber kebenaran dipakai bareng
+     * oleh myJadwalOptions() & createJadwalRescheduleRequest() supaya
+     * keduanya selalu menebak murid yang sama untuk nomor yang sama.
+     * Dibandingkan lewat App\Support\PhoneNumber::normalize() di PHP
+     * (bukan raw SQL) -- jumlah Student per company biasanya kecil,
+     * jadi loop di PHP aman.
+     */
+    private function findStudentByPhone(string $companyId, string $phone): ?JadwalStudent
+    {
+        if ($phone === '') {
+            return null;
+        }
+
+        return JadwalStudent::where('company_id', $companyId)
+            ->where(function ($q) {
+                $q->whereNotNull('parent_phone_number')->orWhereNotNull('student_phone_number');
+            })
+            ->get(['id', 'parent_phone_number', 'student_phone_number'])
+            ->first(fn (JadwalStudent $s) => ($s->parent_phone_number && PhoneNumber::normalize($s->parent_phone_number) === $phone)
+                || ($s->student_phone_number && PhoneNumber::normalize($s->student_phone_number) === $phone));
+    }
+
+    /**
      * Runs one 'action' step's automated effect against this chat's
      * App\Models\WaConversation row. Best-effort: if no conversation row
      * exists yet for this (device, chat) — e.g. App\Services\Chat\
      * ConversationService::recordInbound() failed earlier in the same
      * webhook request — the action is skipped rather than throwing, since
      * that must never break the flow itself from advancing.
+     *
+     * @return string|null Non-null aborts the flow with this message
+     *                      instead of continuing (see walk()) -- only
+     *                      create_jadwal_reschedule_request ever does
+     *                      this today (nomor tidak terdaftar); every
+     *                      other action still always returns null, same
+     *                      as before this method had a return value.
      */
-    private function executeAction(WaChatbotState $state, WaChatbotFlowStep $step): void
+    private function executeAction(WaChatbotState $state, WaChatbotFlowStep $step): ?string
     {
         $conversation = WaConversation::where('device_id', $state->device_id)
             ->where('chat_jid', $state->chat_jid)
@@ -434,10 +741,10 @@ class ChatbotFlowService
                 'action' => $step->action,
             ]);
 
-            return;
+            return null;
         }
 
-        match ($step->action) {
+        return match ($step->action) {
             WaChatbotFlowStep::ACTION_ASSIGN_CONVERSATION => $step->action_value
                 ? $this->conversations->reassign($conversation, $step->action_value)
                 : $this->conversations->autoAssign($conversation),
@@ -453,14 +760,27 @@ class ChatbotFlowService
     /**
      * Tahap 3 integrasi Chat<->Jadwal -- mencatat App\Models\
      * JadwalKelasRescheduleRequest dari sesi flow ini, murni tambahan,
-     * tidak mengubah action lain di atas. Sengaja TIDAK mencoba
-     * mencocokkan ke satu baris App\Models\JadwalKelas yang spesifik
-     * (lihat migration-nya) -- staff yang melakukan itu saat review di
-     * App\Http\Controllers\Jadwal\JadwalRescheduleRequestController.
-     * Best-effort seperti action lain di atas: kalau flow/company tidak
-     * valid, dilewati saja tanpa menggagalkan flow.
+     * tidak mengubah action lain di atas. Diproses manual oleh staff di
+     * App\Http\Controllers\Jadwal\JadwalRescheduleRequestController --
+     * baris ini sendiri TIDAK PERNAH mengubah App\Models\JadwalKelas.
+     *
+     * Nomor pengirim WAJIB cocok dengan Student manapun di company ini
+     * (lihat findStudentByPhone()) -- kalau tidak, request TIDAK
+     * dibuat sama sekali, flow diakhiri dengan pesan penolakan (lihat
+     * executeAction()/walk() untuk bagaimana return non-null di sini
+     * mengakhiri sesi). Beda dari perilaku lama (nomor tidak dikenal
+     * tetap tersimpan dengan jadwal_student_id kosong) -- sengaja
+     * diperketat supaya staff tidak perlu menyaring permintaan dari
+     * nomor yang tidak dikenal sama sekali.
+     *
+     * jadwal_kelas_id & requested_new_start_time/end_time diisi
+     * OTOMATIS kalau flow-nya melalui step 'choice' dinamis
+     * OPTIONS_SOURCE_MY_JADWAL / OPTIONS_SOURCE_OPEN_SLOTS_SAME_PENGAJAR
+     * sebelumnya (lihat findChosenValue()) -- tetap null seperti
+     * perilaku lama kalau flow-nya tidak pakai step itu (mis. cuma
+     * tanya bebas lewat teks), staff yang isi manual saat approve().
      */
-    private function createJadwalRescheduleRequest(WaChatbotState $state, WaChatbotFlowStep $step): void
+    private function createJadwalRescheduleRequest(WaChatbotState $state, WaChatbotFlowStep $step): ?string
     {
         $flow = $step->flow;
         $company = $flow?->company;
@@ -468,47 +788,48 @@ class ChatbotFlowService
         if (! $company) {
             Log::warning('chatbot-flow: create_jadwal_reschedule_request skipped, flow/company invalid', ['step_id' => $step->id]);
 
-            return;
+            return null;
         }
 
-        $phone = PhoneNumber::normalize(Str::before($state->chat_jid, '@'));
+        $phone = $this->senderPhone($state);
+        $student = $this->findStudentByPhone($company->id, $phone);
 
-        // Tebakan terbaik siapa pengirimnya -- cocokkan ke nomor HP
-        // orang tua ATAU murid manapun yang tersimpan di company ini
-        // (lihat App\Models\JadwalStudent's docblock soal kedua field
-        // ini). Dibandingkan lewat App\Support\PhoneNumber::normalize()
-        // di PHP (bukan raw SQL) supaya persis sama sumber kebenarannya
-        // dengan cara nomor lain di app ini dinormalisasi -- jumlah
-        // Student per company biasanya kecil, jadi loop di PHP aman.
-        // Bisa null (tidak ketemu) -- staff yang menentukan lewat
-        // detail_request kalau gagal ditebak otomatis.
-        $student = null;
+        if (! $student) {
+            Log::info('chatbot-flow: create_jadwal_reschedule_request ditolak, nomor tidak terdaftar', [
+                'flow_id' => $flow->id,
+                'company_id' => $company->id,
+            ]);
 
-        if ($phone !== '') {
-            $student = JadwalStudent::where('company_id', $company->id)
-                ->where(function ($q) {
-                    $q->whereNotNull('parent_phone_number')->orWhereNotNull('student_phone_number');
-                })
-                ->get(['id', 'parent_phone_number', 'student_phone_number'])
-                ->first(fn (JadwalStudent $s) => ($s->parent_phone_number && PhoneNumber::normalize($s->parent_phone_number) === $phone)
-                    || ($s->student_phone_number && PhoneNumber::normalize($s->student_phone_number) === $phone));
+            return 'Maaf, nomor Anda belum terdaftar sebagai orang tua/murid di sini. Silakan hubungi admin kami untuk mendaftarkan nomor Anda terlebih dahulu.';
         }
+
+        $variables = $state->variables ?? [];
+        $jadwalKelasId = $this->findChosenValue($flow, WaChatbotFlowStep::OPTIONS_SOURCE_MY_JADWAL, $variables);
+        [$newStart, $newEnd] = $this->parseSlotValue(
+            $this->findChosenValue($flow, WaChatbotFlowStep::OPTIONS_SOURCE_OPEN_SLOTS_SAME_PENGAJAR, $variables)
+        );
 
         JadwalKelasRescheduleRequest::create([
             'company_id' => $company->id,
-            'jadwal_student_id' => $student?->id,
+            'jadwal_student_id' => $student->id,
+            'jadwal_kelas_id' => $jadwalKelasId,
             'device_id' => $state->device_id,
             'chat_jid' => $state->chat_jid,
             'requester_phone' => $phone !== '' ? $phone : null,
             'detail_request' => $this->buildTranscript($state, $flow),
+            'requested_new_start_time' => $newStart,
+            'requested_new_end_time' => $newEnd,
             'status' => JadwalKelasRescheduleRequest::STATUS_PENDING,
         ]);
 
         Log::info('chatbot-flow: Jadwal reschedule request dicatat', [
             'flow_id' => $flow->id,
             'company_id' => $company->id,
-            'matched_student_id' => $student?->id,
+            'matched_student_id' => $student->id,
+            'jadwal_kelas_id' => $jadwalKelasId,
         ]);
+
+        return null;
     }
 
     /**

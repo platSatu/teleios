@@ -145,9 +145,19 @@
                 </div>
 
                 <div class="mb-3" id="wa-step-options-wrap" style="display:none;">
-                    <label class="form-label">Pilihan Jawaban</label>
-                    <div id="wa-step-options-list" class="d-flex flex-column gap-2 mb-2"></div>
-                    <button type="button" class="btn btn-sm btn-light" id="wa-step-option-add"><i class="ri-add-line"></i> Tambah Pilihan</button>
+                    <label class="form-label">Sumber Pilihan</label>
+                    <select id="wa-step-form-options-source" class="form-select mb-2">
+                        <option value="">Manual — saya isi sendiri pilihannya</option>
+                        <option value="my_jadwal">Otomatis — Jadwal Kelas murid ini</option>
+                        <option value="open_slots_same_pengajar">Otomatis — Jam kosong pengajar yang sama</option>
+                    </select>
+                    <div class="form-text mb-2" id="wa-step-options-source-help" style="display:none;"></div>
+
+                    <div id="wa-step-manual-options-wrap">
+                        <label class="form-label">Pilihan Jawaban</label>
+                        <div id="wa-step-options-list" class="d-flex flex-column gap-2 mb-2"></div>
+                        <button type="button" class="btn btn-sm btn-light" id="wa-step-option-add"><i class="ri-add-line"></i> Tambah Pilihan</button>
+                    </div>
                 </div>
 
                 <div class="row g-3 mb-3" id="wa-step-action-wrap" style="display:none;">
@@ -215,6 +225,18 @@
             choice: { icon: 'ri-list-check-2', badge: 'bg-info-subtle text-info', label: 'Pilihan' },
             action: { icon: 'ri-flashlight-line', badge: 'bg-warning-subtle text-warning', label: 'Aksi' },
             end: { icon: 'ri-flag-line', badge: 'bg-secondary-subtle text-secondary', label: 'Selesai' },
+        };
+
+        // Label & bantuan singkat untuk App\Models\WaChatbotFlowStep::
+        // OPTIONS_SOURCE_* -- lihat App\Services\Chat\ChatbotFlowService::
+        // resolveOptions() untuk bagaimana pilihan ini benar-benar di-generate.
+        const OPTIONS_SOURCE_LABELS = {
+            my_jadwal: 'Jadwal Kelas murid ini',
+            open_slots_same_pengajar: 'Jam kosong pengajar yang sama',
+        };
+        const OPTIONS_SOURCE_HELP = {
+            my_jadwal: 'Daftar jadwal kelas murid ini (yang mengirim pesan) otomatis ditampilkan sebagai pilihan bernomor -- tidak perlu diisi manual.',
+            open_slots_same_pengajar: 'Jam kosong pengajar yang sama (belum ada murid lain di jam itu) otomatis ditampilkan. Pastikan flow ini sudah punya step "Jadwal Kelas murid ini" sebelumnya, supaya sistem tahu jadwal asal yang mau dipindah.',
         };
 
         let flows = [];
@@ -351,7 +373,12 @@
                     body.appendChild(msg);
                 }
 
-                if (step.step_type === 'choice' && step.options && step.options.length) {
+                if (step.step_type === 'choice' && step.options_source) {
+                    const src = document.createElement('div');
+                    src.className = 'fs-12 text-muted mt-1';
+                    src.textContent = 'Pilihan otomatis: ' + (OPTIONS_SOURCE_LABELS[step.options_source] || step.options_source);
+                    body.appendChild(src);
+                } else if (step.step_type === 'choice' && step.options && step.options.length) {
                     const opts = document.createElement('div');
                     opts.className = 'fs-12 text-muted mt-1';
                     opts.textContent = step.options.map(function (o) { return o.label; }).join(' · ');
@@ -472,6 +499,9 @@
         const stepTypeSelect = document.getElementById('wa-step-form-type');
         const optionsWrap = document.getElementById('wa-step-options-wrap');
         const optionsList = document.getElementById('wa-step-options-list');
+        const optionsSourceSelect = document.getElementById('wa-step-form-options-source');
+        const manualOptionsWrap = document.getElementById('wa-step-manual-options-wrap');
+        const optionsSourceHelp = document.getElementById('wa-step-options-source-help');
         const actionWrap = document.getElementById('wa-step-action-wrap');
         const nextWrap = document.getElementById('wa-step-next-wrap');
         const nextSelect = document.getElementById('wa-step-form-next');
@@ -517,12 +547,22 @@
 
         document.getElementById('wa-step-option-add').addEventListener('click', function () { addOptionRow('', ''); });
 
+        function toggleOptionsSourceFields() {
+            const source = optionsSourceSelect.value;
+            manualOptionsWrap.style.display = source ? 'none' : 'block';
+            optionsSourceHelp.textContent = OPTIONS_SOURCE_HELP[source] || '';
+            optionsSourceHelp.style.display = source ? 'block' : 'none';
+        }
+
+        optionsSourceSelect.addEventListener('change', toggleOptionsSourceFields);
+
         function toggleStepTypeFields() {
             const type = stepTypeSelect.value;
             optionsWrap.style.display = type === 'choice' ? 'block' : 'none';
             actionWrap.style.display = type === 'action' ? 'block' : 'none';
             nextWrap.style.display = type === 'end' ? 'none' : 'block';
             nextLabel.textContent = type === 'choice' ? 'Lanjut Ke Step (jika balasan tidak cocok pilihan manapun)' : 'Lanjut Ke Step';
+            if (type === 'choice') toggleOptionsSourceFields();
         }
 
         stepTypeSelect.addEventListener('change', toggleStepTypeFields);
@@ -539,6 +579,7 @@
             document.getElementById('wa-step-form-action-value').value = step ? (step.action_value || '') : '';
             document.getElementById('wa-step-form-start').checked = step ? !!step.is_start : false;
             nextSelect.value = step ? (step.default_next_step_id || '') : '';
+            optionsSourceSelect.value = step ? (step.options_source || '') : '';
 
             optionsList.innerHTML = '';
             if (step && step.step_type === 'choice' && step.options) {
@@ -565,12 +606,15 @@
             };
 
             if (type === 'choice') {
-                payload.options = Array.from(optionsList.querySelectorAll('.wa-step-option-row')).map(function (row) {
-                    return {
-                        label: row.querySelector('.wa-step-option-label').value.trim(),
-                        next_step_id: row.querySelector('.wa-step-option-next').value || null,
-                    };
-                }).filter(function (o) { return o.label !== ''; });
+                payload.options_source = optionsSourceSelect.value || null;
+                payload.options = payload.options_source
+                    ? []
+                    : Array.from(optionsList.querySelectorAll('.wa-step-option-row')).map(function (row) {
+                        return {
+                            label: row.querySelector('.wa-step-option-label').value.trim(),
+                            next_step_id: row.querySelector('.wa-step-option-next').value || null,
+                        };
+                    }).filter(function (o) { return o.label !== ''; });
             }
 
             if (type === 'action') {

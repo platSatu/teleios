@@ -60,6 +60,13 @@
                             <div class="small text-muted mb-2">Terhubung ke Jadwal Kelas: {{ $reschedule->jadwalKelas->start_time?->format('d/m/Y H:i') ?? $reschedule->jadwal_kelas_id }}</div>
                         @endif
 
+                        @if($reschedule->requested_new_start_time)
+                            <div class="small text-muted mb-2">
+                                Jadwal baru yang diminta (otomatis dari chat): {{ $reschedule->requested_new_start_time->format('d/m/Y H:i') }}
+                                @if($reschedule->requested_new_end_time) - {{ $reschedule->requested_new_end_time->format('H:i') }} @endif
+                            </div>
+                        @endif
+
                         @if($reschedule->staff_notes)
                             <div class="small text-muted mb-2">Catatan staff: {{ $reschedule->staff_notes }} @if($reschedule->reviewer) &middot; {{ $reschedule->reviewer->name }} @endif</div>
                         @endif
@@ -74,16 +81,18 @@
                                             <select name="jadwal_kelas_id" class="form-select form-select-sm mb-2">
                                                 <option value="">- Jangan ubah Jadwal Kelas otomatis -</option>
                                                 @foreach ($kelasOptions[$reschedule->jadwal_student_id] as $kelasOpt)
-                                                    <option value="{{ $kelasOpt->id }}">{{ $kelasOpt->start_time?->format('d/m/Y H:i') ?? '-' }} - {{ $kelasOpt->end_time?->format('H:i') ?? '-' }}</option>
+                                                    <option value="{{ $kelasOpt->id }}" @selected($kelasOpt->id === $reschedule->jadwal_kelas_id)>{{ $kelasOpt->start_time?->format('d/m/Y H:i') ?? '-' }} - {{ $kelasOpt->end_time?->format('H:i') ?? '-' }}</option>
                                                 @endforeach
                                             </select>
                                         @endif
                                         <div class="row g-2 mb-2">
                                             <div class="col-6">
-                                                <input type="datetime-local" name="new_start_time" class="form-control form-control-sm" placeholder="Waktu mulai baru">
+                                                <input type="datetime-local" name="new_start_time" class="form-control form-control-sm" placeholder="Waktu mulai baru"
+                                                    value="{{ $reschedule->requested_new_start_time?->format('Y-m-d\TH:i') }}">
                                             </div>
                                             <div class="col-6">
-                                                <input type="datetime-local" name="new_end_time" class="form-control form-control-sm" placeholder="Waktu selesai baru">
+                                                <input type="datetime-local" name="new_end_time" class="form-control form-control-sm" placeholder="Waktu selesai baru"
+                                                    value="{{ $reschedule->requested_new_end_time?->format('Y-m-d\TH:i') }}">
                                             </div>
                                         </div>
                                         <input type="text" name="staff_notes" class="form-control form-control-sm mb-2" placeholder="Catatan (opsional)">
