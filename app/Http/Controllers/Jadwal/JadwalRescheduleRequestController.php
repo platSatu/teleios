@@ -127,7 +127,7 @@ class JadwalRescheduleRequestController extends Controller
             'reviewed_at' => now(),
         ]);
 
-        $this->notifyRequester($reschedule, 'Permintaan ubah jadwal Anda sudah kami setujui dan proses. Terima kasih.');
+        $this->sendRescheduleNotifications($reschedule, JadwalKelasRescheduleRequest::STATUS_APPROVED);
 
         return redirect()->route('jadwal.reschedule-requests.index')->with('success', 'Permintaan reschedule disetujui.');
     }
@@ -156,7 +156,7 @@ class JadwalRescheduleRequestController extends Controller
             'reviewed_at' => now(),
         ]);
 
-        $this->notifyRequester($reschedule, 'Mohon maaf, permintaan ubah jadwal Anda belum bisa kami setujui. '.$reschedule->staff_notes);
+        $this->sendRescheduleNotifications($reschedule, JadwalKelasRescheduleRequest::STATUS_REJECTED);
 
         return redirect()->route('jadwal.reschedule-requests.index')->with('success', 'Permintaan reschedule ditolak.');
     }
@@ -164,16 +164,22 @@ class JadwalRescheduleRequestController extends Controller
     /**
      * Best-effort, sama seperti App\Jobs\SendJadwalReminder -- kalau
      * company tidak (lagi) punya package aktif kategori Chat/WhatsApp,
-     * device belum diatur, atau pengiriman gagal, approve()/reject()
-     * TETAP berhasil (statusnya tetap tersimpan) -- konfirmasi WA
+     * device belum diatur, atau pengiriman ke SATU penerima gagal,
+     * approve()/reject() TETAP berhasil (statusnya tetap tersimpan) dan
+     * penerima lain yang di-checklist tetap dicoba -- notifikasi WA
      * cuma bonus, bukan syarat.
+     *
+     * Penerima ditentukan oleh 3 checklist independen di App\Models\
+     * JadwalReminderSetting (reschedule_notify_pengajar/_requester/
+     * _admin -- lihat migration-nya untuk kenapa independen, bukan
+     * enum tunggal seperti remind_target milik pengingat), diisi admin
+     * lewat App\Http\Controllers\Jadwal\JadwalReminderSettingController.
+     * Isi pesannya SAMA untuk ketiga penerima (satu template per
+     * outcome approve/reject, bukan per-penerima) -- kalau nanti perlu
+     * dibedakan per penerima, itu perluasan terpisah.
      */
-    protected function notifyRequester(JadwalKelasRescheduleRequest $reschedule, string $message): void
+    protected function sendRescheduleNotifications(JadwalKelasRescheduleRequest $reschedule, string $outcome): void
     {
-        if (! $reschedule->requester_phone) {
-            return;
-        }
-
         $company = $reschedule->company;
 
         if (! $company || ! $this->packageLimits->hasActiveCategoryPackage($company, JadwalReminderSetting::CHAT_CATEGORY_NAMES)) {
@@ -192,15 +198,79 @@ class JadwalRescheduleRequestController extends Controller
             return;
         }
 
+        $recipients = array_unique(array_filter([
+            $setting->reschedule_notify_requester ? $reschedule->requester_phone : null,
+            $setting->reschedule_notify_pengajar ? $reschedule->jadwalStudent?->pengajar?->handphone : null,
+            $setting->reschedule_notify_admin ? $owner->handphone : null,
+        ]));
+
+        if (empty($recipients)) {
+            return;
+        }
+
         try {
             $token = $this->jwtService->mintFor($owner);
-            $jid = PhoneNumber::normalize($reschedule->requester_phone).'@s.whatsapp.net';
-            $this->inbox->send($token, $setting->device_id, $jid, $message);
         } catch (Throwable $e) {
-            Log::warning('JadwalRescheduleRequestController: gagal mengirim konfirmasi WA', [
+            Log::warning('JadwalRescheduleRequestController: gagal membuat token pengirim WA', [
                 'request_id' => $reschedule->id,
                 'error' => $e->getMessage(),
             ]);
+
+            return;
         }
+
+        $message = $this->composeRescheduleMessage($reschedule, $setting, $outcome);
+
+        foreach ($recipients as $phone) {
+            try {
+                $jid = PhoneNumber::normalize($phone).'@s.whatsapp.net';
+                $this->inbox->send($token, $setting->device_id, $jid, $message);
+            } catch (Throwable $e) {
+                Log::warning('JadwalRescheduleRequestController: gagal mengirim notifikasi WA reschedule', [
+                    'request_id' => $reschedule->id,
+                    'outcome' => $outcome,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Susun pesan notifikasi reschedule -- pakai App\Models\
+     * WaMessageTemplate milik company (kalau ada, aktif & approved,
+     * beda slot untuk approved/rejected -- lihat App\Models\
+     * JadwalReminderSetting::waMessageTemplateRescheduleApproved()/
+     * waMessageTemplateRescheduleRejected()), fallback ke pesan default
+     * kalau tidak diisi. Pola strtr() tag sama seperti App\Jobs\
+     * SendJadwalReminder::composeMessage().
+     */
+    protected function composeRescheduleMessage(JadwalKelasRescheduleRequest $reschedule, JadwalReminderSetting $setting, string $outcome): string
+    {
+        $template = $outcome === JadwalKelasRescheduleRequest::STATUS_APPROVED
+            ? $setting->waMessageTemplateRescheduleApproved
+            : $setting->waMessageTemplateRescheduleRejected;
+
+        $body = ($template && $template->status === 'active' && $template->review_status === 'approved')
+            ? $template->composedMessage()
+            : $this->defaultRescheduleMessage($outcome);
+
+        $student = $reschedule->jadwalStudent;
+
+        $tags = [
+            '{{nama_murid}}' => $student?->name ?? '-',
+            '{{nama_pengajar}}' => $student?->pengajar?->name ?? '-',
+            '{{mata_pelajaran}}' => $student?->mataPelajaran?->name ?? '-',
+            '{{catatan_staff}}' => $reschedule->staff_notes ?? '-',
+            '{{nama_perusahaan}}' => $reschedule->company?->name ?? '-',
+        ];
+
+        return strtr($body, $tags);
+    }
+
+    protected function defaultRescheduleMessage(string $outcome): string
+    {
+        return $outcome === JadwalKelasRescheduleRequest::STATUS_APPROVED
+            ? 'Permintaan ubah jadwal {{mata_pelajaran}} untuk {{nama_murid}} sudah disetujui dan diproses. Terima kasih.'
+            : 'Mohon maaf, permintaan ubah jadwal {{mata_pelajaran}} untuk {{nama_murid}} belum bisa kami setujui. Alasan: {{catatan_staff}}';
     }
 }

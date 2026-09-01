@@ -121,6 +121,71 @@
                             Student tertentu, pengingat untuk Student itu otomatis dilewati.
                         </div>
 
+                        <hr class="my-4">
+
+                        <div class="mb-3">
+                            <h5 class="mb-1">Notifikasi Balasan Reschedule</h5>
+                            <p class="text-muted mb-0">
+                                Saat staff menyetujui/menolak permintaan ubah jadwal (menu Reschedule Requests), pilih siapa saja
+                                yang otomatis dapat notifikasi WA-nya. Bisa dicentang lebih dari satu sekaligus.
+                            </p>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input type="checkbox" name="reschedule_notify_requester" value="1" id="rescheduleNotifyRequester" class="form-check-input"
+                                    @checked(old('reschedule_notify_requester', $setting->reschedule_notify_requester ?? true))>
+                                <label class="form-check-label" for="rescheduleNotifyRequester">Orang tua/murid yang minta reschedule</label>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input type="checkbox" name="reschedule_notify_pengajar" value="1" id="rescheduleNotifyPengajar" class="form-check-input"
+                                    @checked(old('reschedule_notify_pengajar', $setting->reschedule_notify_pengajar ?? false))>
+                                <label class="form-check-label" for="rescheduleNotifyPengajar">Pengajar yang bersangkutan</label>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input type="checkbox" name="reschedule_notify_admin" value="1" id="rescheduleNotifyAdmin" class="form-check-input"
+                                    @checked(old('reschedule_notify_admin', $setting->reschedule_notify_admin ?? false))>
+                                <label class="form-check-label" for="rescheduleNotifyAdmin">Admin/pemilik company</label>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Template Pesan — Disetujui (opsional)</label>
+                                <select name="wa_message_template_id_reschedule_approved" class="form-select @error('wa_message_template_id_reschedule_approved') is-invalid @enderror">
+                                    <option value="">- Tanpa Template (pakai pesan default) -</option>
+                                    @foreach ($templates as $template)
+                                        <option value="{{ $template->id }}" @selected(old('wa_message_template_id_reschedule_approved', $setting->wa_message_template_id_reschedule_approved ?? '') == $template->id)>
+                                            {{ $template->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                @error('wa_message_template_id_reschedule_approved')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Template Pesan — Ditolak (opsional)</label>
+                                <select name="wa_message_template_id_reschedule_rejected" class="form-select @error('wa_message_template_id_reschedule_rejected') is-invalid @enderror">
+                                    <option value="">- Tanpa Template (pakai pesan default) -</option>
+                                    @foreach ($templates as $template)
+                                        <option value="{{ $template->id }}" @selected(old('wa_message_template_id_reschedule_rejected', $setting->wa_message_template_id_reschedule_rejected ?? '') == $template->id)>
+                                            {{ $template->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                @error('wa_message_template_id_reschedule_rejected')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+                        </div>
+                        <div class="form-text mb-3">
+                            Tag yang tersedia di kedua template: <code>@{{nama_murid}}</code>, <code>@{{nama_pengajar}}</code>,
+                            <code>@{{mata_pelajaran}}</code>, <code>@{{catatan_staff}}</code>, <code>@{{nama_perusahaan}}</code>.
+                            Isi pesan yang sama dikirim ke semua penerima yang dicentang di atas. Lampiran pada template (kalau ada)
+                            tidak ikut terkirim, hanya teksnya.
+                        </div>
+
                         <button type="submit" class="btn btn-primary">Simpan Pengaturan</button>
                     </form>
                 @endif

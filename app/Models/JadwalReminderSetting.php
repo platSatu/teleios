@@ -14,6 +14,18 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * JadwalReminderSettingController, dibaca oleh App\Console\Commands\
  * DispatchDueJadwalReminders & App\Jobs\SendJadwalReminder.
  *
+ * Baris yang sama juga menyimpan pengaturan notifikasi WA balasan
+ * Approve/Reject App\Models\JadwalKelasRescheduleRequest (kolom
+ * reschedule_notify_pengajar / _requester / _admin, dan
+ * wa_message_template_id_reschedule_approved / _rejected) -- lihat
+ * migration add_reschedule_notification_settings_to_..._table.php's
+ * docblock untuk kenapa 3 checkbox independen + 2 template terpisah,
+ * bukan 1 kolom target seperti remind_target). Dibaca oleh
+ * App\Http\Controllers\Jadwal\JadwalRescheduleRequestController::
+ * sendRescheduleNotifications() -- fitur berbeda, cuma numpang satu
+ * baris pengaturan yang sama per keputusan diskusi (satu halaman
+ * "Pengaturan Pengingat" Jadwal untuk keduanya).
+ *
  * CHAT_CATEGORY_NAMES adalah satu-satunya tempat nama kategori
  * "Chat"/"WhatsApp" didefinisikan untuk kebutuhan gating fitur
  * pengingat Jadwal -- dipakai bareng oleh controller (tampilkan/
@@ -58,11 +70,19 @@ class JadwalReminderSetting extends Model
         'remind_value',
         'remind_unit',
         'remind_target',
+        'reschedule_notify_pengajar',
+        'reschedule_notify_requester',
+        'reschedule_notify_admin',
+        'wa_message_template_id_reschedule_approved',
+        'wa_message_template_id_reschedule_rejected',
     ];
 
     protected $casts = [
         'enabled' => 'boolean',
         'remind_value' => 'integer',
+        'reschedule_notify_pengajar' => 'boolean',
+        'reschedule_notify_requester' => 'boolean',
+        'reschedule_notify_admin' => 'boolean',
     ];
 
     public function company(): BelongsTo
@@ -73,6 +93,16 @@ class JadwalReminderSetting extends Model
     public function waMessageTemplate(): BelongsTo
     {
         return $this->belongsTo(WaMessageTemplate::class);
+    }
+
+    public function waMessageTemplateRescheduleApproved(): BelongsTo
+    {
+        return $this->belongsTo(WaMessageTemplate::class, 'wa_message_template_id_reschedule_approved');
+    }
+
+    public function waMessageTemplateRescheduleRejected(): BelongsTo
+    {
+        return $this->belongsTo(WaMessageTemplate::class, 'wa_message_template_id_reschedule_rejected');
     }
 
     /** Selisih waktu (dalam menit) sebelum start_time pengingat harus dikirim. */
