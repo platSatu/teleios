@@ -114,21 +114,21 @@
                                 </td>
                                 <td>Rp {{ number_format($item->wallet->balance ?? 0, 0, ',', '.') }}</td>
                                 <td class="text-end">
-                                    <div class="btn-group btn-group-sm">
-                                        <a href="{{ route('superadmin-users.show', $item->id) }}" class="btn btn-outline-primary">
+                                    <div class="d-flex flex-wrap justify-content-end gap-1">
+                                        <a href="{{ route('superadmin-users.show', $item->id) }}" class="btn btn-sm rounded-pill btn-outline-primary">
                                             <i class="ri-eye-line"></i> Show
                                         </a>
-                                        <a href="{{ route('superadmin-users.edit', $item->id) }}" class="btn btn-outline-secondary">
+                                        <a href="{{ route('superadmin-users.edit', $item->id) }}" class="btn btn-sm rounded-pill btn-outline-secondary">
                                             <i class="ri-edit-line"></i> Edit
                                         </a>
-                                        <button type="submit" form="reset-user-{{ $item->id }}" class="btn btn-outline-warning" onclick="return confirm('Reset seluruh riwayat user ini (login, deposit, voucher, ledger, subscription, referral, keanggotaan company, dll) dan nolkan saldo wallet? Akun user itu sendiri TIDAK akan dihapus. Data finansial permanen (ledger entry, audit log, deposit sukses, dsb) tidak ikut dihapus. Tindakan ini tidak bisa dibatalkan.');">
+                                        <button type="submit" form="reset-user-{{ $item->id }}" class="btn btn-sm rounded-pill btn-outline-warning" onclick="return confirm('Reset seluruh riwayat user ini (login, deposit, voucher, ledger, subscription, referral, keanggotaan company, dll) dan nolkan saldo wallet? Akun user itu sendiri TIDAK akan dihapus. Data finansial permanen (ledger entry, audit log, deposit sukses, dsb) tidak ikut dihapus. Tindakan ini tidak bisa dibatalkan.');">
                                             <i class="ri-refresh-line"></i> Reset
                                         </button>
                                         @if ($item->id !== auth()->id())
-                                            <button type="submit" form="delete-user-{{ $item->id }}" class="btn btn-outline-danger" onclick="return confirm('Hapus user ini? Ini akan gagal jika user masih punya data terkait (wallet/deposit/dsb).');">
+                                            <button type="submit" form="delete-user-{{ $item->id }}" class="btn btn-sm rounded-pill btn-outline-danger" onclick="return confirm('Hapus user ini? Ini akan gagal jika user masih punya data terkait (wallet/deposit/dsb).');">
                                                 <i class="ri-delete-bin-line"></i> Hapus
                                             </button>
-                                            <button type="submit" form="force-destroy-user-{{ $item->id }}" class="btn btn-danger" onclick="return confirmForceDestroyUser('{{ addslashes($item->name) }}')">
+                                            <button type="submit" form="force-destroy-user-{{ $item->id }}" class="btn btn-sm rounded-pill btn-danger" onclick="return confirmForceDestroyUser('{{ addslashes($item->name) }}')">
                                                 <i class="ri-delete-bin-7-line"></i> Hapus Total
                                             </button>
                                         @endif
