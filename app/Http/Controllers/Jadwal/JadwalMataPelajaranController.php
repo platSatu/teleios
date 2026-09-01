@@ -49,6 +49,11 @@ class JadwalMataPelajaranController extends Controller
             ->addSelect(['pengajar_count' => JadwalKelas::selectRaw('count(distinct pengajar_id)')
                 ->whereColumn('jadwal_kelas.jadwal_mata_pelajaran_id', 'jadwal_mata_pelajaran.id'),
             ])
+            // Jumlah MURID UNIK, logika sama persis dengan pengajar_count
+            // di atas tapi dari student_id.
+            ->addSelect(['student_count' => JadwalKelas::selectRaw('count(distinct student_id)')
+                ->whereColumn('jadwal_kelas.jadwal_mata_pelajaran_id', 'jadwal_mata_pelajaran.id'),
+            ])
             ->with('branchOffice:id,name');
 
         if ($context->isLockedToBranch()) {
