@@ -7,6 +7,7 @@ use App\Http\Controllers\Concerns\ResolvesCompanyContext;
 use App\Http\Controllers\Controller;
 use App\Models\BranchOffice;
 use App\Models\Company;
+use App\Models\JadwalKelas;
 use App\Models\JadwalMataPelajaran;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -36,6 +37,18 @@ class JadwalMataPelajaranController extends Controller
 
         $query = JadwalMataPelajaran::where('company_id', $company->id)
             ->withCount('kelas')
+            // Jumlah PENGAJAR UNIK (bukan jumlah baris Jadwal Kelas --
+            // itu sudah 'kelas_count' di atas) -- tidak ada tabel
+            // assignment pengajar tersendiri, "pengajar dari Mata
+            // Pelajaran ini" hanya bisa diturunkan dari pengajar_id
+            // pada baris-baris JadwalKelas di bawahnya (lihat docblock
+            // App\Http\Controllers\Jadwal\JadwalPengajarController).
+            // withCount() Eloquent tidak bisa COUNT(DISTINCT ...)
+            // langsung, jadi dipakai correlated subquery lewat
+            // addSelect().
+            ->addSelect(['pengajar_count' => JadwalKelas::selectRaw('count(distinct pengajar_id)')
+                ->whereColumn('jadwal_kelas.jadwal_mata_pelajaran_id', 'jadwal_mata_pelajaran.id'),
+            ])
             ->with('branchOffice:id,name');
 
         if ($context->isLockedToBranch()) {

@@ -66,6 +66,7 @@
                                 <th>Nama</th>
                                 <th>Branch</th>
                                 <th>Jumlah Kelas</th>
+                                <th>Jumlah Pengajar</th>
                                 <th>Status</th>
                                 <th class="text-end">Aksi</th>
                             </tr>
@@ -85,6 +86,7 @@
                                     <td class="fw-semibold">{{ $mataPelajaran->name }}</td>
                                     <td>{{ $mataPelajaran->branchOffice->name ?? '-' }}</td>
                                     <td>{{ $mataPelajaran->kelas_count }}</td>
+                                    <td>{{ $mataPelajaran->pengajar_count }}</td>
                                     <td>
                                         <span class="badge {{ $mataPelajaran->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $mataPelajaran->status }}</span>
                                     </td>
@@ -104,7 +106,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="6" class="text-center text-muted py-4">Belum ada Mata Pelajaran / Bidang. Klik "Tambah Mata Pelajaran / Bidang" untuk membuat yang pertama.</td>
+                                    <td colspan="7" class="text-center text-muted py-4">Belum ada Mata Pelajaran / Bidang. Klik "Tambah Mata Pelajaran / Bidang" untuk membuat yang pertama.</td>
                                 </tr>
                             @endforelse
                         </tbody>
