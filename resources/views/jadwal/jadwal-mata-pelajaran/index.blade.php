@@ -60,16 +60,32 @@
 
                 <div class="table-responsive">
                     <table class="table table-centered table-hover align-middle mb-0">
+                        {{--
+                            text-nowrap di semua header + isi baris di
+                            bawah SENGAJA dipasang -- tanpa ini, header
+                            seperti "Jumlah Pengajar" kepencet jadi 2
+                            baris saat layar sempit (numpuk/berantakan)
+                            alih-alih tabelnya yang scroll ke samping.
+                            .table-responsive (pembungkus di atas) sudah
+                            sedia overflow-x:auto; text-nowrap ini yang
+                            bikin tabel benar-benar lebih lebar dari
+                            container-nya supaya scroll itu kepakai,
+                            bukan malah teks yang dipaksa muat.
+
+                            Jumlah Kelas/Pengajar/Murid (3 kolom
+                            terpisah sebelumnya) digabung jadi satu
+                            kolom "Statistik" berisi badge kecil berikon
+                            -- lebih ringkas, kurangi total kolom dari 8
+                            jadi 6.
+                        --}}
                         <thead class="table-light">
                             <tr>
                                 <th></th>
-                                <th>Nama</th>
-                                <th>Branch</th>
-                                <th>Jumlah Kelas</th>
-                                <th>Jumlah Pengajar</th>
-                                <th>Jumlah Murid</th>
-                                <th>Status</th>
-                                <th class="text-end">Aksi</th>
+                                <th class="text-nowrap">Nama</th>
+                                <th class="text-nowrap">Branch</th>
+                                <th class="text-nowrap">Statistik</th>
+                                <th class="text-nowrap">Status</th>
+                                <th class="text-nowrap text-end">Aksi</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -84,15 +100,25 @@
                                             </span>
                                         @endif
                                     </td>
-                                    <td class="fw-semibold">{{ $mataPelajaran->name }}</td>
-                                    <td>{{ $mataPelajaran->branchOffice->name ?? '-' }}</td>
-                                    <td>{{ $mataPelajaran->kelas_count }}</td>
-                                    <td>{{ $mataPelajaran->pengajar_count }}</td>
-                                    <td>{{ $mataPelajaran->student_count }}</td>
-                                    <td>
+                                    <td class="fw-semibold text-nowrap">{{ $mataPelajaran->name }}</td>
+                                    <td class="text-nowrap">{{ $mataPelajaran->branchOffice->name ?? '-' }}</td>
+                                    <td class="text-nowrap">
+                                        <div class="d-flex gap-1">
+                                            <span class="badge bg-light text-dark border fw-normal" title="Jumlah Kelas">
+                                                <i class="ri-book-2-line align-middle"></i> {{ $mataPelajaran->kelas_count }}
+                                            </span>
+                                            <span class="badge bg-light text-dark border fw-normal" title="Jumlah Pengajar">
+                                                <i class="ri-user-star-line align-middle"></i> {{ $mataPelajaran->pengajar_count }}
+                                            </span>
+                                            <span class="badge bg-light text-dark border fw-normal" title="Jumlah Murid">
+                                                <i class="ri-graduation-cap-line align-middle"></i> {{ $mataPelajaran->student_count }}
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td class="text-nowrap">
                                         <span class="badge {{ $mataPelajaran->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $mataPelajaran->status }}</span>
                                     </td>
-                                    <td class="text-end">
+                                    <td class="text-nowrap text-end">
                                         <a href="{{ route('jadwal.pengajar.index', ['jadwal_mata_pelajaran_id' => $mataPelajaran->id]) }}" class="btn btn-sm btn-outline-primary">
                                             <i class="ri-add-line"></i> Add Pengajar
                                         </a>
@@ -108,7 +134,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="8" class="text-center text-muted py-4">Belum ada Mata Pelajaran / Bidang. Klik "Tambah Mata Pelajaran / Bidang" untuk membuat yang pertama.</td>
+                                    <td colspan="6" class="text-center text-muted py-4">Belum ada Mata Pelajaran / Bidang. Klik "Tambah Mata Pelajaran / Bidang" untuk membuat yang pertama.</td>
                                 </tr>
                             @endforelse
                         </tbody>
