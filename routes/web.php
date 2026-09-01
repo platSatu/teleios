@@ -40,6 +40,8 @@ use App\Http\Controllers\Superadmin\RoleController;
 
 use App\Http\Controllers\Superadmin\HistoryUserLoginController;
 
+use App\Http\Controllers\Superadmin\FrontendVisitorLogController;
+
 use App\Http\Controllers\Superadmin\CategoryPackageController;
 
 use App\Http\Controllers\Superadmin\VoucherHistoryController;
@@ -1180,6 +1182,14 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
 
         Route::get('/history-user-login', [HistoryUserLoginController::class, 'index'])
             ->name('history-user-login.index');
+
+        // Kunjungan halaman publik fe-konexa (beranda/artikel/dll) --
+        // datanya ditulis lewat POST /api/frontend/visitor-log (lihat
+        // routes/api.php), controller ini cuma baca. Beda dari
+        // history-user-login di atas: itu sesi login akun terdaftar,
+        // ini pengunjung situs marketing yang kebanyakan belum daftar.
+        Route::get('/frontend-visitor-log', [FrontendVisitorLogController::class, 'index'])
+            ->name('frontend-visitor-log.index');
 
         Route::prefix('category-package')
             ->controller(CategoryPackageController::class)

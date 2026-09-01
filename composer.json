@@ -12,6 +12,7 @@
         "php": "^8.2",
         "duitkupg/duitku-php": "dev-master",
         "intervention/image": "^3.11",
+        "jenssegers/agent": "^2.6",
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.0",
         "laravel/socialite": "^5.0",

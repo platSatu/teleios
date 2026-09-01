@@ -446,6 +446,11 @@
                                     History User Login
                                 </a>
                             </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('frontend-visitor-log.index') }}" class="pe-nav-link">
+                                    Visitor Log
+                                </a>
+                            </li>
                         </ul>
                     </li>
                     <li class="pe-slide pe-has-sub">

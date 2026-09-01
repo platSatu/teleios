@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\Frontend\HeaderController as FrontendHeaderControll
 use App\Http\Controllers\Api\Frontend\PackageController as FrontendPackageController;
 use App\Http\Controllers\Api\Frontend\TermConditionController as FrontendTermConditionController;
 use App\Http\Controllers\Api\Frontend\VideoController as FrontendVideoController;
+use App\Http\Controllers\Api\Frontend\VisitorLogController as FrontendVisitorLogController;
 use App\Http\Controllers\Api\Frontend\WebSettingController as FrontendWebSettingController;
 use App\Http\Controllers\User\Deposit\DuitkuCallbackController;
 
@@ -125,6 +126,14 @@ Route::prefix('frontend')->middleware('frontend.api-key')->group(function () {
 
     Route::get('/footers', [FrontendFooterController::class, 'index'])
         ->name('api.frontend.footers.index');
+
+    // Satu-satunya endpoint TULIS di grup ini (yang lain semua baca
+    // katalog) — fe-konexa lapor tiap kunjungan halaman publik ke sini
+    // lewat App\Http\Middleware\LogVisitorMiddleware di app itu. Gerbang
+    // keamanannya sama persis dengan endpoint baca di atas (X-API-KEY),
+    // jadi tidak bisa dipanggil bebas dari browser pengunjung.
+    Route::post('/visitor-log', [FrontendVisitorLogController::class, 'store'])
+        ->name('api.frontend.visitor-log.store');
 });
 
 Route::prefix('superadmin')->middleware('auth:sanctum')->group(function () {
