@@ -98,7 +98,7 @@ class WaChatbotFlow extends Model
 
     public function steps()
     {
-        return $this->hasMany(WaChatbotFlowStep::class)->orderBy('position');
+        return $this->hasMany(WaChatbotFlowStep::class)->orderBy('position')->orderBy('created_at');
     }
 
     public function states()

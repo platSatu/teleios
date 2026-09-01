@@ -142,6 +142,10 @@ class ChatbotFlowController extends Controller
 
         $validated = $this->stepValidator($request, $flowModel)->validate();
 
+        if (! array_key_exists('position', $validated) || $validated['position'] === null) {
+            $validated['position'] = ($flowModel->steps()->max('position') ?? -1) + 1;
+        }
+
         $step = $flowModel->steps()->create($validated);
 
         if ($request->boolean('is_start')) {
