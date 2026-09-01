@@ -75,9 +75,19 @@ class ChatbotFlowService
      * keyword/AI-bot chain in that case, exactly as if this service
      * didn't exist at all.
      *
+     * $senderPhone is the sender's real phone number as resolved by Go
+     * (webhook's `sender_phone` field) — passed through to start() and
+     * stored on the new WaChatbotState so senderPhone() below doesn't
+     * have to guess it from $chatJid, which is NOT reliably a phone
+     * number (WhatsApp addresses some chats via an opaque "...@lid" id
+     * with no digits in it at all — see App\Http\Controllers\Api     * WaIncomingMessageWebhookController's `sender_phone` validation
+     * rule docblock for the production case that taught this). Optional
+     * & nullable throughout for backward compatibility with an older Go
+     * build that hasn't been redeployed with this field yet.
+     *
      * @return array{messages: array<int, string>, ended: bool}|null
      */
-    public function handleIncoming(string $deviceId, string $chatJid, string $body): ?array
+    public function handleIncoming(string $deviceId, string $chatJid, string $body, ?string $senderPhone = null): ?array
     {
         $state = $this->activeState($deviceId, $chatJid);
 
@@ -91,7 +101,7 @@ class ChatbotFlowService
             return null;
         }
 
-        return $this->start($flow, $deviceId, $chatJid);
+        return $this->start($flow, $deviceId, $chatJid, $senderPhone);
     }
 
     /**
@@ -184,7 +194,7 @@ class ChatbotFlowService
     /**
      * @return array{messages: array<int, string>, ended: bool}
      */
-    public function start(WaChatbotFlow $flow, string $deviceId, string $chatJid): array
+    public function start(WaChatbotFlow $flow, string $deviceId, string $chatJid, ?string $senderPhone = null): array
     {
         $startStep = $flow->steps()->where('is_start', true)->first();
 
@@ -202,12 +212,14 @@ class ChatbotFlowService
         // updateOrCreate() against the table's own unique(device_id,
         // chat_jid) constraint.
         $lockKey = "chatbot-flow:start-lock:{$deviceId}:{$chatJid}";
+        $normalizedPhone = $senderPhone ? PhoneNumber::normalize($senderPhone) : null;
 
-        return Cache::lock($lockKey, 10)->block(5, function () use ($flow, $deviceId, $chatJid, $startStep) {
-            return DB::transaction(function () use ($flow, $deviceId, $chatJid, $startStep) {
+        return Cache::lock($lockKey, 10)->block(5, function () use ($flow, $deviceId, $chatJid, $startStep, $normalizedPhone) {
+            return DB::transaction(function () use ($flow, $deviceId, $chatJid, $startStep, $normalizedPhone) {
                 $state = WaChatbotState::updateOrCreate(
                     ['device_id' => $deviceId, 'chat_jid' => $chatJid],
                     [
+                        'sender_phone' => $normalizedPhone ?: null,
                         'wa_chatbot_flow_id' => $flow->id,
                         'current_step_id' => $startStep->id,
                         'variables' => [],
@@ -681,12 +693,21 @@ class ChatbotFlowService
     }
 
     /**
-     * Nomor HP pengirim pesan ini, dinormalisasi -- potongan sebelum
-     * "@" pada chat_jid (lihat App\Support\PhoneNumber::normalize()).
+     * Nomor HP pengirim pesan ini, dinormalisasi. Diutamakan dari
+     * $state->sender_phone (diisi start() dari `sender_phone` Go, lihat
+     * migration 2026_09_08_090000_add_sender_phone_to_wa_chatbot_states_
+     * table.php) -- JATUH ke potongan sebelum "@" pada chat_jid hanya
+     * untuk sesi lama yang dibuat sebelum kolom ini ada, atau kalau Go
+     * kebetulan tidak mengirim sender_phone. chat_jid sendiri TIDAK BOLEH
+     * dipakai sebagai sumber utama -- WhatsApp mengalamatkan sebagian
+     * chat lewat "...@lid" (id internal), yang sama sekali tidak berisi
+     * digit nomor HP, ditemukan langsung di produksi.
      */
     private function senderPhone(WaChatbotState $state): string
     {
-        return PhoneNumber::normalize(Str::before($state->chat_jid, '@'));
+        return $state->sender_phone !== null && $state->sender_phone !== ''
+            ? $state->sender_phone
+            : PhoneNumber::normalize(Str::before($state->chat_jid, '@'));
     }
 
     /**

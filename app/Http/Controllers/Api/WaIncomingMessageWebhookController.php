@@ -245,7 +245,7 @@ class WaIncomingMessageWebhookController extends Controller
      */
     protected function tryChatbotFlow(array $validated): ?JsonResponse
     {
-        $result = $this->chatbotFlows->handleIncoming($validated['device_id'], $validated['chat_jid'], $validated['body']);
+        $result = $this->chatbotFlows->handleIncoming($validated['device_id'], $validated['chat_jid'], $validated['body'], $validated['sender_phone'] ?? null);
 
         if ($result === null) {
             return null;

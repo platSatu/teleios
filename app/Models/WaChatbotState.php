@@ -23,6 +23,7 @@ class WaChatbotState extends Model
     protected $fillable = [
         'device_id',
         'chat_jid',
+        'sender_phone',
         'wa_chatbot_flow_id',
         'current_step_id',
         'variables',
