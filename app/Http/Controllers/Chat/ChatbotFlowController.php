@@ -224,6 +224,7 @@ class ChatbotFlowController extends Controller
             'name' => ['required', 'string', 'max:150'],
             'trigger_keyword' => ['required', 'string', 'max:255'],
             'trigger_match_type' => ['required', Rule::in(['exact', 'contains'])],
+            'exit_keyword' => ['nullable', 'string', 'max:255'],
             'status' => ['required', Rule::in([WaChatbotFlow::STATUS_ACTIVE, WaChatbotFlow::STATUS_INACTIVE])],
             'session_timeout_minutes' => ['nullable', 'integer', 'min:1', 'max:1440'],
         ]);

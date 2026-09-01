@@ -84,6 +84,11 @@
                     <label class="form-label">Kata Kunci Pemicu</label>
                     <input type="text" id="wa-flow-form-trigger" class="form-control" placeholder="Contoh: booking">
                 </div>
+                <div class="mb-3">
+                    <label class="form-label">Kata Kunci Keluar <span class="text-muted fs-12">(opsional)</span></label>
+                    <input type="text" id="wa-flow-form-exit" class="form-control" placeholder="Contoh: batal">
+                    <div class="form-text">Kalau diisi, customer bisa ketik kata ini kapan saja untuk keluar paksa dari flow ini. Kosongkan untuk nonaktifkan.</div>
+                </div>
                 <div class="row g-3">
                     <div class="col-6">
                         <label class="form-label">Cara Cocok</label>
@@ -399,6 +404,7 @@
                 name: document.getElementById('wa-flow-form-name').value.trim(),
                 trigger_keyword: document.getElementById('wa-flow-form-trigger').value.trim(),
                 trigger_match_type: document.getElementById('wa-flow-form-match-type').value,
+                exit_keyword: document.getElementById('wa-flow-form-exit').value.trim() || null,
                 status: document.getElementById('wa-flow-form-status').value,
                 session_timeout_minutes: document.getElementById('wa-flow-form-timeout').value || null,
             };
@@ -423,6 +429,7 @@
             document.getElementById('wa-flow-form-name').value = '';
             document.getElementById('wa-flow-form-trigger').value = '';
             document.getElementById('wa-flow-form-match-type').value = 'exact';
+            document.getElementById('wa-flow-form-exit').value = '';
             document.getElementById('wa-flow-form-status').value = 'active';
             document.getElementById('wa-flow-form-timeout').value = '';
             document.getElementById('wa-flow-modal-title').textContent = 'Flow Baru';
@@ -438,6 +445,7 @@
             document.getElementById('wa-flow-form-name').value = flow.name;
             document.getElementById('wa-flow-form-trigger').value = flow.trigger_keyword || '';
             document.getElementById('wa-flow-form-match-type').value = flow.trigger_match_type || 'exact';
+            document.getElementById('wa-flow-form-exit').value = flow.exit_keyword || '';
             document.getElementById('wa-flow-form-status').value = flow.status;
             document.getElementById('wa-flow-form-timeout').value = flow.session_timeout_minutes || '';
             flowModal.show();

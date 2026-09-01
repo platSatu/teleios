@@ -32,6 +32,7 @@ class WaChatbotFlow extends Model
         'name',
         'trigger_keyword',
         'trigger_match_type',
+        'exit_keyword',
         'status',
         'session_timeout_minutes',
     ];
@@ -69,6 +70,25 @@ class WaChatbotFlow extends Model
             'exact' => mb_strtolower(trim($body)) === mb_strtolower(trim($this->trigger_keyword)),
             default => mb_stripos($body, $this->trigger_keyword) !== false, // 'contains'
         };
+    }
+
+    /**
+     * True if `body` should force-end the customer's current session in
+     * this flow -- see App\Services\Chat\ChatbotFlowService::
+     * exitIfRequested(). Opt-in: a flow with no exit_keyword configured
+     * (NULL, the default -- see the add_exit_keyword_to_wa_chatbot_flows_
+     * table migration) never matches, so this is a no-op for every flow
+     * that predates this column. Always an exact (case-insensitive)
+     * match, unlike matchesTrigger() -- an exit command needs to be
+     * unambiguous, not accidentally caught inside a free-text answer.
+     */
+    public function matchesExit(string $body): bool
+    {
+        if (! $this->exit_keyword) {
+            return false;
+        }
+
+        return mb_strtolower(trim($body)) === mb_strtolower(trim($this->exit_keyword));
     }
 
     public function company()

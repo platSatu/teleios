@@ -69,7 +69,7 @@ class ChatbotFlowService
         $state = $this->activeState($deviceId, $chatJid);
 
         if ($state) {
-            return $this->continueFlow($state, $body);
+            return $this->exitIfRequested($state, $body) ?? $this->continueFlow($state, $body);
         }
 
         $flow = $this->findTriggeredFlow($deviceId, $body);
@@ -119,6 +119,39 @@ class ChatbotFlowService
         }
 
         return $state;
+    }
+
+    /**
+     * Kata kunci keluar paksa OPSIONAL milik flow yang sedang aktif --
+     * lihat App\Models\WaChatbotFlow::matchesExit(). Dicek SEBELUM
+     * pesan diproses sebagai jawaban step biasa, supaya customer yang
+     * macet (mis. berkali-kali salah jawab pilihan) punya jalan keluar
+     * pasti, tanpa perlu menunggu timeout atau staff turun tangan
+     * manual lewat database. Null-safe by design: flow tanpa
+     * exit_keyword (default semua flow yang sudah ada) selalu balik
+     * null di sini, jadi handleIncoming() lanjut ke continueFlow()
+     * seperti biasa -- tidak ada perubahan perilaku untuk flow yang
+     * belum di-opt-in.
+     *
+     * @return array{messages: array<int, string>, ended: bool}|null
+     */
+    private function exitIfRequested(WaChatbotState $state, string $body): ?array
+    {
+        $flow = $state->flow;
+
+        if (! $flow || ! $flow->matchesExit($body)) {
+            return null;
+        }
+
+        $state->delete();
+
+        Log::info('chatbot-flow: sesi diakhiri paksa via exit_keyword', [
+            'flow_id' => $flow->id,
+            'device_id' => $state->device_id,
+            'chat_jid' => $state->chat_jid,
+        ]);
+
+        return ['messages' => ['Baik, sesi dibatalkan. Ketik ulang kata kunci untuk memulai lagi.'], 'ended' => true];
     }
 
     /**
@@ -211,9 +244,14 @@ class ChatbotFlowService
                 $matched = $this->matchChoiceOption($currentStep, $body);
 
                 if ($matched === null) {
-                    $locked->last_interaction_at = now();
-                    $locked->save();
-
+                    // Sengaja TIDAK meng-update last_interaction_at di sini --
+                    // jawaban yang tidak dikenali bukan progress, jadi tidak
+                    // boleh memperpanjang timeout sesi (lihat activeState()'s
+                    // docblock). Tanpa ini, customer yang terus-terusan salah
+                    // jawab bisa membuat sesinya sendiri tidak pernah timeout,
+                    // padahal itu justru tanda dia sedang macet, bukan sedang
+                    // aktif menjawab -- timer cuma boleh mundur lagi kalau ada
+                    // progress beneran (lihat walk() di bawah).
                     $reprompt = trim(
                         'Maaf, pilihan tidak dikenali. '
                         .$this->renderStepMessage($currentStep, $currentStep->flow?->company)
