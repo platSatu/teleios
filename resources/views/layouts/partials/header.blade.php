@@ -197,10 +197,6 @@
                                     {{ Auth::user()->name }}
                                 </h6>
 
-                                <small class="text-muted mb-0 d-block">
-                                    {{ Auth::user()->email }}
-                                </small>
-
                                 @if (Auth::user()->referralCode)
                                     {{-- Kode + link referral milik user ini sendiri, supaya
                                          gampang dibagikan (mis. oleh agen). Link-nya menuju
@@ -210,19 +206,25 @@
                                          rememberReferralCodeFromLink() dan Dashboard\
                                          PackageCheckoutController::show(). Tidak mengubah cara
                                          kerja kode referral itu sendiri sama sekali, ini murni
-                                         jalan pintas berbagi. --}}
-                                    <div class="d-flex align-items-center gap-1 mt-2" id="referral-share-block" data-referral-link="{{ route('register', ['ref' => Auth::user()->referralCode->code]) }}">
-                                        <span class="badge bg-primary-subtle text-primary fw-semibold fs-11 text-nowrap">
+                                         jalan pintas berbagi. Tombol copy/share dibuat plain
+                                         (text-muted, tanpa border/lingkaran) supaya tidak
+                                         menonjol sendiri dari warna tema aplikasi. --}}
+                                    <div class="d-flex align-items-center gap-1 mb-1" id="referral-share-block" data-referral-link="{{ route('register', ['ref' => Auth::user()->referralCode->code]) }}">
+                                        <span class="badge bg-primary-subtle text-primary fw-semibold fs-10 text-nowrap">
                                             {{ Auth::user()->referralCode->code }}
                                         </span>
-                                        <button type="button" class="btn btn-icon btn-outline-secondary btn-sm rounded-circle" id="referral-copy-btn" title="Salin link referral" style="width: 24px; height: 24px;">
+                                        <button type="button" class="btn btn-icon btn-sm p-0 text-muted" id="referral-copy-btn" title="Salin link referral" style="width: 18px; height: 18px; line-height: 1;">
                                             <i class="ri-file-copy-line fs-11"></i>
                                         </button>
-                                        <button type="button" class="btn btn-icon btn-outline-secondary btn-sm rounded-circle d-none" id="referral-share-btn" title="Bagikan link referral" style="width: 24px; height: 24px;">
+                                        <button type="button" class="btn btn-icon btn-sm p-0 text-muted d-none" id="referral-share-btn" title="Bagikan link referral" style="width: 18px; height: 18px; line-height: 1;">
                                             <i class="ri-share-forward-line fs-11"></i>
                                         </button>
                                     </div>
                                 @endif
+
+                                <small class="text-muted mb-0 d-block">
+                                    {{ Auth::user()->email }}
+                                </small>
 
                                 <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
                                     <span class="fw-semibold fs-12 text-body text-nowrap">
