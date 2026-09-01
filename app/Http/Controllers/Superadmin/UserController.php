@@ -10,12 +10,15 @@ use App\Models\CompanyToUser;
 use App\Models\Deposit;
 use App\Models\HistoryUserLogin;
 use App\Models\LedgerEntry;
+use App\Models\PaymentTransaction;
+use App\Models\PaymentWebhook;
 use App\Models\ReferralCodeUsage;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Models\Voucher;
 use App\Models\VoucherUserRedemption;
 use App\Models\Wallet;
+use App\Models\WalletTransfer;
 use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
@@ -394,6 +397,182 @@ class UserController extends Controller
                 $counts['company_memberships'],
                 $counts['subscriptions'],
                 $counts['deposits'],
+            ));
+    }
+
+    /**
+     * "Hapus Total" — permanent, always-available hard-delete of a user
+     * ACCOUNT INCLUDING its financial/audit history, on superadmin's
+     * explicit request: unlike reset() above, this exists specifically
+     * so a limited pool of real WhatsApp numbers can be reused by test
+     * accounts before launch, and superadmin decided it should stay a
+     * standing feature with no SUCCESS-deposit/ACTIVE-subscription
+     * restriction — usable "kapan saja selama superadmin membutuhkan".
+     *
+     * Deletes, in FK-safe order (bulk Model::where(...)->delete() calls
+     * bypass each model's per-instance static::deleting() guard — same
+     * bypass technique reset() already uses, just without reset()'s
+     * SUCCESS/ACTIVE exclusions): payment_transactions/payment_webhooks
+     * matching this user's deposits/subscriptions (morphTo, no real FK,
+     * so found by reference_type/reference_id instead of a relation),
+     * wallet_transfers, admin_wallet_actions, ledger_entries, deposits,
+     * subscriptions, then the wallet itself, then the smaller history
+     * tables reset() also clears. referral_codes cascades away
+     * automatically at the DB level once the user row is deleted below
+     * (referral_codes.user_id is cascadeOnDelete) — including, as a
+     * side effect, any referral_code_usages row where an OTHER user
+     * redeemed THIS user's code (that table cascades from
+     * referral_code_id too), since the code itself no longer has an
+     * owner to belong to.
+     *
+     * Deliberately NEVER touched:
+     * - AuditLog. It has no real foreign key to users at all
+     *   (actor_id/entity_id are plain indexed strings) precisely so it
+     *   can outlive the accounts it references — an orphaned reference
+     *   after this runs is the intended, permanent behavior, not a bug.
+     *   The AuditLog row this method itself writes below immediately
+     *   becomes exactly that kind of orphaned-but-permanent reference.
+     *
+     * Still refused, but for reasons that have nothing to do with
+     * financial-history immutability — these are separate business-data
+     * safety rails this method does not attempt to route around:
+     * - Owning a company (companies.user_id). It cascades on delete,
+     *   and that cascade chains into jadwal_kelas/jadwal_student/
+     *   branch_offices/etc — hard-deleting this user would silently
+     *   wipe that company's entire operational data, including for any
+     *   OTHER member still using it. Checked explicitly up front rather
+     *   than left to fail, because unlike the pengajar_id case below it
+     *   would NOT fail — it would silently succeed and take the company
+     *   down with it.
+     * - Still assigned as `pengajar_id` on a jadwal_kelas/jadwal_student
+     *   row (restrictOnDelete at the DB level). Left to fail naturally
+     *   with its own distinct QueryException message below — teaching
+     *   assignments are real business data outside what was asked for
+     *   here, not something to silently cascade through.
+     */
+    public function forceDestroy(string $id): RedirectResponse
+    {
+        if ($id === Auth::id()) {
+            return back()->with('error', 'Tidak bisa menghapus akun sendiri.');
+        }
+
+        $user = User::with('wallet')->findOrFail($id);
+
+        if ($user->companies()->exists()) {
+            return back()->with('error', sprintf(
+                'User "%s" masih menjadi pemilik company (%s). Hapus atau pindahkan company tersebut dulu lewat '
+                . 'Data Company sebelum menghapus total user ini — menghapus usernya akan ikut menghapus seluruh '
+                . 'jadwal & data operasional company itu.',
+                $user->name,
+                $user->companies()->pluck('name')->implode(', ')
+            ));
+        }
+
+        $before = $user->toArray();
+
+        try {
+            $counts = DB::transaction(function () use ($user) {
+                $walletId = optional($user->wallet)->id;
+                $depositIds = Deposit::where('user_id', $user->id)->pluck('id');
+                $subscriptionIds = Subscription::where('user_id', $user->id)->pluck('id');
+
+                $counts = [];
+
+                $counts['payment_transactions'] = PaymentTransaction::where(function ($q) use ($depositIds) {
+                    $q->where('reference_type', Deposit::class)->whereIn('reference_id', $depositIds);
+                })->orWhere(function ($q) use ($subscriptionIds) {
+                    $q->where('reference_type', Subscription::class)->whereIn('reference_id', $subscriptionIds);
+                })->delete();
+
+                $counts['payment_webhooks'] = PaymentWebhook::where(function ($q) use ($depositIds) {
+                    $q->where('reference_type', Deposit::class)->whereIn('reference_id', $depositIds);
+                })->orWhere(function ($q) use ($subscriptionIds) {
+                    $q->where('reference_type', Subscription::class)->whereIn('reference_id', $subscriptionIds);
+                })->delete();
+
+                $counts['wallet_transfers'] = WalletTransfer::where('sender_user_id', $user->id)
+                    ->orWhere('receiver_user_id', $user->id)
+                    ->when($walletId, fn ($q) => $q->orWhere('sender_wallet_id', $walletId)->orWhere('receiver_wallet_id', $walletId))
+                    ->delete();
+
+                $counts['admin_wallet_actions'] = AdminWalletAction::where('admin_id', $user->id)
+                    ->when($walletId, fn ($q) => $q->orWhere('wallet_id', $walletId))
+                    ->delete();
+
+                $counts['ledger_entries'] = LedgerEntry::where('user_id', $user->id)
+                    ->when($walletId, fn ($q) => $q->orWhere('wallet_id', $walletId))
+                    ->delete();
+
+                $counts['deposits'] = Deposit::where('user_id', $user->id)->delete();
+                $counts['subscriptions'] = Subscription::where('user_id', $user->id)->delete();
+
+                if ($walletId) {
+                    Wallet::where('id', $walletId)->delete();
+                }
+
+                $counts['login_histories'] = HistoryUserLogin::where('user_id', $user->id)->delete();
+                $counts['vouchers'] = Voucher::where('user_id', $user->id)->delete();
+                $counts['voucher_redemptions'] = VoucherUserRedemption::where('user_id', $user->id)->delete();
+                $counts['referral_code_usages'] = ReferralCodeUsage::where('used_by_user_id', $user->id)->delete();
+                $counts['company_memberships'] = CompanyToUser::where('user_id', $user->id)->delete();
+
+                // Baris User itu sendiri, terakhir — referral_codes milik
+                // dia cascade otomatis dari sini (lihat docblock di
+                // atas). Kalau masih jadi pengajar_id aktif di jadwal
+                // manapun, restrictOnDelete di DB akan menolak baris ini
+                // dengan QueryException, ditangkap di catch() bawah.
+                $user->delete();
+
+                return $counts;
+            });
+        } catch (QueryException $e) {
+            return back()->with('error', sprintf(
+                'User "%s" tidak bisa dihapus total: kemungkinan masih tercatat sebagai pengajar (pengajar_id) '
+                . 'aktif di jadwal kelas atau data murid. Pindahkan/hapus jadwal tersebut dulu lewat menu Jadwal, '
+                . 'baru coba lagi. (Detail teknis: %s)',
+                $before['name'],
+                $e->getMessage()
+            ));
+        }
+
+        // Ditulis setelah user-nya benar-benar hilang — actor_id tetap
+        // superadmin yang melakukan, entity_id tetap id user yang baru
+        // dihapus (jadi referensi "orphan" yang disengaja, sama seperti
+        // audit_logs lain yang menunjuk ke entity yang sudah tidak ada).
+        AuditLog::create([
+            'actor_type' => Auth::user()::class,
+            'actor_id' => Auth::id(),
+            'action' => 'force_delete',
+            'entity_type' => User::class,
+            'entity_id' => $id,
+            'old_value' => $before,
+            'new_value' => $counts,
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'created_at' => now(),
+        ]);
+
+        return redirect()
+            ->route('superadmin-users.index')
+            ->with('success', sprintf(
+                'User "%s" berhasil DIHAPUS TOTAL beserta seluruh riwayat finansialnya — wallet, %d deposit, '
+                . '%d subscription, %d ledger entry, %d admin wallet action, %d wallet transfer, '
+                . '%d payment transaction, %d payment webhook, %d login history, %d voucher, '
+                . '%d redemption voucher, %d referral usage, %d keanggotaan company. '
+                . 'Audit log tetap permanen dan tidak ikut terhapus.',
+                $before['name'],
+                $counts['deposits'],
+                $counts['subscriptions'],
+                $counts['ledger_entries'],
+                $counts['admin_wallet_actions'],
+                $counts['wallet_transfers'],
+                $counts['payment_transactions'],
+                $counts['payment_webhooks'],
+                $counts['login_histories'],
+                $counts['vouchers'],
+                $counts['voucher_redemptions'],
+                $counts['referral_code_usages'],
+                $counts['company_memberships'],
             ));
     }
 

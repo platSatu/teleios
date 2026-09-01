@@ -1224,6 +1224,12 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
                 Route::put('/{id}', 'update')->name('superadmin-users.update');
                 Route::delete('/{id}', 'destroy')->name('superadmin-users.destroy');
                 Route::post('/{id}/reset', 'reset')->name('superadmin-users.reset');
+
+                // "Hapus Total" — full hard-delete including financial/
+                // audit history that destroy() above deliberately
+                // refuses to touch. See UserController::forceDestroy()'s
+                // docblock for why this exists and what it still refuses.
+                Route::delete('/{id}/force-destroy', 'forceDestroy')->name('superadmin-users.force-destroy');
             });
 
         // "Data Company" in the sidebar — superadmin-wide CRUD over

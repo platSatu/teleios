@@ -128,6 +128,9 @@
                                             <button type="submit" form="delete-user-{{ $item->id }}" class="btn btn-outline-danger" onclick="return confirm('Hapus user ini? Ini akan gagal jika user masih punya data terkait (wallet/deposit/dsb).');">
                                                 <i class="ri-delete-bin-line"></i> Hapus
                                             </button>
+                                            <button type="submit" form="force-destroy-user-{{ $item->id }}" class="btn btn-danger" onclick="return confirmForceDestroyUser('{{ addslashes($item->name) }}')">
+                                                <i class="ri-delete-bin-7-line"></i> Hapus Total
+                                            </button>
                                         @endif
                                     </div>
                                     <form id="reset-user-{{ $item->id }}" action="{{ route('superadmin-users.reset', $item->id) }}" method="POST" class="d-none">
@@ -135,6 +138,10 @@
                                     </form>
                                     @if ($item->id !== auth()->id())
                                         <form id="delete-user-{{ $item->id }}" action="{{ route('superadmin-users.destroy', $item->id) }}" method="POST" class="d-none">
+                                            @csrf
+                                            @method('DELETE')
+                                        </form>
+                                        <form id="force-destroy-user-{{ $item->id }}" action="{{ route('superadmin-users.force-destroy', $item->id) }}" method="POST" class="d-none">
                                             @csrf
                                             @method('DELETE')
                                         </form>
@@ -152,8 +159,26 @@
 
             <div class="mt-3">
                  {{ $users->links('pagination::bootstrap-5') }}
-              
+
             </div>
         </div>
     </div>
+
+    {{-- "Hapus Total" perlu konfirmasi lebih ketat dari confirm() biasa
+         (Reset/Hapus di atas) karena ini permanen dan ikut menghapus
+         riwayat finansial — minta superadmin ketik ulang nama usernya
+         persis, supaya klik yang tidak sengaja tidak langsung menghapus
+         data yang tidak bisa dikembalikan. Lihat Superadmin\
+         UserController::forceDestroy(). --}}
+    <script>
+        function confirmForceDestroyUser(userName) {
+            const warning = 'PERINGATAN: Ini akan MENGHAPUS TOTAL user "' + userName + '" beserta SELURUH riwayat '
+                + 'finansial & audit terkait (wallet, ledger, deposit, subscription, admin wallet action, payment '
+                + 'transaction/webhook, wallet transfer) secara PERMANEN. Tindakan ini TIDAK BISA DIBATALKAN.\n\n'
+                + 'Ketik ulang nama user ini persis untuk konfirmasi:';
+            const typed = window.prompt(warning);
+
+            return typed === userName;
+        }
+    </script>
 @endsection
