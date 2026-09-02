@@ -49,6 +49,15 @@ class JadwalPengajarRecapService
         return strtr($body, [
             '{{nama_pengajar}}' => $pengajar->name,
             '{{tanggal}}' => $date->translatedFormat('d F Y'),
+            // Admin sets up ONE template text shared by both the daily
+            // (H-1/manual) and weekly (WA keyword) recap -- Pengaturan
+            // Pengingat advertises all 6 tags together for that single
+            // field (jadwal/settings/edit.blade.php), so whichever tag
+            // doesn't natively apply to this call path still needs a
+            // real value here, or it leaks into the WhatsApp message as
+            // literal "{{rentang_tanggal}}" text. A daily recap has no
+            // real "range" -- fall back to the same single date.
+            '{{rentang_tanggal}}' => $date->translatedFormat('d F Y'),
             '{{jumlah_sesi}}' => (string) $sesi->count(),
             '{{daftar_sesi}}' => $this->formatSesiList($sesi),
             '{{nama_perusahaan}}' => $companyName,
@@ -60,9 +69,17 @@ class JadwalPengajarRecapService
     {
         $body = $this->templateBodyOrDefault($template, $this->defaultWeeklyMessage());
 
+        $rentangTanggal = $from->translatedFormat('d M').' - '.$to->translatedFormat('d M Y');
+
         return strtr($body, [
             '{{nama_pengajar}}' => $pengajar->name,
-            '{{rentang_tanggal}}' => $from->translatedFormat('d M').' - '.$to->translatedFormat('d M Y'),
+            // Same reasoning as composeDailyMessage()'s new
+            // {{rentang_tanggal}} fallback, mirrored the other way: a
+            // weekly recap has no single "tanggal", so a template that
+            // uses that tag here falls back to the range instead of
+            // leaking "{{tanggal}}" verbatim into the message.
+            '{{tanggal}}' => $rentangTanggal,
+            '{{rentang_tanggal}}' => $rentangTanggal,
             '{{jumlah_sesi}}' => (string) $sesi->count(),
             '{{daftar_sesi}}' => $this->formatSesiListGroupedByDay($sesi),
             '{{nama_perusahaan}}' => $companyName,
