@@ -281,18 +281,6 @@
                                             </a>
                                         </li>
                                     @endif
-                                    @if ($canSeeChatMenu('chat.message-templates.index'))
-                                        <li class="pe-slide-item">
-                                            <a href="{{ route('chat.message-templates.index') }}" class="pe-nav-link">
-                                                WA Template
-                                            </a>
-                                        </li>
-                                        <li class="pe-slide-item">
-                                            <a href="{{ route('chat.category-templates.index') }}" class="pe-nav-link">
-                                                Kategori Template
-                                            </a>
-                                        </li>
-                                    @endif
                                     @if ($canSeeChatMenu('chat.message-auto-replies.index'))
                                         <li class="pe-slide-item">
                                             <a href="{{ route('chat.message-auto-replies.index') }}"
@@ -316,17 +304,6 @@
                                             </a>
                                         </li>
                                     @endif
-                                    {{-- Fitur #2 — daftar nomor yang
-                                             berhenti berlangganan broadcast.
-                                             See App\Http\Controllers\Chat\
-                                             OptOutController. --}}
-                                    @if ($canSeeChatMenu('chat.opt-outs.index'))
-                                        <li class="pe-slide-item">
-                                            <a href="{{ route('chat.opt-outs.index') }}" class="pe-nav-link">
-                                                Opt-out
-                                            </a>
-                                        </li>
-                                    @endif
                                     {{-- "Label" moved here from the now-removed
                                              Pengaturan > Laporan submenu — that
                                              submenu was almost entirely dead
@@ -338,6 +315,29 @@
                                         <li class="pe-slide-item">
                                             <a href="{{ route('chat.labels.index') }}" class="pe-nav-link">
                                                 Label
+                                            </a>
+                                        </li>
+                                    @endif
+                                    {{-- Fitur #2 — daftar nomor yang
+                                             berhenti berlangganan broadcast.
+                                             See App\Http\Controllers\Chat\
+                                             OptOutController. --}}
+                                    @if ($canSeeChatMenu('chat.opt-outs.index'))
+                                        <li class="pe-slide-item">
+                                            <a href="{{ route('chat.opt-outs.index') }}" class="pe-nav-link">
+                                                Opt-out
+                                            </a>
+                                        </li>
+                                    @endif
+                                    @if ($canSeeChatMenu('chat.message-templates.index'))
+                                        <li class="pe-slide-item">
+                                            <a href="{{ route('chat.category-templates.index') }}" class="pe-nav-link">
+                                                Kategori Template
+                                            </a>
+                                        </li>
+                                        <li class="pe-slide-item">
+                                            <a href="{{ route('chat.message-templates.index') }}" class="pe-nav-link">
+                                                WA Template
                                             </a>
                                         </li>
                                     @endif
