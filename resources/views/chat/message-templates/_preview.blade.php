@@ -225,10 +225,34 @@
     // tokens, so no user-entered text can ever inject a real tag.
     function renderMarkdown(text) {
         let safe = escapeHtml(text);
+
+        // Protect any {{variabel}} placeholder that's still unresolved
+        // (no "Contoh Nilai Variabel" filled in yet -- applyVariables()
+        // leaves it as literal "{{...}}" text) from the token replacements
+        // below. Variable names routinely contain "_" (nama_pengajar,
+        // rentang_tanggal, ...), and without this guard that underscore
+        // gets paired up with the next one found ANYWHERE later in the
+        // message -- across other placeholders too -- and both get
+        // mangled into italic, chopping the "{{"/"}}" braces off along
+        // the way. The real WhatsApp message never has this problem
+        // (variables are substituted with real values, e.g. an actual
+        // name, before sending -- see WaMessageTemplate::composedMessage()
+        // callers), so this only needs to protect the PREVIEW.
+        const placeholders = [];
+        safe = safe.replace(/\{\{\s*[a-zA-Z0-9_]+\s*\}\}/g, function (match) {
+            placeholders.push(match);
+            return '\u0000' + (placeholders.length - 1) + '\u0000';
+        });
+
         safe = safe.replace(/```([^`]+)```/g, '<code>$1</code>');
         safe = safe.replace(/\*([^*]+)\*/g, '<strong>$1</strong>');
         safe = safe.replace(/_([^_]+)_/g, '<em>$1</em>');
         safe = safe.replace(/~([^~]+)~/g, '<s>$1</s>');
+
+        safe = safe.replace(/\u0000(\d+)\u0000/g, function (match, idx) {
+            return placeholders[Number(idx)];
+        });
+
         return safe.replace(/\n/g, '<br>');
     }
 
