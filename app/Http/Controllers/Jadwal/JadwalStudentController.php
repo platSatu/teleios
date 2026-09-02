@@ -85,10 +85,22 @@ class JadwalStudentController extends Controller
     {
         $context = $this->companyContext($request);
 
+        $selectedMataPelajaranId = $request->query('jadwal_mata_pelajaran_id');
+
+        // Branch ikut terkunci kalau datang dari drill-down Mata
+        // Pelajaran/Bidang (biar konsisten dengan branch aslinya &
+        // tidak bisa salah pilih branch lain -- lihat _form.blade.php).
+        $selectedBranchOfficeId = $selectedMataPelajaranId
+            ? JadwalMataPelajaran::where('company_id', $context->company->id)
+                ->where('id', $selectedMataPelajaranId)
+                ->value('branch_office_id')
+            : null;
+
         return view('jadwal.jadwal-student.create', [
             'student' => null,
-            'selectedMataPelajaranId' => $request->query('jadwal_mata_pelajaran_id'),
+            'selectedMataPelajaranId' => $selectedMataPelajaranId,
             'selectedPengajarId' => $request->query('pengajar_id'),
+            'selectedBranchOfficeId' => $selectedBranchOfficeId,
         ] + $this->formData($context));
     }
 

@@ -6,13 +6,12 @@
     // JadwalStudentController::edit()) -- $selectedMataPelajaranId/
     // $selectedPengajarId cuma pernah ke-set oleh create().
     //
-    // Branch TIDAK pernah datang terkunci lewat drill-down (tombol
-    // "+ Add Student" cuma bawa jadwal_mata_pelajaran_id & pengajar_id,
-    // branch-nya otomatis mengikuti mata pelajaran yang dipilih di
-    // JadwalStudentController::store()/update()) -- tapi tetap
-    // ditampilkan sebagai select manual di sini supaya akses langsung
-    // lewat menu sidebar "Student" bisa pilih branch sendiri tanpa
-    // harus lewat index Branch/Mata Pelajaran dulu.
+    // Branch IKUT terkunci (mengikuti branch_office_id dari Mata
+    // Pelajaran/Bidang yang dipilih) kalau datang dari drill-down --
+    // lihat JadwalStudentController::create(). Ini supaya admin tidak
+    // bisa salah pilih branch yang beda dari branch Mata Pelajaran itu
+    // sendiri. Tanpa konteks drill-down (akses langsung lewat menu
+    // sidebar "Student"), branch tetap jadi select manual di sini.
     $lockedBranchOfficeId = old('branch_office_id', $selectedBranchOfficeId ?? null);
     $lockedBranch = $lockedBranchOfficeId ? $branchOffices->firstWhere('id', $lockedBranchOfficeId) : null;
 
@@ -29,10 +28,7 @@
         <input type="text" class="form-control" value="{{ $lockedBranch->name }}" disabled readonly>
         <input type="hidden" name="branch_office_id" value="{{ $lockedBranch->id }}">
         <div class="form-text">
-            Student ini akan dikaitkan ke branch di atas.
-            @if ($branchOffices->count() > 1)
-                <a href="{{ route('jadwal.student.create') }}">Ganti branch</a>
-            @endif
+            Otomatis mengikuti branch dari Mata Pelajaran / Bidang yang dipilih.
         </div>
     @elseif ($branchOffices->count() <= 1 && $branchOffices->isNotEmpty())
         {{-- Branch-locked member: satu-satunya opsi otomatis dipakai. --}}
