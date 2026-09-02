@@ -36,7 +36,7 @@
                             <tr>
                                 <th class="text-nowrap">Nama Branch</th>
                                 <th class="text-nowrap">Status</th>
-                                <th class="text-nowrap">Jumlah Mata Pelajaran / Bidang</th>
+                                <th class="text-nowrap text-center">Jumlah Mata Pelajaran / Bidang</th>
                                 <th class="text-center text-nowrap">Aksi</th>
                             </tr>
                         </thead>
@@ -47,7 +47,7 @@
                                     <td>
                                         <span class="badge {{ $branch->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $branch->status }}</span>
                                     </td>
-                                    <td>{{ $branch->jadwal_mata_pelajaran_count }}</td>
+                                    <td class="text-center">{{ $branch->jadwal_mata_pelajaran_count }}</td>
                                     <td class="text-end text-nowrap">
                                         <a href="{{ route('jadwal.mata-pelajaran.index', ['branch_office_id' => $branch->id]) }}" class="btn btn-sm btn-outline-primary">
                                             Lihat Mata Pelajaran / Bidang
