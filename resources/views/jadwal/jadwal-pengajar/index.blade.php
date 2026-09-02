@@ -59,7 +59,7 @@
                                     <td>{{ $index + 1 }}</td>
                                     <td class="fw-semibold">{{ $member->name }}</td>
                                     <td>{{ $member->email }}</td>
-                                    <td class="text-end">
+                                    <td class="text-end text-nowrap">
                                         <a href="{{ route('jadwal.student.create', ['jadwal_mata_pelajaran_id' => $mataPelajaran->id, 'pengajar_id' => $member->id]) }}" class="btn btn-sm btn-outline-primary">
                                             <i class="ri-add-line"></i> Add Student
                                         </a>

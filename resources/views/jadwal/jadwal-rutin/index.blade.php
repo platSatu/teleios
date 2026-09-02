@@ -59,7 +59,7 @@
                                     <td>
                                         <span class="badge {{ $rutin->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $rutin->status }}</span>
                                     </td>
-                                    <td class="text-end">
+                                    <td class="text-end text-nowrap">
                                         <a href="{{ route('jadwal.rutin.edit', $rutin->id) }}" class="btn btn-sm btn-light"><i class="ri-edit-line"></i></a>
                                         <form action="{{ route('jadwal.rutin.destroy', $rutin->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Hapus Jadwal Rutin ini? Sesi yang sudah pernah digenerate TIDAK ikut terhapus.');">
                                             @csrf
