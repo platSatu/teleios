@@ -9,11 +9,14 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 /**
- * Data untuk Laporan Harian & Bulanan Jadwal v2 (CLAUDE.md item #15
- * spec poin 12 & 13) -- dipakai bersama oleh App\Http\Controllers\
- * Jadwal\JadwalLaporanController (tampilan halaman) dan
- * App\Exports\Jadwal\* (download Excel), supaya angka yang tampil di
- * layar dan yang di-export SELALU sama persis (satu sumber query).
+ * Data untuk Laporan Jadwal v2 (CLAUDE.md item #15 spec poin 12 & 13)
+ * -- SATU menu dengan filter rentang tanggal bebas (dari-sampai; satu
+ * hari kalau dari==sampai, satu bulan kalau dari=awal bulan sampai
+ * akhir bulan, atau rentang lain), dipakai bersama oleh
+ * App\Http\Controllers\Jadwal\JadwalLaporanController (tampilan
+ * halaman) dan App\Exports\Jadwal\JadwalLaporanExport (download
+ * Excel), supaya angka yang tampil di layar dan yang di-export SELALU
+ * sama persis (satu sumber query).
  *
  * Fee & jam mengajar HANYA dihitung dari sesi yang attendance_status-nya
  * SUDAH DITANDAI 'hadir' atau 'tidak_hadir' (App\Models\JadwalKelas::
@@ -28,25 +31,26 @@ use Illuminate\Support\Collection;
 class JadwalLaporanService
 {
     /**
-     * Rekap SATU HARI: semua sesi aktif tanggal itu, untuk Laporan
-     * Harian (spec poin 12 -- "kelas mana aja yang terpakai, daftar
-     * murid nya, dan jam nya").
+     * Semua sesi aktif dalam rentang tanggal $from-$to (spec poin 12
+     * -- "kelas mana aja yang terpakai, daftar murid nya, dan jam
+     * nya"). $from/$to sebaiknya sudah startOfDay()/endOfDay() dari
+     * pemanggil supaya rentang tanggalnya inklusif penuh.
      *
      * @return Collection<int, JadwalKelas>
      */
-    public function harian(string $companyId, ?string $branchOfficeId, Carbon $date): Collection
+    public function sesiUntukRentang(string $companyId, ?string $branchOfficeId, Carbon $from, Carbon $to): Collection
     {
         return JadwalKelas::where('company_id', $companyId)
             ->where('status', JadwalKelas::STATUS_ACTIVE)
             ->when($branchOfficeId, fn ($q) => $q->where('branch_office_id', $branchOfficeId))
-            ->whereDate('start_time', $date)
+            ->whereBetween('start_time', [$from, $to])
             ->with(['mataPelajaran:id,name', 'kategori:id,name', 'ruangan:id,name', 'pengajar:id,name', 'student:id,name'])
             ->orderBy('start_time')
             ->get();
     }
 
     /**
-     * Rekap SATU BULAN untuk Laporan Bulanan (spec poin 13): jumlah
+     * Rekap untuk rentang tanggal $from-$to (spec poin 13): jumlah
      * murid aktif/baru, jumlah reschedule, total fee (company vs
      * pengajar), lama mengajar per pengajar.
      *
@@ -56,7 +60,7 @@ class JadwalLaporanService
      *   perPengajar: Collection<int, array{pengajar_id: string, nama: string, jumlah_sesi: int, total_menit: int, fee_pengajar: float}>,
      * }
      */
-    public function bulanan(string $companyId, ?string $branchOfficeId, Carbon $monthStart, Carbon $monthEnd): array
+    public function rekap(string $companyId, ?string $branchOfficeId, Carbon $from, Carbon $to): array
     {
         $activeStudentCount = JadwalStudent::where('company_id', $companyId)
             ->where('status', JadwalStudent::STATUS_ACTIVE)
@@ -65,17 +69,17 @@ class JadwalLaporanService
 
         $newStudentCount = JadwalStudent::where('company_id', $companyId)
             ->when($branchOfficeId, fn ($q) => $q->where('branch_office_id', $branchOfficeId))
-            ->whereBetween('created_at', [$monthStart, $monthEnd])
+            ->whereBetween('created_at', [$from, $to])
             ->count();
 
         $rescheduleCount = JadwalKelasRescheduleRequest::where('company_id', $companyId)
-            ->whereBetween('created_at', [$monthStart, $monthEnd])
+            ->whereBetween('created_at', [$from, $to])
             ->count();
 
         $paidSesi = JadwalKelas::where('company_id', $companyId)
             ->where('status', JadwalKelas::STATUS_ACTIVE)
             ->when($branchOfficeId, fn ($q) => $q->where('branch_office_id', $branchOfficeId))
-            ->whereBetween('start_time', [$monthStart, $monthEnd])
+            ->whereBetween('start_time', [$from, $to])
             ->whereIn('attendance_status', JadwalKelas::ATTENDANCE_TETAP_DIBAYAR)
             ->with('pengajar:id,name')
             ->get();

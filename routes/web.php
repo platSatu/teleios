@@ -431,15 +431,15 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::post('/{id}/reject', 'reject')->name('jadwal.reschedule-requests.reject');
             });
 
-        // Laporan Harian & Bulanan (Jadwal v2, spec poin 12 & 13) --
-        // lihat JadwalLaporanController.
+        // Laporan Jadwal (Jadwal v2, spec poin 12 & 13) -- 1 menu,
+        // filter rentang tanggal (dari-sampai) gantikan Laporan
+        // Harian & Bulanan yang dulu 2 menu terpisah. Lihat
+        // JadwalLaporanController.
         Route::prefix('laporan')
             ->controller(JadwalLaporanController::class)
             ->group(function () {
-                Route::get('/harian', 'harian')->name('jadwal.laporan.harian');
-                Route::get('/harian/export', 'harianExport')->name('jadwal.laporan.harian.export');
-                Route::get('/bulanan', 'bulanan')->name('jadwal.laporan.bulanan');
-                Route::get('/bulanan/export', 'bulananExport')->name('jadwal.laporan.bulanan.export');
+                Route::get('/', 'index')->name('jadwal.laporan.index');
+                Route::get('/export', 'export')->name('jadwal.laporan.export');
             });
     });
 
