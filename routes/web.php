@@ -123,6 +123,14 @@ use App\Http\Controllers\Crm\CustomerSegmentController;
 use App\Http\Controllers\Crm\CustomerTagController;
 use App\Http\Controllers\Crm\CustomerTaskController;
 use App\Http\Controllers\Crm\DealController;
+use App\Http\Controllers\Form\FormBranchController;
+use App\Http\Controllers\Form\FormCategoryController;
+use App\Http\Controllers\Form\FormContentController;
+use App\Http\Controllers\Form\FormFooterController;
+use App\Http\Controllers\Form\FormHeaderController;
+use App\Http\Controllers\Form\FormSettingController;
+use App\Http\Controllers\Form\FormSubmissionController;
+use App\Http\Controllers\Form\PublicFormController;
 use App\Http\Controllers\Jadwal\JadwalBranchController;
 use App\Http\Controllers\Jadwal\JadwalMataPelajaranController;
 use App\Http\Controllers\Jadwal\JadwalPengajarController;
@@ -192,6 +200,93 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
     // it regardless of package/menu-access status, same as the rest of
     // the Dashboard shell.
     Route::get('/summary', [DashboardController::class, 'summary'])->name('dashboard.summary');
+
+    // Fitur "Form" -- form builder Google-Forms-style per branch, lihat
+    // App\Http\Controllers\Form\*. Diletakkan SEBELUM grup 'jadwal' di
+    // bawah supaya urutannya sama dengan sidebar: Dashboard, Form, Jadwal
+    // (lihat resources/views/layouts/partials/menu.blade.php). Sama
+    // seperti grup 'jadwal': bukan bagian dari langganan paket 'chat',
+    // jadi TANPA 'active.package', cuma 'menu.access' sebagai backstop.
+    //
+    // Halaman PUBLIK pengisi form (app.konexa.id/{slug}) TIDAK ada di
+    // sini -- itu rute top-level tanpa auth, didaftarkan PALING BAWAH
+    // file ini (setelah require auth.php) supaya /{slug} tidak pernah
+    // menang lawan /login, /register, dst.
+    Route::prefix('form')->middleware(['menu.access'])->group(function () {
+        // Drill-down: Branch -> Form Category -> Form Header -> Form
+        // Content -> Form Footer -> Form Setting (pola sama persis
+        // dengan drill-down 'jadwal' di bawah).
+        Route::get('branch', [FormBranchController::class, 'index'])->name('form.branch.index');
+
+        Route::prefix('category')
+            ->controller(FormCategoryController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('form.category.index');
+                Route::get('/create', 'create')->name('form.category.create');
+                Route::post('/', 'store')->name('form.category.store');
+                Route::get('/{id}/edit', 'edit')->name('form.category.edit');
+                Route::put('/{id}', 'update')->name('form.category.update');
+                Route::delete('/{id}', 'destroy')->name('form.category.destroy');
+                // Tombol "Copy" di index -- deep-clone seluruh rangkaian
+                // category ini (header -> content/footer/setting-nya).
+                Route::post('/{id}/duplicate', 'duplicate')->name('form.category.duplicate');
+            });
+
+        Route::prefix('category/{formCategory}/header')
+            ->controller(FormHeaderController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('form.header.index');
+                Route::get('/create', 'create')->name('form.header.create');
+                Route::post('/', 'store')->name('form.header.store');
+                Route::get('/{id}/edit', 'edit')->name('form.header.edit');
+                Route::put('/{id}', 'update')->name('form.header.update');
+                Route::delete('/{id}', 'destroy')->name('form.header.destroy');
+                // Tombol "Regenerate URL & QR" -- ganti slug (jadi URL/QR
+                // publik lama tidak berlaku lagi), lihat controller method-nya.
+                Route::post('/{id}/regenerate-slug', 'regenerateSlug')->name('form.header.regenerate-slug');
+            });
+
+        // Builder pertanyaan -- JSON CRUD (bukan Blade create/edit
+        // terpisah), lihat App\Http\Controllers\Form\
+        // FormContentController's docblock.
+        Route::prefix('header/{formHeader}/content')
+            ->controller(FormContentController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('form.content.index');
+                Route::get('/list', 'list')->name('form.content.list');
+                Route::post('/', 'store')->name('form.content.store');
+                Route::put('/{content}', 'update')->name('form.content.update');
+                Route::delete('/{content}', 'destroy')->name('form.content.destroy');
+            });
+
+        Route::prefix('header/{formHeader}/footer')
+            ->controller(FormFooterController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('form.footer.index');
+                Route::get('/create', 'create')->name('form.footer.create');
+                Route::post('/', 'store')->name('form.footer.store');
+                Route::get('/{id}/edit', 'edit')->name('form.footer.edit');
+                Route::put('/{id}', 'update')->name('form.footer.update');
+                Route::delete('/{id}', 'destroy')->name('form.footer.destroy');
+            });
+
+        Route::prefix('header/{formHeader}/setting')
+            ->controller(FormSettingController::class)
+            ->group(function () {
+                Route::get('/', 'edit')->name('form.setting.edit');
+                Route::put('/', 'update')->name('form.setting.update');
+            });
+
+        // Daftar siapa saja yang sudah submit form ini -- lihat
+        // App\Http\Controllers\Form\FormSubmissionController's docblock.
+        Route::prefix('header/{formHeader}/submission')
+            ->controller(FormSubmissionController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('form.submission.index');
+                Route::get('/{id}', 'show')->name('form.submission.show');
+                Route::delete('/{id}', 'destroy')->name('form.submission.destroy');
+            });
+    });
 
     // Fitur "Jadwal" -- jadwal kelas kursus, generik lintas bidang
     // pendidikan (musik, bahasa, dll.), lihat App\Http\Controllers\
@@ -1599,3 +1694,17 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
 });
 
 require __DIR__ . '/auth.php';
+
+// Halaman publik pengisi Form (fitur Form, lihat grup route 'form' di
+// atas untuk sisi admin-nya) -- app.konexa.id/{slug}, TANPA auth, sama
+// pola dengan /dokumentasi. SENGAJA PALING BAWAH file ini: {slug} cocok
+// dengan APA SAJA di segmen pertama URL, jadi kalau didaftarkan lebih
+// awal dia bisa "mencuri" request yang seharusnya milik /login,
+// /dashboard, dst. Laravel mencocokkan rute sesuai urutan pendaftaran,
+// jadi taruh di paling akhir menjamin setiap rute spesifik lain (di
+// atas, termasuk yang dari auth.php) selalu menang duluan. Lihat juga
+// App\Http\Controllers\Form\FormHeaderController::RESERVED_SLUGS
+// (pertahanan lapis kedua di sisi pembuatan slug).
+Route::get('/{slug}', [PublicFormController::class, 'show'])->name('form.public.show');
+Route::post('/{slug}', [PublicFormController::class, 'store'])->name('form.public.store');
+

@@ -54,6 +54,17 @@ class BranchOffice extends Model
         return $this->hasMany(JadwalMataPelajaran::class, 'branch_office_id');
     }
 
+    /**
+     * Form Category milik fitur Form yang di-set ke branch ini --
+     * dipakai App\Http\Controllers\Form\FormBranchController untuk
+     * kolom jumlah di index-nya, pola sama persis dengan
+     * jadwalMataPelajarans() di atas.
+     */
+    public function formCategories()
+    {
+        return $this->hasMany(FormCategory::class, 'branch_office_id');
+    }
+
     public function units()
     {
         return $this->hasMany(BranchOfficeUnit::class);

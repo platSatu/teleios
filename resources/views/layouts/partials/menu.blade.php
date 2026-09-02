@@ -35,6 +35,42 @@
                 <li class="pe-menu-title">Apps</li>
 
                 {{--
+                    Menu "Form" -- form builder Google-Forms-style per
+                    branch, lihat App\Http\Controllers\Form\*.
+                    Diletakkan SETELAH "Dashboards" dan SEBELUM "Jadwal"
+                    (urutan: Dashboard, Form, Jadwal) sesuai spek fitur
+                    ini. Sama seperti menu Jadwal di bawah: TIDAK
+                    dibungkus "$hasActivePackage" (bukan bagian
+                    langganan Chat), App\Http\Middleware\
+                    EnsureMenuAccess tetap backstop di level route.
+                    Cuma 2 level teratas (Branch, Category) yang
+                    langsung ada di sidebar -- Header/Content/Footer/
+                    Setting dibuka lewat tombol drill-down per baris,
+                    sama seperti Jadwal.
+                --}}
+                <li class="pe-slide pe-has-sub">
+                    <a href="#collapseForm" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
+                        aria-controls="collapseForm">
+                        <i class="uil uil-file-alt pe-nav-icon"></i>
+                        <span class="pe-nav-content">Form</span>
+                        <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
+                        <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
+                    </a>
+                    <ul class="pe-slide-menu collapse" id="collapseForm">
+                        <li class="pe-slide-item">
+                            <a href="{{ route('form.branch.index') }}" class="pe-nav-link">
+                                Branch
+                            </a>
+                        </li>
+                        <li class="pe-slide-item">
+                            <a href="{{ route('form.category.index') }}" class="pe-nav-link">
+                                Form Category
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+
+                {{--
                     Menu "Jadwal" -- jadwal kelas kursus, generik lintas
                     bidang pendidikan (musik, bahasa, dll.), lihat
                     App\Http\Controllers\Jadwal\*. Diletakkan di atas
