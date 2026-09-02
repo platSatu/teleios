@@ -34,10 +34,10 @@
                     <table class="table table-centered table-hover align-middle mb-0">
                         <thead class="table-light">
                             <tr>
-                                <th>Nama Branch</th>
-                                <th>Status</th>
-                                <th>Jumlah Mata Pelajaran / Bidang</th>
-                                <th class="text-end">Aksi</th>
+                                <th class="text-nowrap">Nama Branch</th>
+                                <th class="text-nowrap">Status</th>
+                                <th class="text-nowrap">Jumlah Mata Pelajaran / Bidang</th>
+                                <th class="text-center text-nowrap">Aksi</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -49,16 +49,16 @@
                                     </td>
                                     <td>{{ $branch->jadwal_mata_pelajaran_count }}</td>
                                     <td class="text-end text-nowrap">
-                                        <a href="{{ route('jadwal.mata-pelajaran.index', ['branch_office_id' => $branch->id]) }}" class="btn btn-sm btn-light">
+                                        <a href="{{ route('jadwal.mata-pelajaran.index', ['branch_office_id' => $branch->id]) }}" class="btn btn-sm btn-outline-primary">
                                             Lihat Mata Pelajaran / Bidang
                                         </a>
                                         <a href="{{ route('jadwal.mata-pelajaran.create', ['branch_office_id' => $branch->id]) }}" class="btn btn-sm btn-outline-primary">
                                             <i class="ri-add-line"></i> Add Mata Pelajaran / Bidang
                                         </a>
-                                        <a href="{{ route('jadwal.ruangan.index', ['branch_office_id' => $branch->id]) }}" class="btn btn-sm btn-light">
+                                        <a href="{{ route('jadwal.ruangan.index', ['branch_office_id' => $branch->id]) }}" class="btn btn-sm btn-outline-primary">
                                             <i class="ri-door-open-line"></i> Ruangan
                                         </a>
-                                        <a href="{{ route('jadwal.branch-settings.edit', $branch->id) }}" class="btn btn-sm btn-light">
+                                        <a href="{{ route('jadwal.branch-settings.edit', $branch->id) }}" class="btn btn-sm btn-outline-primary">
                                             <i class="ri-time-line"></i> Jam Operasional
                                         </a>
                                     </td>
