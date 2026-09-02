@@ -47,19 +47,24 @@
                                     <td>
                                         <span class="badge {{ $branch->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $branch->status }}</span>
                                     </td>
-                                    <td class="text-center">{{ $branch->jadwal_mata_pelajaran_count }}</td>
+                                    <td class="text-center">
+                                        <a href="{{ route('jadwal.mata-pelajaran.index', ['branch_office_id' => $branch->id]) }}"
+                                            class="fw-semibold text-decoration-none" title="Lihat Mata Pelajaran / Bidang">
+                                            {{ $branch->jadwal_mata_pelajaran_count }}
+                                        </a>
+                                    </td>
                                     <td class="text-end text-nowrap">
-                                        <a href="{{ route('jadwal.mata-pelajaran.index', ['branch_office_id' => $branch->id]) }}" class="btn btn-sm btn-outline-primary">
-                                            Lihat Mata Pelajaran / Bidang
+                                        <a href="{{ route('jadwal.mata-pelajaran.create', ['branch_office_id' => $branch->id]) }}"
+                                            class="btn btn-sm btn-outline-primary" title="Add Mata Pelajaran / Bidang" aria-label="Add Mata Pelajaran / Bidang">
+                                            <i class="ri-add-line"></i>
                                         </a>
-                                        <a href="{{ route('jadwal.mata-pelajaran.create', ['branch_office_id' => $branch->id]) }}" class="btn btn-sm btn-outline-primary">
-                                            <i class="ri-add-line"></i> Add Mata Pelajaran / Bidang
+                                        <a href="{{ route('jadwal.ruangan.index', ['branch_office_id' => $branch->id]) }}"
+                                            class="btn btn-sm btn-outline-primary" title="Ruangan" aria-label="Ruangan">
+                                            <i class="ri-door-open-line"></i>
                                         </a>
-                                        <a href="{{ route('jadwal.ruangan.index', ['branch_office_id' => $branch->id]) }}" class="btn btn-sm btn-outline-primary">
-                                            <i class="ri-door-open-line"></i> Ruangan
-                                        </a>
-                                        <a href="{{ route('jadwal.branch-settings.edit', $branch->id) }}" class="btn btn-sm btn-outline-primary">
-                                            <i class="ri-time-line"></i> Jam Operasional
+                                        <a href="{{ route('jadwal.branch-settings.edit', $branch->id) }}"
+                                            class="btn btn-sm btn-outline-primary" title="Jam Operasional" aria-label="Jam Operasional">
+                                            <i class="ri-time-line"></i>
                                         </a>
                                     </td>
                                 </tr>
