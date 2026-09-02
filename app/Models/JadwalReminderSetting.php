@@ -70,6 +70,9 @@ class JadwalReminderSetting extends Model
         'remind_value',
         'remind_unit',
         'remind_target',
+        'remind_notify_pengajar',
+        'wa_message_template_id_pengajar',
+        'pengajar_request_keyword',
         'reschedule_notify_pengajar',
         'reschedule_notify_requester',
         'reschedule_notify_admin',
@@ -80,6 +83,7 @@ class JadwalReminderSetting extends Model
     protected $casts = [
         'enabled' => 'boolean',
         'remind_value' => 'integer',
+        'remind_notify_pengajar' => 'boolean',
         'reschedule_notify_pengajar' => 'boolean',
         'reschedule_notify_requester' => 'boolean',
         'reschedule_notify_admin' => 'boolean',
@@ -93,6 +97,12 @@ class JadwalReminderSetting extends Model
     public function waMessageTemplate(): BelongsTo
     {
         return $this->belongsTo(WaMessageTemplate::class);
+    }
+
+    /** Template rekap jadwal untuk PENGAJAR (H-1 otomatis & request manual by WA) -- lihat spec Jadwal v2 poin 9/10. */
+    public function waMessageTemplatePengajar(): BelongsTo
+    {
+        return $this->belongsTo(WaMessageTemplate::class, 'wa_message_template_id_pengajar');
     }
 
     public function waMessageTemplateRescheduleApproved(): BelongsTo

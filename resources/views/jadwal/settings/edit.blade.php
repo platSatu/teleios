@@ -124,10 +124,59 @@
                         <hr class="my-4">
 
                         <div class="mb-3">
-                            <h5 class="mb-1">Notifikasi Balasan Reschedule</h5>
+                            <h5 class="mb-1">Reminder ke Pengajar (Jadwal v2)</h5>
                             <p class="text-muted mb-0">
-                                Saat staff menyetujui/menolak permintaan ubah jadwal (menu Reschedule Requests), pilih siapa saja
-                                yang otomatis dapat notifikasi WA-nya. Bisa dicentang lebih dari satu sekaligus.
+                                Rekap jadwal mengajar H-1 (otomatis tiap sore) dan lewat request manual pengajar via WA. Pakai
+                                device pengirim yang sama dengan pengaturan di atas -- tidak ada device/nomor terpisah.
+                            </p>
+                        </div>
+
+                        <div class="form-check form-switch mb-3">
+                            <input type="checkbox" name="remind_notify_pengajar" value="1" id="remindNotifyPengajar" class="form-check-input"
+                                @checked(old('remind_notify_pengajar', $setting->remind_notify_pengajar ?? false))>
+                            <label class="form-check-label" for="remindNotifyPengajar">Kirim rekap H-1 otomatis ke pengajar tiap sore</label>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Template Pesan Rekap Pengajar (opsional)</label>
+                                <select name="wa_message_template_id_pengajar" class="form-select @error('wa_message_template_id_pengajar') is-invalid @enderror">
+                                    <option value="">- Tanpa Template (pakai pesan default) -</option>
+                                    @foreach ($templates as $template)
+                                        <option value="{{ $template->id }}" @selected(old('wa_message_template_id_pengajar', $setting->wa_message_template_id_pengajar ?? '') == $template->id)>
+                                            {{ $template->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                @error('wa_message_template_id_pengajar')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                                <div class="form-text">
+                                    Tag: <code>@{{nama_pengajar}}</code>, <code>@{{tanggal}}</code> / <code>@{{rentang_tanggal}}</code>,
+                                    <code>@{{jumlah_sesi}}</code>, <code>@{{daftar_sesi}}</code>, <code>@{{nama_perusahaan}}</code>.
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Kata Kunci Request Jadwal via WA</label>
+                                <input type="text" name="pengajar_request_keyword" class="form-control @error('pengajar_request_keyword') is-invalid @enderror"
+                                    value="{{ old('pengajar_request_keyword', $setting->pengajar_request_keyword ?? 'jadwal') }}" maxlength="50">
+                                @error('pengajar_request_keyword')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                                <div class="form-text">
+                                    Kata yang diketik pengajar di WA (persis, tanpa embel-embel lain) untuk minta rekap jadwal minggu ini kapan saja.
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <div class="mb-3">
+                            <h5 class="mb-1">Notifikasi Perubahan Jadwal</h5>
+                            <p class="text-muted mb-0">
+                                Saat staff menyetujui/menolak permintaan ubah jadwal (menu Reschedule Requests), ATAU saat admin
+                                mengubah jam/pengajar langsung lewat form Edit Jadwal Kelas, pilih siapa saja yang otomatis dapat
+                                notifikasi WA-nya. Bisa dicentang lebih dari satu sekaligus.
                             </p>
                         </div>
 
@@ -140,7 +189,7 @@
                             <div class="form-check form-switch">
                                 <input type="checkbox" name="reschedule_notify_pengajar" value="1" id="rescheduleNotifyPengajar" class="form-check-input"
                                     @checked(old('reschedule_notify_pengajar', $setting->reschedule_notify_pengajar ?? false))>
-                                <label class="form-check-label" for="rescheduleNotifyPengajar">Pengajar yang bersangkutan</label>
+                                <label class="form-check-label" for="rescheduleNotifyPengajar">Pengajar yang bersangkutan (termasuk saat admin edit jadwal langsung)</label>
                             </div>
                             <div class="form-check form-switch">
                                 <input type="checkbox" name="reschedule_notify_admin" value="1" id="rescheduleNotifyAdmin" class="form-check-input"

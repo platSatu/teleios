@@ -138,6 +138,11 @@ use App\Http\Controllers\Jadwal\JadwalStudentController;
 use App\Http\Controllers\Jadwal\JadwalKelasController;
 use App\Http\Controllers\Jadwal\JadwalReminderSettingController;
 use App\Http\Controllers\Jadwal\JadwalRescheduleRequestController;
+use App\Http\Controllers\Jadwal\JadwalBranchSettingController;
+use App\Http\Controllers\Jadwal\JadwalRuanganController;
+use App\Http\Controllers\Jadwal\JadwalKategoriController;
+use App\Http\Controllers\Jadwal\JadwalRutinController;
+use App\Http\Controllers\Jadwal\JadwalLaporanController;
 use App\Http\Controllers\Chat\CategoryPhoneBookController;
 use App\Http\Controllers\Chat\PhoneBookController;
 use App\Http\Controllers\Chat\WaGroupController;
@@ -305,6 +310,27 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
         // project's University -> Album -> Photo).
         Route::get('branch', [JadwalBranchController::class, 'index'])->name('jadwal.branch.index');
 
+        // Jam Operasional per branch (Jadwal v2, spec poin 1) -- singleton
+        // per branch_office_id, lihat JadwalBranchSettingController.
+        Route::prefix('branch-settings')
+            ->controller(JadwalBranchSettingController::class)
+            ->group(function () {
+                Route::get('/{branchOfficeId}/edit', 'edit')->name('jadwal.branch-settings.edit');
+                Route::put('/{branchOfficeId}', 'update')->name('jadwal.branch-settings.update');
+            });
+
+        // Ruangan per branch (Jadwal v2, spec poin 2).
+        Route::prefix('ruangan')
+            ->controller(JadwalRuanganController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('jadwal.ruangan.index');
+                Route::get('/create', 'create')->name('jadwal.ruangan.create');
+                Route::post('/', 'store')->name('jadwal.ruangan.store');
+                Route::get('/{id}/edit', 'edit')->name('jadwal.ruangan.edit');
+                Route::put('/{id}', 'update')->name('jadwal.ruangan.update');
+                Route::delete('/{id}', 'destroy')->name('jadwal.ruangan.destroy');
+            });
+
         Route::prefix('mata-pelajaran')
             ->controller(JadwalMataPelajaranController::class)
             ->group(function () {
@@ -314,6 +340,18 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::get('/{id}/edit', 'edit')->name('jadwal.mata-pelajaran.edit');
                 Route::put('/{id}', 'update')->name('jadwal.mata-pelajaran.update');
                 Route::delete('/{id}', 'destroy')->name('jadwal.mata-pelajaran.destroy');
+            });
+
+        // Kategori di bawah Kelas/Mata Pelajaran (Jadwal v2, spec poin 3).
+        Route::prefix('kategori')
+            ->controller(JadwalKategoriController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('jadwal.kategori.index');
+                Route::get('/create', 'create')->name('jadwal.kategori.create');
+                Route::post('/', 'store')->name('jadwal.kategori.store');
+                Route::get('/{id}/edit', 'edit')->name('jadwal.kategori.edit');
+                Route::put('/{id}', 'update')->name('jadwal.kategori.update');
+                Route::delete('/{id}', 'destroy')->name('jadwal.kategori.destroy');
             });
 
         // Read-only -- tidak ada tabel/CRUD sendiri, lihat
@@ -331,6 +369,19 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::delete('/{id}', 'destroy')->name('jadwal.student.destroy');
             });
 
+        // Jadwal Rutin milik satu Student (Jadwal v2, spec poin 4) --
+        // cetakan jadwal mingguan berulang, lihat JadwalRutinController.
+        Route::prefix('rutin')
+            ->controller(JadwalRutinController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('jadwal.rutin.index');
+                Route::get('/create', 'create')->name('jadwal.rutin.create');
+                Route::post('/', 'store')->name('jadwal.rutin.store');
+                Route::get('/{id}/edit', 'edit')->name('jadwal.rutin.edit');
+                Route::put('/{id}', 'update')->name('jadwal.rutin.update');
+                Route::delete('/{id}', 'destroy')->name('jadwal.rutin.destroy');
+            });
+
         Route::prefix('kelas')
             ->controller(JadwalKelasController::class)
             ->group(function () {
@@ -343,6 +394,9 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 // Update cepat kehadiran dari index -- lihat
                 // JadwalKelasController::updateAttendance()'s docblock.
                 Route::patch('/{id}/attendance', 'updateAttendance')->name('jadwal.kelas.attendance.update');
+                // Reminder manual by admin (Jadwal v2 spec poin 10) --
+                // lihat JadwalKelasController::sendPengajarReminder().
+                Route::post('/{id}/kirim-reminder-pengajar', 'sendPengajarReminder')->name('jadwal.kelas.pengajar-reminder.send');
             });
 
         // Pengaturan pengingat WA Jadwal (Tahap 2 integrasi Chat<->Jadwal)
@@ -375,6 +429,17 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::get('/', 'index')->name('jadwal.reschedule-requests.index');
                 Route::post('/{id}/approve', 'approve')->name('jadwal.reschedule-requests.approve');
                 Route::post('/{id}/reject', 'reject')->name('jadwal.reschedule-requests.reject');
+            });
+
+        // Laporan Harian & Bulanan (Jadwal v2, spec poin 12 & 13) --
+        // lihat JadwalLaporanController.
+        Route::prefix('laporan')
+            ->controller(JadwalLaporanController::class)
+            ->group(function () {
+                Route::get('/harian', 'harian')->name('jadwal.laporan.harian');
+                Route::get('/harian/export', 'harianExport')->name('jadwal.laporan.harian.export');
+                Route::get('/bulanan', 'bulanan')->name('jadwal.laporan.bulanan');
+                Route::get('/bulanan/export', 'bulananExport')->name('jadwal.laporan.bulanan.export');
             });
     });
 

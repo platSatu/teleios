@@ -55,6 +55,12 @@
                                         <a href="{{ route('jadwal.mata-pelajaran.create', ['branch_office_id' => $branch->id]) }}" class="btn btn-sm btn-outline-primary">
                                             <i class="ri-add-line"></i> Add Mata Pelajaran / Bidang
                                         </a>
+                                        <a href="{{ route('jadwal.ruangan.index', ['branch_office_id' => $branch->id]) }}" class="btn btn-sm btn-light">
+                                            <i class="ri-door-open-line"></i> Ruangan
+                                        </a>
+                                        <a href="{{ route('jadwal.branch-settings.edit', $branch->id) }}" class="btn btn-sm btn-light">
+                                            <i class="ri-time-line"></i> Jam Operasional
+                                        </a>
                                     </td>
                                 </tr>
                             @empty

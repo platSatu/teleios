@@ -119,6 +119,9 @@
                                         <span class="badge {{ $mataPelajaran->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $mataPelajaran->status }}</span>
                                     </td>
                                     <td class="text-nowrap text-end">
+                                        <a href="{{ route('jadwal.kategori.index', ['jadwal_mata_pelajaran_id' => $mataPelajaran->id]) }}" class="btn btn-sm btn-light">
+                                            <i class="ri-price-tag-3-line"></i> Kategori
+                                        </a>
                                         <a href="{{ route('jadwal.pengajar.index', ['jadwal_mata_pelajaran_id' => $mataPelajaran->id]) }}" class="btn btn-sm btn-outline-primary">
                                             <i class="ri-add-line"></i> Add Pengajar
                                         </a>

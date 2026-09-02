@@ -21,6 +21,17 @@ use Illuminate\Database\Eloquent\Model;
  * pengajar+mata-pelajaran sama sebagai satu grup (sel Pengajar/Mata
  * Pelajaran digabung ala Excel) walau datanya tetap 1 baris per
  * student -- bukan restrukturisasi ke "kelas grup".
+ *
+ * **Jadwal v2** (CLAUDE.md item #15) menambahkan: baris ini bisa jadi
+ * hasil AUTO-GENERATE dari satu App\Models\JadwalRutin
+ * (jadwal_rutin_id, nullable -- null berarti dibuat manual seperti
+ * sebelumnya), dengan kolom SNAPSHOT harga/persentase/durasi/kategori/
+ * ruangan yang di-copy dari Kategori pada saat generate (lihat migration
+ * add_jadwal_v2_columns_to_jadwal_kelas_table.php's docblock untuk
+ * kenapa snapshot, bukan selalu baca live). `attendance_status` juga
+ * bertambah 1 opsi: ATTENDANCE_IZIN ("Izin/Sakit -- dapat pengganti").
+ * `pengganti_dari_sesi_id` menandai baris ini sebagai SESI PENGGANTI
+ * untuk sesi lain yang izin/sakit.
  */
 class JadwalKelas extends Model
 {
@@ -36,9 +47,20 @@ class JadwalKelas extends Model
 
     public const ATTENDANCE_HADIR = 'hadir';
 
+    /** Tidak hadir tanpa keterangan -- hangus, TIDAK ada pengganti. Pengajar tetap dibayar penuh (tetap hadir mengajar). */
     public const ATTENDANCE_TIDAK_HADIR = 'tidak_hadir';
 
-    public const ATTENDANCE_STATUSES = [self::ATTENDANCE_HADIR, self::ATTENDANCE_TIDAK_HADIR];
+    /** Izin/sakit -- berhak dapat sesi pengganti (lihat pengganti_dari_sesi_id). */
+    public const ATTENDANCE_IZIN = 'izin';
+
+    public const ATTENDANCE_STATUSES = [
+        self::ATTENDANCE_HADIR,
+        self::ATTENDANCE_TIDAK_HADIR,
+        self::ATTENDANCE_IZIN,
+    ];
+
+    /** attendance_status yang pengajarnya tetap dibayar penuh walau murid tidak hadir. */
+    public const ATTENDANCE_TETAP_DIBAYAR = [self::ATTENDANCE_HADIR, self::ATTENDANCE_TIDAK_HADIR];
 
     protected $fillable = [
         'company_id',
@@ -46,8 +68,16 @@ class JadwalKelas extends Model
         'jadwal_mata_pelajaran_id',
         'pengajar_id',
         'student_id',
+        'jadwal_rutin_id',
+        'jadwal_kategori_id',
+        'jadwal_ruangan_id',
         'start_time',
         'end_time',
+        'duration_minutes',
+        'harga_sesi',
+        'persentase_company',
+        'persentase_pengajar',
+        'pengganti_dari_sesi_id',
         'status',
         'attendance_status',
         'attendance_notes',
@@ -57,6 +87,10 @@ class JadwalKelas extends Model
     protected $casts = [
         'start_time' => 'datetime',
         'end_time' => 'datetime',
+        'duration_minutes' => 'integer',
+        'harga_sesi' => 'decimal:2',
+        'persentase_company' => 'decimal:2',
+        'persentase_pengajar' => 'decimal:2',
     ];
 
     public function company()
@@ -84,6 +118,33 @@ class JadwalKelas extends Model
         return $this->belongsTo(JadwalStudent::class, 'student_id');
     }
 
+    public function jadwalRutin()
+    {
+        return $this->belongsTo(JadwalRutin::class, 'jadwal_rutin_id');
+    }
+
+    public function kategori()
+    {
+        return $this->belongsTo(JadwalKategori::class, 'jadwal_kategori_id');
+    }
+
+    public function ruangan()
+    {
+        return $this->belongsTo(JadwalRuangan::class, 'jadwal_ruangan_id');
+    }
+
+    /** Sesi ASLI yang digantikan oleh baris ini (kalau baris ini adalah sesi pengganti). */
+    public function penggantiDariSesi()
+    {
+        return $this->belongsTo(self::class, 'pengganti_dari_sesi_id');
+    }
+
+    /** Sesi PENGGANTI yang dibuat dari baris ini (kalau baris ini yang izin/sakit). */
+    public function sesiPengganti()
+    {
+        return $this->hasOne(self::class, 'pengganti_dari_sesi_id');
+    }
+
     /**
      * Jejak klaim/kirim pengingat WA untuk baris ini -- lihat
      * App\Models\JadwalKelasReminderLog & App\Console\Commands\
@@ -94,5 +155,25 @@ class JadwalKelas extends Model
     public function reminderLog()
     {
         return $this->hasOne(JadwalKelasReminderLog::class);
+    }
+
+    /** Nominal fee bagian company untuk sesi ini, dari snapshot harga_sesi/persentase_company. */
+    public function feeCompany(): float
+    {
+        if ($this->harga_sesi === null || $this->persentase_company === null) {
+            return 0.0;
+        }
+
+        return round(((float) $this->harga_sesi) * ((float) $this->persentase_company) / 100, 2);
+    }
+
+    /** Nominal fee bagian pengajar untuk sesi ini, dari snapshot harga_sesi/persentase_pengajar. Dihitung penuh selama attendance_status ada di ATTENDANCE_TETAP_DIBAYAR. */
+    public function feePengajar(): float
+    {
+        if ($this->harga_sesi === null || $this->persentase_pengajar === null) {
+            return 0.0;
+        }
+
+        return round(((float) $this->harga_sesi) * ((float) $this->persentase_pengajar) / 100, 2);
     }
 }

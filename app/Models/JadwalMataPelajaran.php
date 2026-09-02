@@ -49,6 +49,12 @@ class JadwalMataPelajaran extends Model
         return $this->hasMany(JadwalKelas::class, 'jadwal_mata_pelajaran_id');
     }
 
+    /** Daftar Kategori (Jadwal v2, CLAUDE.md item #15) di bawah Kelas ini. */
+    public function kategoris()
+    {
+        return $this->hasMany(JadwalKategori::class, 'jadwal_mata_pelajaran_id');
+    }
+
     /**
      * Public URL of `image`, or null when none is set — see
      * App\Helpers\JadwalImageUploader::url().

@@ -113,6 +113,16 @@
                                 Jadwal Kelas
                             </a>
                         </li>
+                        <li class="pe-slide-item">
+                            <a href="{{ route('jadwal.laporan.harian') }}" class="pe-nav-link">
+                                Laporan Harian
+                            </a>
+                        </li>
+                        <li class="pe-slide-item">
+                            <a href="{{ route('jadwal.laporan.bulanan') }}" class="pe-nav-link">
+                                Laporan Bulanan
+                            </a>
+                        </li>
                         {{-- Cuma tampil kalau company punya package aktif
                                  kategori Chat/WhatsApp secara spesifik --
                                  BUKAN $hasActivePackage yang dipakai menu

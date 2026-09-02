@@ -2,11 +2,15 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Concerns\ResolvesCompanyContext;
 use App\Http\Controllers\Controller;
 use App\Jobs\SendAiBotReply;
 use App\Jobs\SendAutoReplyMessage;
 use App\Jobs\SendChatbotFlowMessages;
+use App\Jobs\SendJadwalPengajarWeeklyRecapReply;
 use App\Jobs\SendOptOutConfirmationMessage;
+use App\Models\Company;
+use App\Models\JadwalReminderSetting;
 use App\Models\User;
 use App\Models\WaAiBot;
 use App\Models\WaMessageAutoReply;
@@ -15,6 +19,7 @@ use App\Services\Chat\BroadcastOptOutService;
 use App\Services\Chat\ChatbotFlowService;
 use App\Services\Chat\ConversationService;
 use App\Services\Chat\DeviceDirectory;
+use App\Support\PhoneNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -66,6 +71,8 @@ use Throwable;
  */
 class WaIncomingMessageWebhookController extends Controller
 {
+    use ResolvesCompanyContext;
+
     /**
      * Matched as a whole message (trimmed, case-insensitive), not a
      * substring match, so an unrelated longer message that merely
@@ -155,6 +162,19 @@ class WaIncomingMessageWebhookController extends Controller
 
         if ($optOutResponse) {
             return $optOutResponse;
+        }
+
+        // Request rekap jadwal by pengajar (Jadwal v2, CLAUDE.md item
+        // #15 spec poin 9) -- dicek SETELAH opt-out (compliance selalu
+        // menang) tapi SEBELUM chatbot flow/keyword rule biasa, karena
+        // ini match yang sangat spesifik (nomor pengirim harus persis
+        // salah satu users.handphone company ybs) dan tidak seharusnya
+        // pernah "kalah" oleh flow/keyword customer yang kebetulan
+        // memakai kata kunci yang sama. Lihat tryJadwalPengajarKeyword().
+        $pengajarKeywordResponse = $this->tryJadwalPengajarKeyword($validated);
+
+        if ($pengajarKeywordResponse) {
+            return $pengajarKeywordResponse;
         }
 
         // Chat ops (status/SLA/auto-assignment) bookkeeping — see
@@ -309,6 +329,91 @@ class WaIncomingMessageWebhookController extends Controller
             'status' => 'matched (ai bot)',
             'ai_bot_id' => $bot->id,
         ]);
+    }
+
+    /**
+     * Kata kunci request rekap jadwal mingguan by pengajar (Jadwal v2,
+     * CLAUDE.md item #15 spec poin 9: "pengajar bisa request by wa,
+     * lihat jadwal nya buat seminggu"). Match SELURUH pesan (trim,
+     * case-insensitive, sama seperti tryOptOutKeyword() di bawah) --
+     * kata kuncinya sendiri diambil dari App\Models\JadwalReminderSetting::
+     * pengajar_request_keyword MILIK COMPANY device ini (default
+     * 'jadwal', tapi bisa diubah admin -- lihat class docblock
+     * JadwalReminderSetting untuk kenapa nothing hardcoded).
+     *
+     * Nomor pengirim dicocokkan (via App\Support\PhoneNumber::normalize())
+     * ke `handphone` salah satu anggota company ini (owner atau member,
+     * lihat companyTeamMembers()) -- kalau tidak ada yang cocok, pesan
+     * ini BUKAN dari pengajar company ini, jadi dibiarkan lanjut ke
+     * chain normal (chatbot flow/keyword/AI bot) alih-alih diam-diam
+     * ditelan.
+     *
+     * Returns null (falls through) kalau device tidak terhubung ke
+     * company mana pun, company belum mengatur pengaturan pengingat
+     * Jadwal sama sekali, kata kuncinya kosong, pesan tidak cocok kata
+     * kunci, atau nomor pengirim tidak dikenali sebagai pengajar.
+     *
+     * @param  array<string, mixed>  $validated
+     */
+    protected function tryJadwalPengajarKeyword(array $validated): ?JsonResponse
+    {
+        $companyId = $this->devices->companyFor($validated['device_id']);
+
+        if (! $companyId) {
+            return null;
+        }
+
+        $setting = JadwalReminderSetting::where('company_id', $companyId)->first();
+
+        if (! $setting || ! $setting->pengajar_request_keyword) {
+            return null;
+        }
+
+        $normalizedBody = mb_strtolower(trim($validated['body']));
+        $normalizedBody = trim($normalizedBody, ".!? \t\n\r");
+        $keyword = mb_strtolower(trim($setting->pengajar_request_keyword));
+
+        if ($keyword === '' || $normalizedBody !== $keyword) {
+            return null;
+        }
+
+        $phone = $validated['sender_phone'] ?? null;
+        $digits = $phone !== null && $phone !== '' ? preg_replace('/\D+/', '', $phone) : preg_replace('/\D+/', '', explode('@', $validated['chat_jid'])[0] ?? '');
+
+        if (! $digits) {
+            return null;
+        }
+
+        $company = Company::find($companyId);
+
+        if (! $company) {
+            return null;
+        }
+
+        $normalizedSender = PhoneNumber::normalize($digits);
+
+        $pengajar = $this->companyTeamMembers($company)->first(
+            fn (User $u) => $u->handphone && PhoneNumber::normalize($u->handphone) === $normalizedSender
+        );
+
+        if (! $pengajar) {
+            Log::info('jadwal-pengajar-keyword: kata kunci cocok tapi nomor pengirim tidak dikenali sebagai pengajar company ini, dilanjutkan ke chain normal', [
+                'company_id' => $companyId,
+                'sender_phone' => $normalizedSender,
+            ]);
+
+            return null;
+        }
+
+        Log::info('jadwal-pengajar-keyword: request rekap mingguan dikirim', [
+            'company_id' => $companyId,
+            'pengajar_id' => $pengajar->id,
+            'device_id' => $validated['device_id'],
+        ]);
+
+        SendJadwalPengajarWeeklyRecapReply::dispatch($companyId, $validated['device_id'], $validated['chat_jid'], $pengajar->id);
+
+        return response()->json(['status' => 'jadwal pengajar keyword matched', 'pengajar_id' => $pengajar->id]);
     }
 
     /**

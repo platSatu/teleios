@@ -69,4 +69,19 @@ class BranchOffice extends Model
     {
         return $this->hasMany(BranchOfficeUnit::class);
     }
+
+    /**
+     * Jam Operasional (Jadwal v2, CLAUDE.md item #15) -- satu baris per
+     * branch, lihat App\Models\JadwalBranchSetting.
+     */
+    public function jadwalBranchSetting()
+    {
+        return $this->hasOne(JadwalBranchSetting::class, 'branch_office_id');
+    }
+
+    /** Daftar Ruangan (Jadwal v2) milik branch ini. */
+    public function jadwalRuangans()
+    {
+        return $this->hasMany(JadwalRuangan::class, 'branch_office_id');
+    }
 }

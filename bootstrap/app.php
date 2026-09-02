@@ -46,6 +46,25 @@ return Application::configure(basePath: dirname(__DIR__))
             ->everyFiveMinutes()
             ->withoutOverlapping();
 
+        // Auto-generate sesi bulanan dari Jadwal Rutin (Jadwal v2,
+        // CLAUDE.md item #15 spec poin 6) -- lihat App\Console\Commands\
+        // GenerateJadwalRutinSesi. Jalan tanggal 1 tiap bulan jam 01:00
+        // untuk bulan BERJALAN (bulan yang baru saja mulai) -- idempotent
+        // (unique index jadwal_rutin_id+start_time), aman kalau admin
+        // juga generate manual/lebih awal via `php artisan
+        // jadwal:generate-sesi --month=YYYY-MM`.
+        $schedule->command('jadwal:generate-sesi')
+            ->monthlyOn(1, '01:00')
+            ->withoutOverlapping();
+
+        // H-1 rekap WA otomatis ke pengajar (Jadwal v2, spec poin 9) --
+        // lihat App\Console\Commands\DispatchJadwalPengajarDailyReminders.
+        // Sore hari supaya pengajar terima rekap besok pagi/sore ini
+        // juga, bukan tengah malam.
+        $schedule->command('jadwal:dispatch-pengajar-reminders')
+            ->dailyAt('19:00')
+            ->withoutOverlapping();
+
         // H-7/H-3/H-1/H0 package expiry reminder emails — see
         // App\Console\Commands\SendPackageExpiryReminders for the full
         // logic (idempotent per voucher+milestone, skips already-renewed

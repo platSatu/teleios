@@ -104,6 +104,9 @@
                                         <span class="badge {{ $student->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $student->status }}</span>
                                     </td>
                                     <td class="text-end">
+                                        <a href="{{ route('jadwal.rutin.index', ['student_id' => $student->id]) }}" class="btn btn-sm btn-light">
+                                            <i class="ri-repeat-line"></i> Jadwal Rutin
+                                        </a>
                                         <a href="{{ route('jadwal.kelas.create', [
                                             'branch_office_id' => $student->branch_office_id,
                                             'jadwal_mata_pelajaran_id' => $student->jadwal_mata_pelajaran_id,

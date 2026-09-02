@@ -65,4 +65,15 @@ class JadwalStudent extends Model
     {
         return $this->hasMany(JadwalKelas::class, 'student_id');
     }
+
+    /**
+     * Jadwal Rutin (Jadwal v2, CLAUDE.md item #15) -- murid ini bisa
+     * punya BANYAK baris (mis. Senin Piano Classic, Selasa Drum
+     * Reguler), lihat App\Models\JadwalRutin. Menggantikan konsep lama
+     * "1 mata-pelajaran+1 pengajar per JadwalStudent" di atas.
+     */
+    public function jadwalRutins()
+    {
+        return $this->hasMany(JadwalRutin::class, 'student_id');
+    }
 }
