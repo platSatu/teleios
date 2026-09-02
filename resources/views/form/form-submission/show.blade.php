@@ -1,23 +1,7 @@
 @extends('layouts.dashboard')
 
 @section('content')
-<style>
-    @media print {
-        .app-header, #sidebar, .main-breadcrumb, .no-print {
-            display: none !important;
-        }
-
-        main.app-wrapper {
-            margin: 0 !important;
-        }
-
-        .submission-print-card {
-            max-width: 100% !important;
-            box-shadow: none !important;
-            border: none !important;
-        }
-    }
-</style>
+@include('layouts.partials.print')
 <div class="row">
     <div class="col-12">
 
@@ -55,7 +39,7 @@
 
         <div class="row justify-content-center">
             <div class="col-lg-8">
-                <div class="card border-0 shadow-sm submission-print-card">
+                <div class="card border-0 shadow-sm print-card">
                     <div class="card-body">
                         @forelse($submission->answers as $answer)
                             <div class="mb-4 pb-4 {{ !$loop->last ? 'border-bottom' : '' }}">

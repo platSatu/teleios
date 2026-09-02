@@ -1,29 +1,15 @@
 @extends('layouts.dashboard')
 
 @section('content')
+    @include('layouts.partials.print')
     <style>
         .invoice-card {
             max-width: 720px;
             margin: 0 auto;
         }
-
-        @media print {
-            .app-header, #sidebar, .main-breadcrumb, .no-print {
-                display: none !important;
-            }
-
-            main.app-wrapper {
-                margin: 0 !important;
-            }
-
-            .invoice-card {
-                max-width: 100% !important;
-                box-shadow: none !important;
-            }
-        }
     </style>
 
-    <div class="invoice-card">
+    <div class="invoice-card print-card">
         @if (session('success'))
             <div class="alert alert-success no-print">{{ session('success') }}</div>
         @endif
