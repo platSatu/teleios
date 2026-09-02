@@ -84,7 +84,7 @@
                                     </td>
                                     <td class="text-nowrap text-end">
                                         <a href="{{ route('form.header.index', $category->id) }}" class="btn btn-sm btn-outline-primary">
-                                            <i class="ri-add-line"></i> Lihat Form Header
+                                            <i class="ri-add-line"></i> Lihat Form
                                         </a>
                                         <form action="{{ route('form.category.duplicate', $category->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Duplikasi Form Category ini beserta seluruh Header/Content/Footer/Setting di dalamnya? Hasil copy akan berstatus Inactive.');">
                                             @csrf

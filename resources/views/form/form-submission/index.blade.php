@@ -46,7 +46,6 @@
                                     <th class="text-nowrap">{{ $summaryContent->name }}</th>
                                 @endif
                                 <th class="text-nowrap">Jumlah Jawaban</th>
-                                <th class="text-nowrap">IP</th>
                                 <th class="text-nowrap text-end">Aksi</th>
                             </tr>
                         </thead>
@@ -65,7 +64,6 @@
                                     <td class="text-nowrap">
                                         <span class="badge bg-light text-dark border fw-normal">{{ $submission->answers->count() }}</span>
                                     </td>
-                                    <td class="text-nowrap fs-12 text-muted">{{ $submission->ip_address ?? '-' }}</td>
                                     <td class="text-nowrap text-end">
                                         <a href="{{ route('form.submission.show', [$header->id, $submission->id]) }}" class="btn btn-sm btn-outline-primary">
                                             <i class="ri-eye-line"></i> Detail
@@ -79,7 +77,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="{{ $summaryContent ? 5 : 4 }}" class="text-center text-muted py-4">
+                                    <td colspan="{{ $summaryContent ? 4 : 3 }}" class="text-center text-muted py-4">
                                         Belum ada yang submit form ini.
                                         <a href="{{ route('form.public.show', $header->slug) }}" target="_blank">Lihat form publik</a>.
                                     </td>

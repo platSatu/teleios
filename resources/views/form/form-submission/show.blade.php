@@ -1,10 +1,27 @@
 @extends('layouts.dashboard')
 
 @section('content')
+<style>
+    @media print {
+        .app-header, #sidebar, .main-breadcrumb, .no-print {
+            display: none !important;
+        }
+
+        main.app-wrapper {
+            margin: 0 !important;
+        }
+
+        .submission-print-card {
+            max-width: 100% !important;
+            box-shadow: none !important;
+            border: none !important;
+        }
+    }
+</style>
 <div class="row">
     <div class="col-12">
 
-        <nav aria-label="breadcrumb" class="mb-2">
+        <nav aria-label="breadcrumb" class="mb-2 no-print">
             <ol class="breadcrumb mb-0">
                 <li class="breadcrumb-item"><a href="{{ route('form.branch.index') }}">Branch</a></li>
                 <li class="breadcrumb-item"><a href="{{ route('form.category.index', ['branch_office_id' => $header->branch_office_id]) }}">Form Category</a></li>
@@ -19,10 +36,12 @@
                 <h4 class="mb-1">Detail Submission</h4>
                 <p class="text-muted mb-0">
                     Dikirim {{ $submission->submitted_at?->translatedFormat('d M Y H:i') }}
-                    @if ($submission->ip_address) &middot; IP {{ $submission->ip_address }} @endif
                 </p>
             </div>
-            <div class="d-flex flex-wrap gap-2">
+            <div class="d-flex flex-wrap gap-2 no-print">
+                <button type="button" class="btn btn-primary" onclick="window.print()">
+                    <i class="ri-printer-line"></i> Print
+                </button>
                 <a href="{{ route('form.submission.index', $header->id) }}" class="btn btn-light">
                     <i class="ri-arrow-left-line"></i> Kembali ke Daftar
                 </a>
@@ -36,7 +55,7 @@
 
         <div class="row justify-content-center">
             <div class="col-lg-8">
-                <div class="card border-0 shadow-sm">
+                <div class="card border-0 shadow-sm submission-print-card">
                     <div class="card-body">
                         @forelse($submission->answers as $answer)
                             <div class="mb-4 pb-4 {{ !$loop->last ? 'border-bottom' : '' }}">

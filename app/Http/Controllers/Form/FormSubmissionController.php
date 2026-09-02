@@ -50,9 +50,18 @@ class FormSubmissionController extends Controller
         $header = $this->ownedHeaderOrFail($request, $formHeader);
 
         $submission = $header->submissions()
-            ->with(['answers' => fn ($q) => $q->with('formContent')->orderBy('created_at')])
+            ->with(['answers' => fn ($q) => $q->with('formContent')])
             ->whereKey($id)
             ->firstOrFail();
+
+        // Urutkan jawaban sesuai urutan pertanyaan di form aslinya
+        // (App\Models\FormContent::position), bukan urutan submit --
+        // supaya di halaman Detail & saat di-print, urutannya sama
+        // persis dengan yang dilihat pengisi form.
+        $submission->setRelation(
+            'answers',
+            $submission->answers->sortBy(fn ($answer) => $answer->formContent->position ?? PHP_INT_MAX)->values()
+        );
 
         return view('form.form-submission.show', compact('header', 'submission'));
     }
