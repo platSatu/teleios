@@ -302,10 +302,49 @@ class ProfileController extends Controller
     {
         $user = $request->user();
 
-        $validated = $request->validate([
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
             'name' => ['required', 'string', 'max:255'],
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            // Bare national number only (no leading 0, no '62' country
+            // code) — same shape/normalization as everywhere else this
+            // app collects a handphone (see Auth\AuthController::
+            // register() and User\Profile\CompanyUserController).
+            // Needed so the owner (and any user editing their own
+            // profile) has somewhere to set/fix this — Setting Users
+            // deliberately has no edit action on the owner's own row,
+            // and WhatsApp-based features (e.g. the "jadwal" keyword
+            // recap) silently no-op for anyone without a handphone set.
+            'handphone' => ['nullable', 'regex:/^[1-9][0-9]{9,13}$/'],
+        ], [
+            'handphone.regex' => 'Nomor WhatsApp harus 10-14 digit angka, tanpa awalan 0 atau kode negara 62 (contoh: 81286800080).',
         ]);
+
+        $validator->after(function ($validator) use ($request, $user) {
+            $raw = $request->input('handphone');
+
+            if (blank($raw) || $validator->errors()->has('handphone')) {
+                return;
+            }
+
+            $normalized = '62'.$raw;
+
+            $exists = \App\Models\User::where('handphone', $normalized)
+                ->where('id', '!=', $user->id)
+                ->exists();
+
+            if ($exists) {
+                $validator->errors()->add('handphone', 'Nomor WhatsApp ini sudah terdaftar untuk user lain.');
+            }
+        });
+
+        $validated = $validator->validate();
+
+        // Same normalization as everywhere else — see the field's
+        // validation comment above. An empty submission CLEARS the
+        // number (explicit null) rather than leaving whatever was
+        // there before untouched, so a wrong number can actually be
+        // removed from this form too.
+        $validated['handphone'] = filled($validated['handphone'] ?? null) ? '62'.$validated['handphone'] : null;
 
         if ($request->hasFile('image')) {
             // Remove the old photo first so changing avatars doesn't

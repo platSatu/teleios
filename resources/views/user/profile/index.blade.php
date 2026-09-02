@@ -207,6 +207,21 @@
                                     @enderror
                                 </div>
 
+                                <div class="mb-3">
+                                    <label for="handphone" class="form-label">Handphone (WhatsApp)</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">+62</span>
+                                        <input type="text" inputmode="numeric" name="handphone" id="handphone"
+                                            class="form-control @error('handphone') is-invalid @enderror"
+                                            value="{{ old('handphone', $user->handphone ? substr($user->handphone, 2) : '') }}"
+                                            placeholder="81234567890" maxlength="14">
+                                        @error('handphone')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+                                    <div class="form-text">Tanpa awalan 0 atau kode negara 62 -- cukup 10-14 digit setelahnya. Dipakai untuk fitur WhatsApp (mis. cek jadwal via kata kunci). Kosongkan untuk menghapus nomor.</div>
+                                </div>
+
                                 <div class="mb-4">
                                     <label for="email" class="form-label">Email</label>
                                     <input type="email" id="email" class="form-control" value="{{ $user->email }}"
