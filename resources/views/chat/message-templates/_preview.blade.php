@@ -226,15 +226,20 @@
     function renderMarkdown(text) {
         let safe = escapeHtml(text);
 
-        // Protect any {{variabel}} placeholder that's still unresolved
-        // (no "Contoh Nilai Variabel" filled in yet -- applyVariables()
-        // leaves it as literal "{{...}}" text) from the token replacements
-        // below. Variable names routinely contain "_" (nama_pengajar,
-        // rentang_tanggal, ...), and without this guard that underscore
-        // gets paired up with the next one found ANYWHERE later in the
-        // message -- across other placeholders too -- and both get
-        // mangled into italic, chopping the "{{"/"}}" braces off along
-        // the way. The real WhatsApp message never has this problem
+        // Protect any un-substituted double-curly-brace variable
+        // placeholder from the token replacements below (write-up here
+        // keeps the braces spaced apart -- "{ {" / "} }" -- on purpose,
+        // since two of them written back-to-back would make Blade try
+        // to compile this very comment as a PHP echo tag).
+        // A placeholder is still in that raw "{ {name} }" form when no
+        // "Contoh Nilai Variabel" was filled in for it yet --
+        // applyVariables() leaves it untouched in that case. Variable
+        // names routinely contain "_" (nama_pengajar, rentang_tanggal,
+        // ...), and without this guard that underscore gets paired up
+        // with the next one found ANYWHERE later in the message --
+        // across other placeholders too -- and both get mangled into
+        // italic, chopping the opening/closing braces off along the
+        // way. The real WhatsApp message never has this problem
         // (variables are substituted with real values, e.g. an actual
         // name, before sending -- see WaMessageTemplate::composedMessage()
         // callers), so this only needs to protect the PREVIEW.
