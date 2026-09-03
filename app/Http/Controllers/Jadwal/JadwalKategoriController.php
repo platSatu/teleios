@@ -16,13 +16,16 @@ use Illuminate\View\View;
 /**
  * CRUD "Kategori" (Jadwal v2, CLAUDE.md item #15, spec poin 3) -- level
  * BARU di bawah Kelas (App\Models\JadwalMataPelajaran), mis. Kelas
- * "Piano" punya Kategori "Classic Level 1" (harga 400rb) & "Classic
- * Level 2" (harga 500rb). Setiap Kategori punya harga per sesi +
- * persentase split company/pengajar SENDIRI (harus berjumlah 100).
- * Diakses lewat tombol "Kategori" di baris index Mata Pelajaran /
- * Bidang (jadwal.mata-pelajaran.index) -- jadwal_mata_pelajaran_id
- * SELALU wajib ada di sini (beda dari Ruangan yang wajib branch_office_id),
- * karena Kategori tidak masuk akal berdiri sendiri lintas Kelas.
+ * "Piano" punya Kategori "Classic Level 1" (harga 400rb/bulan) &
+ * "Classic Level 2" (harga 500rb/bulan). Setiap Kategori punya harga
+ * BULANAN (admin input harga bulanan, bukan per sesi -- harga per sesi
+ * dihitung otomatis dari situ, lihat App\Models\JadwalKategori::
+ * hargaPerSesi()) + persentase split company/pengajar SENDIRI (harus
+ * berjumlah 100). Diakses lewat tombol "Kategori" di baris index Mata
+ * Pelajaran / Bidang (jadwal.mata-pelajaran.index) --
+ * jadwal_mata_pelajaran_id SELALU wajib ada di sini (beda dari Ruangan
+ * yang wajib branch_office_id), karena Kategori tidak masuk akal
+ * berdiri sendiri lintas Kelas.
  */
 class JadwalKategoriController extends Controller
 {
@@ -93,7 +96,7 @@ class JadwalKategoriController extends Controller
             'company_id' => $company->id,
             'jadwal_mata_pelajaran_id' => $mataPelajaran->id,
             'name' => $validated['name'],
-            'harga_per_sesi' => $validated['harga_per_sesi'],
+            'harga_bulanan' => $validated['harga_bulanan'],
             'persentase_company' => $validated['persentase_company'],
             'persentase_pengajar' => $validated['persentase_pengajar'],
             'status' => $validated['status'] ?? 'active',
@@ -136,7 +139,7 @@ class JadwalKategoriController extends Controller
 
         $kategori->update([
             'name' => $validated['name'],
-            'harga_per_sesi' => $validated['harga_per_sesi'],
+            'harga_bulanan' => $validated['harga_bulanan'],
             'persentase_company' => $validated['persentase_company'],
             'persentase_pengajar' => $validated['persentase_pengajar'],
             'status' => $validated['status'] ?? 'active',
@@ -190,7 +193,7 @@ class JadwalKategoriController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'name' => ['required', 'string', 'max:255'],
-            'harga_per_sesi' => ['required', 'numeric', 'min:0', 'max:999999999.99'],
+            'harga_bulanan' => ['required', 'numeric', 'min:0', 'max:999999999.99'],
             'persentase_company' => ['required', 'numeric', 'min:0', 'max:100'],
             'persentase_pengajar' => ['required', 'numeric', 'min:0', 'max:100'],
             'status' => ['nullable', 'in:active,inactive'],

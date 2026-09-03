@@ -44,7 +44,7 @@
                         <thead class="table-light">
                             <tr>
                                 <th>Nama Kategori</th>
-                                <th>Harga / Sesi</th>
+                                <th>Harga Bulanan</th>
                                 <th>Split Company / Pengajar</th>
                                 <th>Jadwal Rutin Aktif</th>
                                 <th>Status</th>
@@ -55,7 +55,10 @@
                             @forelse($kategoris as $kategori)
                                 <tr>
                                     <td class="fw-semibold">{{ $kategori->name }}</td>
-                                    <td>Rp {{ number_format($kategori->harga_per_sesi, 0, ',', '.') }}</td>
+                                    <td>
+                                        Rp {{ number_format($kategori->harga_bulanan, 0, ',', '.') }}
+                                        <div class="text-muted small">≈ Rp {{ number_format($kategori->hargaPerSesi(), 0, ',', '.') }} / sesi</div>
+                                    </td>
                                     <td>{{ rtrim(rtrim(number_format($kategori->persentase_company, 2), '0'), '.') }}% / {{ rtrim(rtrim(number_format($kategori->persentase_pengajar, 2), '0'), '.') }}%</td>
                                     <td>{{ $kategori->jadwal_rutins_count }}</td>
                                     <td>

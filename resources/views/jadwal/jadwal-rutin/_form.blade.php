@@ -9,7 +9,7 @@
                 <optgroup label="{{ $mp->name }}">
                     @foreach($mp->kategoris as $kat)
                         <option value="{{ $kat->id }}" @selected(old('jadwal_kategori_id', $rutin->jadwal_kategori_id ?? '') == $kat->id)>
-                            {{ $kat->name }} — Rp {{ number_format($kat->harga_per_sesi, 0, ',', '.') }}
+                            {{ $kat->name }} — Rp {{ number_format($kat->hargaPerSesi($branchSetting->sesi_per_bulan_default ?? null), 0, ',', '.') }} / sesi
                         </option>
                     @endforeach
                 </optgroup>

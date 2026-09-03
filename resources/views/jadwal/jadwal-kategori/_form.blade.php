@@ -10,12 +10,16 @@
 </div>
 
 <div class="mb-3">
-    <label class="form-label">Harga per Sesi (Rp)</label>
-    <input type="number" step="0.01" min="0" name="harga_per_sesi" class="form-control @error('harga_per_sesi') is-invalid @enderror"
-        value="{{ old('harga_per_sesi', $kategori->harga_per_sesi ?? '') }}" placeholder="400000" required>
-    @error('harga_per_sesi')
+    <label class="form-label">Harga Bulanan (Rp)</label>
+    <input type="number" step="0.01" min="0" name="harga_bulanan" id="harga_bulanan" class="form-control @error('harga_bulanan') is-invalid @enderror"
+        value="{{ old('harga_bulanan', $kategori->harga_bulanan ?? '') }}" placeholder="1600000" required>
+    @error('harga_bulanan')
         <div class="invalid-feedback">{{ $message }}</div>
     @enderror
+    {{-- Preview saja (kenyamanan admin) -- perhitungan sebenarnya saat
+    sesi dibuat tetap pakai sesi_per_bulan_default branch murid yang
+    bersangkutan, lihat App\Models\JadwalKategori::hargaPerSesi(). --}}
+    <div class="form-text" id="harga_per_sesi_preview"></div>
 </div>
 
 <div class="row">
@@ -72,5 +76,27 @@
             if (!isNaN(v) && v >= 0 && v <= 100) company.value = (100 - v).toString();
         }
     });
+})();
+
+// Preview "≈ Rp X / sesi" -- kenyamanan saja, dibagi 4 (default umum,
+// branch tertentu bisa beda lewat Jam Operasional-nya sendiri, lihat
+// App\Models\JadwalKategori::hargaPerSesi()).
+(function () {
+    var bulanan = document.getElementById('harga_bulanan');
+    var preview = document.getElementById('harga_per_sesi_preview');
+    if (!bulanan || !preview) return;
+
+    function update() {
+        var v = parseFloat(bulanan.value);
+        if (isNaN(v) || v < 0) {
+            preview.textContent = '';
+            return;
+        }
+        var perSesi = Math.round((v / 4) * 100) / 100;
+        preview.textContent = '≈ Rp ' + perSesi.toLocaleString('id-ID', {maximumFractionDigits: 0}) + ' / sesi (dibagi 4 sesi/bulan default).';
+    }
+
+    bulanan.addEventListener('input', update);
+    update();
 })();
 </script>

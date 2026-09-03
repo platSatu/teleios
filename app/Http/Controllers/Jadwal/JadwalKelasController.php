@@ -483,6 +483,15 @@ class JadwalKelasController extends Controller
 
     private function validator(Request $request, Company $company, ?string $ignoreId = null)
     {
+        // <select name="student_id"> yang dikosongkan (opsi "- Slot
+        // Kosong -") kirim string kosong, bukan absen -- normalisasi
+        // ke null di sini SEBELUM validasi supaya lolos rule
+        // 'nullable' dan tidak nyoba insert '' ke kolom FK char(36)
+        // (lihat docblock App\Models\JadwalKelas soal slot kosong).
+        if ($request->has('student_id') && $request->input('student_id') === '') {
+            $request->merge(['student_id' => null]);
+        }
+
         return Validator::make($request->all(), [
             'jadwal_mata_pelajaran_id' => [
                 'nullable', 'uuid', 'exists:jadwal_mata_pelajaran,id',
@@ -493,8 +502,14 @@ class JadwalKelasController extends Controller
                 },
             ],
             'pengajar_id' => ['required', 'uuid', 'exists:users,id'],
+            // Nullable (spec: "slot kosong") -- pengajar+jam+ruangan
+            // sudah dibuat manual, murid belum ditentukan. Lihat
+            // migration make_student_id_nullable_on_jadwal_kelas_table.php
+            // & docblock App\Models\JadwalKelas. String kosong dari
+            // <select> dinormalisasi jadi null di atas, sebelum sampai
+            // sini (FK char(36) tidak boleh diisi '').
             'student_id' => [
-                'required', 'uuid', 'exists:jadwal_student,id',
+                'nullable', 'uuid', 'exists:jadwal_student,id',
                 function ($attribute, $value, $fail) use ($company) {
                     if ($value && ! JadwalStudent::where('company_id', $company->id)->where('id', $value)->exists()) {
                         $fail('Student tidak valid.');

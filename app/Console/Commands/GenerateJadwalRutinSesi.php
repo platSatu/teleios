@@ -130,7 +130,7 @@ class GenerateJadwalRutinSesi extends Command
             $startTime = $date->setTimeFromTimeString($rutin->jam_mulai);
             $endTime = $startTime->addMinutes($durationMinutes);
 
-            if ($this->createSesi($rutin, $kategori, $startTime, $endTime, $durationMinutes)) {
+            if ($this->createSesi($rutin, $kategori, $branchSetting, $startTime, $endTime, $durationMinutes)) {
                 $count++;
             }
         }
@@ -163,7 +163,7 @@ class GenerateJadwalRutinSesi extends Command
      * perlu SELECT-then-INSERT (lihat migration's docblock & class
      * docblock file ini).
      */
-    private function createSesi(JadwalRutin $rutin, JadwalKategori $kategori, CarbonImmutable $startTime, CarbonImmutable $endTime, int $durationMinutes): bool
+    private function createSesi(JadwalRutin $rutin, JadwalKategori $kategori, JadwalBranchSetting $branchSetting, CarbonImmutable $startTime, CarbonImmutable $endTime, int $durationMinutes): bool
     {
         try {
             JadwalKelas::create([
@@ -178,7 +178,10 @@ class GenerateJadwalRutinSesi extends Command
                 'start_time' => $startTime,
                 'end_time' => $endTime,
                 'duration_minutes' => $durationMinutes,
-                'harga_sesi' => $kategori->harga_per_sesi,
+                // Harga BULANAN Kategori dibagi sesi/bulan branch murid ini
+                // -- lihat App\Models\JadwalKategori::hargaPerSesi() & migration
+                // rename_harga_per_sesi_to_harga_bulanan_on_jadwal_kategori_table.php.
+                'harga_sesi' => $kategori->hargaPerSesi($branchSetting->sesi_per_bulan_default),
                 'persentase_company' => $kategori->persentase_company,
                 'persentase_pengajar' => $kategori->persentase_pengajar,
                 'status' => JadwalKelas::STATUS_ACTIVE,

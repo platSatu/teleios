@@ -6,12 +6,18 @@ use App\Models\Concerns\HasUuidPrimaryKey;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Satu baris jadwal kelas kursus — 1 pengajar + 1 murid + rentang
- * waktu, terhubung opsional ke satu App\Models\JadwalMataPelajaran.
- * Lihat App\Http\Controllers\Jadwal\JadwalKelasController untuk CRUD-nya.
+ * Satu baris jadwal kelas kursus — 1 pengajar + rentang waktu,
+ * terhubung opsional ke satu App\Models\JadwalMataPelajaran dan
+ * opsional ke satu murid. Lihat App\Http\Controllers\Jadwal\
+ * JadwalKelasController untuk CRUD-nya.
  * `pengajar_id` FK ke `users`, `student_id` FK ke App\Models\
- * JadwalStudent (roster sendiri, bukan `users`) — lihat migration
- * create_jadwal_kelas_table.php's docblock.
+ * JadwalStudent (roster sendiri, bukan `users`) — NULLABLE (lihat
+ * migration make_student_id_nullable_on_jadwal_kelas_table.php):
+ * baris ini bisa jadi "slot kosong" (pengajar+jam+ruangan sudah
+ * dibuat, murid belum ditentukan) kalau dibuat manual lewat
+ * JadwalKelasController; sesi hasil `jadwal:generate-sesi` selalu
+ * punya student_id (di-copy dari JadwalRutin yang tetap wajib
+ * murid). Kode yang baca `->student` HARUS null-safe (`?->`).
  *
  * `attendance_status`/`attendance_notes`: kehadiran student di sesi
  * ini (lihat migration add_attendance_to_jadwal_kelas_table.php's

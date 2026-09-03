@@ -250,6 +250,11 @@ class JadwalMataPelajaranController extends Controller
         $rosterByMataPelajaran = JadwalKelas::where('company_id', $company->id)
             ->whereIn('jadwal_mata_pelajaran_id', $mataPelajaranIds)
             ->where('status', JadwalKelas::STATUS_ACTIVE)
+            // "Slot kosong" (student_id null, lihat docblock
+            // App\Models\JadwalKelas) sengaja DIKELUARKAN dari roster
+            // ini -- roster berarti "penugasan yang sedang berjalan",
+            // slot kosong belum jadi penugasan apa pun.
+            ->whereNotNull('student_id')
             ->with(['pengajar:id,name', 'student:id,name', 'ruangan:id,name'])
             ->get()
             // Kunci dedup ikut sertakan jadwal_mata_pelajaran_id --

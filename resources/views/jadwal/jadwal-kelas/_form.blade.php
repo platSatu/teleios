@@ -82,14 +82,14 @@
     </div>
 
     <div class="col-md-6 mb-3">
-        <label class="form-label">Murid</label>
+        <label class="form-label">Murid (opsional)</label>
         @if ($lockedStudent && !$errors->has('student_id'))
             <input type="text" class="form-control" value="{{ $lockedStudent->name }}" disabled readonly>
             <input type="hidden" name="student_id" value="{{ $lockedStudent->id }}">
             <div class="form-text">Terkunci ke murid di atas.</div>
         @else
-            <select name="student_id" class="form-select @error('student_id') is-invalid @enderror" required>
-                <option value="">- Pilih Murid -</option>
+            <select name="student_id" class="form-select @error('student_id') is-invalid @enderror">
+                <option value="">- Slot Kosong (belum ada murid) -</option>
                 @foreach ($students as $s)
                     <option value="{{ $s->id }}" @selected(old('student_id', $kelas->student_id ?? '') == $s->id)>{{ $s->name }} @if($s->mataPelajaran) — {{ $s->mataPelajaran->name }} @endif @if($s->pengajar) (diajar {{ $s->pengajar->name }}) @endif</option>
                 @endforeach

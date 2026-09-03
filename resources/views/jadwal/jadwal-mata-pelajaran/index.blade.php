@@ -228,7 +228,7 @@
                                         <thead class="table-light">
                                             <tr>
                                                 <th class="text-nowrap">Nama Kategori</th>
-                                                <th class="text-nowrap">Harga/Sesi</th>
+                                                <th class="text-nowrap">Harga Bulanan</th>
                                                 <th class="text-nowrap">Split Company/Pengajar</th>
                                                 <th class="text-nowrap">Status</th>
                                             </tr>
@@ -237,7 +237,10 @@
                                             @foreach($mataPelajaran->kategoris as $kategori)
                                                 <tr>
                                                     <td class="text-nowrap">{{ $kategori->name }}</td>
-                                                    <td class="text-nowrap">Rp {{ number_format($kategori->harga_per_sesi, 0, ',', '.') }}</td>
+                                                    <td class="text-nowrap">
+                                                        Rp {{ number_format($kategori->harga_bulanan, 0, ',', '.') }}
+                                                        <div class="text-muted small">≈ Rp {{ number_format($kategori->hargaPerSesi(), 0, ',', '.') }} / sesi</div>
+                                                    </td>
                                                     <td class="text-nowrap">{{ rtrim(rtrim(number_format($kategori->persentase_company, 2), '0'), '.') }}% / {{ rtrim(rtrim(number_format($kategori->persentase_pengajar, 2), '0'), '.') }}%</td>
                                                     <td class="text-nowrap">
                                                         <span class="badge {{ $kategori->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $kategori->status }}</span>

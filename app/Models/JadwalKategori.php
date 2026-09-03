@@ -9,9 +9,18 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * "Kategori" -- level BARU di bawah Kelas (App\Models\
- * JadwalMataPelajaran), tiap Kategori punya harga per sesi + persentase
+ * JadwalMataPelajaran), tiap Kategori punya harga BULANAN + persentase
  * split company/pengajar sendiri. Lihat migration
  * create_jadwal_kategori_table.php's docblock.
+ *
+ * `harga_bulanan` (sebelumnya `harga_per_sesi` langsung, lihat migration
+ * rename_harga_per_sesi_to_harga_bulanan_on_jadwal_kategori_table.php)
+ * -- harga per SESI dihitung dari sini, dibagi jumlah sesi/bulan branch
+ * (App\Models\JadwalBranchSetting::sesi_per_bulan_default) lewat
+ * hargaPerSesi() di bawah, bukan disimpan langsung. `jadwal_kelas.
+ * harga_sesi` tetap snapshot NILAI PER SESI (hasil hargaPerSesi() saat
+ * sesi itu dibuat), bukan `harga_bulanan` mentah -- lihat
+ * App\Console\Commands\GenerateJadwalRutinSesi.
  */
 class JadwalKategori extends Model
 {
@@ -29,14 +38,14 @@ class JadwalKategori extends Model
         'company_id',
         'jadwal_mata_pelajaran_id',
         'name',
-        'harga_per_sesi',
+        'harga_bulanan',
         'persentase_company',
         'persentase_pengajar',
         'status',
     ];
 
     protected $casts = [
-        'harga_per_sesi' => 'decimal:2',
+        'harga_bulanan' => 'decimal:2',
         'persentase_company' => 'decimal:2',
         'persentase_pengajar' => 'decimal:2',
     ];
@@ -56,15 +65,20 @@ class JadwalKategori extends Model
         return $this->hasMany(JadwalRutin::class, 'jadwal_kategori_id');
     }
 
-    /** Nominal fee bagian company untuk satu sesi Kategori ini. */
-    public function feeCompanyPerSesi(): float
+    /**
+     * Harga per SESI, dihitung dari harga_bulanan dibagi jumlah
+     * sesi/bulan -- kirim `$sesiPerBulan` dari
+     * JadwalBranchSetting::sesi_per_bulan_default branch yang relevan
+     * (lihat App\Console\Commands\GenerateJadwalRutinSesi &
+     * jadwal-rutin/_form.blade.php's pemakaian). Kalau tidak dikirim
+     * (mis. listing lintas-branch di jadwal-kategori/index.blade.php
+     * yang tidak punya satu branch spesifik), fallback ke 4 sesuai
+     * default umum (CLAUDE.md item #15 spec poin 6).
+     */
+    public function hargaPerSesi(?int $sesiPerBulan = null): float
     {
-        return round(((float) $this->harga_per_sesi) * ((float) $this->persentase_company) / 100, 2);
-    }
+        $pembagi = $sesiPerBulan ?: 4;
 
-    /** Nominal fee bagian pengajar untuk satu sesi Kategori ini. */
-    public function feePengajarPerSesi(): float
-    {
-        return round(((float) $this->harga_per_sesi) * ((float) $this->persentase_pengajar) / 100, 2);
+        return round(((float) $this->harga_bulanan) / $pembagi, 2);
     }
 }
