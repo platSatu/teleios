@@ -71,6 +71,14 @@ class CompanyController extends Controller
                 'name' => 'Owner',
                 'description' => 'Pemilik company dengan akses penuh.',
                 'status' => 'active',
+                // Explicit rather than relying on the column's DB
+                // default -- a solo owner who also teaches is the
+                // common case, so the auto-created Owner role starts
+                // out counted as a Pengajar too. The owner can uncheck
+                // this later from the Roles tab once real teaching
+                // staff are added. See the is_pengajar migration's
+                // docblock for the full reasoning.
+                'is_pengajar' => true,
             ]);
 
             CompanyToUser::create([

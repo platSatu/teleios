@@ -13,11 +13,12 @@ use Illuminate\View\View;
  * Tingkat ke-3 drill-down Jadwal (Branch -> Mata Pelajaran / Bidang ->
  * Pengajar -> Student -> Jadwal). Sengaja READ-ONLY (index saja) dan
  * TIDAK punya tabel sendiri — Pengajar tetap dipilih dari user
- * perusahaan yang sudah ada lewat App\Http\Controllers\Concerns\
- * ResolvesCompanyContext::companyTeamMembers(), sama seperti sebelumnya
- * (lihat App\Http\Controllers\Jadwal\JadwalKelasController). Halaman ini
- * cuma pintu masuk untuk memilih pengajar mana yang jadi konteks saat
- * membuat Student baru lewat tombol "+ Add Student" di setiap baris.
+ * perusahaan yang rolenya ditandai is_pengajar, lewat App\Http\
+ * Controllers\Concerns\ResolvesCompanyContext::companyPengajarMembers()
+ * (lihat App\Http\Controllers\Jadwal\JadwalKelasController, yang pakai
+ * method yang sama). Halaman ini cuma pintu masuk untuk memilih pengajar
+ * mana yang jadi konteks saat membuat Student baru lewat tombol
+ * "+ Add Student" di setiap baris.
  *
  * Selalu diakses lewat tombol "+ Add Pengajar" di index Mata Pelajaran
  * / Bidang (lihat JadwalMataPelajaranController::index()), jadi
@@ -50,7 +51,7 @@ class JadwalPengajarController extends Controller
             ? $context->branchOffice?->id
             : $mataPelajaran->branch_office_id;
 
-        $teamMembers = $this->companyTeamMembers($company, $branchOfficeId);
+        $teamMembers = $this->companyPengajarMembers($company, $branchOfficeId);
 
         if ($request->filled('search')) {
             $search = $request->string('search');

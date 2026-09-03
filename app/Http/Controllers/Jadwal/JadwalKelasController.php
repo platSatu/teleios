@@ -454,7 +454,7 @@ class JadwalKelasController extends Controller
                 ->where('status', 'active')
                 ->orderBy('name')
                 ->get(['id', 'name']),
-            'teamMembers' => $this->companyTeamMembers($context->company, $branchOfficeId),
+            'teamMembers' => $this->companyPengajarMembers($context->company, $branchOfficeId),
             // Label deskriptif ("Ana — Piano (diajar Sarah)") supaya mode
             // bebas tetap bisa langsung pilih student tanpa perlu
             // cascading select (pilih mata pelajaran -> pengajar dulu).

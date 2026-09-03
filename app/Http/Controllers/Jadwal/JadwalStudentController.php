@@ -247,7 +247,7 @@ class JadwalStudentController extends Controller
                 ->where('status', 'active')
                 ->orderBy('name')
                 ->get(['id', 'name']),
-            'teamMembers' => $this->companyTeamMembers($context->company, $branchOfficeId),
+            'teamMembers' => $this->companyPengajarMembers($context->company, $branchOfficeId),
         ];
     }
 

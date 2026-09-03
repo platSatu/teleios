@@ -18,6 +18,10 @@ class CompanyRole extends Model
 
     public $incrementing = false;
 
+    protected $casts = [
+        'is_pengajar' => 'boolean',
+    ];
+
     protected $fillable = [
         'company_id',
         'branch_office_id',
@@ -30,6 +34,11 @@ class CompanyRole extends Model
         'name',
         'description',
         'status',
+        // Whether members holding this role should appear in the Jadwal
+        // module's "Pengajar" dropdowns — see migration
+        // 2026_09_14_090000_add_is_pengajar_to_company_roles_table and
+        // ResolvesCompanyContext::companyPengajarMembers().
+        'is_pengajar',
     ];
 
     protected static function boot()

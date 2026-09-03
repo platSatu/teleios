@@ -88,4 +88,53 @@ trait ResolvesCompanyContext
 
         return User::whereIn('id', $userIds)->orderBy('name')->get();
     }
+
+    /**
+     * Members whose assigned CompanyRole is flagged is_pengajar (see
+     * migration 2026_09_14_090000_add_is_pengajar_to_company_roles_table)
+     * -- used by every "Pengajar" dropdown in the Jadwal module
+     * (JadwalKelasController::formData(), JadwalPengajarController::
+     * index(), JadwalRutinController::formData(),
+     * JadwalStudentController::index()/formData()).
+     *
+     * Deliberately separate from companyTeamMembers() above rather than
+     * a parameter on it: companyTeamMembers() is also reused by the
+     * Kontak page, the Inbox assignee dropdown, CRM team-member fields,
+     * Form WA-notification recipients and the WA webhook auto-reply
+     * matcher -- none of which should suddenly lose every non-teaching
+     * member just because Jadwal wants a narrower list.
+     *
+     * Unlike companyTeamMembers(), the owner is NOT unconditionally
+     * unioned in here. The owner already has a normal, role-tagged
+     * company_to_users row (their auto-created "Owner" role -- see
+     * CompanyController::store()), so they appear here through the same
+     * query path as everyone else: only if that "Owner" role (or
+     * whichever role they hold) is itself flagged is_pengajar. A solo
+     * owner who also teaches keeps that flag on by default; an owner
+     * who has since hired real teaching staff can uncheck it from the
+     * Roles tab so they stop cluttering every Pengajar dropdown.
+     *
+     * $branchOfficeId behaves the same as companyTeamMembers()'s.
+     *
+     * @return Collection<int, User>
+     */
+    protected function companyPengajarMembers(Company $company, ?string $branchOfficeId = null): Collection
+    {
+        $memberQuery = CompanyToUser::where('company_id', $company->id)
+            ->where('status', 'active')
+            ->whereHas('role', function ($q) {
+                $q->where('is_pengajar', true);
+            });
+
+        if ($branchOfficeId) {
+            $memberQuery->where(function ($q) use ($branchOfficeId) {
+                $q->where('branch_office_id', $branchOfficeId)
+                    ->orWhereNull('branch_office_id');
+            });
+        }
+
+        $userIds = $memberQuery->pluck('user_id')->unique()->values();
+
+        return User::whereIn('id', $userIds)->orderBy('name')->get();
+    }
 }

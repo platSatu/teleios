@@ -86,6 +86,7 @@ class CompanyRoleController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'status' => ['required', 'in:active,inactive'],
+            'is_pengajar' => ['nullable', 'boolean'],
         ]);
 
         $validator->after(function ($validator) use ($request, $company) {
@@ -119,6 +120,14 @@ class CompanyRoleController extends Controller
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
             'status' => $validated['status'],
+            // Defaults to false for every newly-created custom role
+            // (Admin, Finance, ...) regardless of the column's own true
+            // DB default -- see the is_pengajar migration's docblock.
+            // $request->boolean() reads the paired hidden input below
+            // the checkbox in the form, so an unchecked box is saved as
+            // false rather than silently falling through to the DB
+            // default.
+            'is_pengajar' => $request->boolean('is_pengajar'),
         ]);
 
         return redirect()
@@ -151,6 +160,7 @@ class CompanyRoleController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'status' => ['required', 'in:active,inactive'],
+            'is_pengajar' => ['nullable', 'boolean'],
         ]);
 
         if ($validator->fails()) {
@@ -160,7 +170,15 @@ class CompanyRoleController extends Controller
                 ->withInput();
         }
 
-        $role->update($validator->validated());
+        $validated = $validator->validated();
+        // Same reasoning as store(): read the checkbox via $request so
+        // an unchecked box is persisted as false instead of being
+        // dropped from $validated (a checkbox sends nothing at all when
+        // unchecked -- the paired hidden input is what makes that case
+        // reach here as "0").
+        $validated['is_pengajar'] = $request->boolean('is_pengajar');
+
+        $role->update($validated);
 
         return redirect()
             ->route('profile.edit', ['tab' => 'roles'])

@@ -731,6 +731,7 @@
                                             <th style="min-width: 150px;">Nama Role</th>
                                             <th style="min-width: 170px;">Unit/Divisi</th>
                                             <th style="min-width: 110px;">Status</th>
+                                            <th style="min-width: 110px;">Pengajar?</th>
                                             <th style="min-width: 260px;" width="260">Aksi</th>
                                         </tr>
                                     </thead>
@@ -744,6 +745,13 @@
                                                         <span class="badge bg-success">Active</span>
                                                     @else
                                                         <span class="badge bg-danger">Inactive</span>
+                                                    @endif
+                                                </td>
+                                                <td>
+                                                    @if ($role->is_pengajar)
+                                                        <span class="badge bg-info-subtle text-info-emphasis">Ya</span>
+                                                    @else
+                                                        <span class="badge bg-light text-muted">Tidak</span>
                                                     @endif
                                                 </td>
                                                 <td>
@@ -778,7 +786,7 @@
                                             </tr>
                                         @empty
                                             <tr>
-                                                <td colspan="4" class="text-center text-muted">Belum ada role.</td>
+                                                <td colspan="5" class="text-center text-muted">Belum ada role.</td>
                                             </tr>
                                         @endforelse
                                     </tbody>
@@ -1147,6 +1155,20 @@
                                     @error('status', 'editRole' . $role->id)
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
+                                </div>
+
+                                <div class="form-check form-switch mt-3">
+                                    <input type="hidden" name="is_pengajar" value="0">
+                                    <input type="checkbox" name="is_pengajar" value="1" id="isPengajar{{ $role->id }}"
+                                        class="form-check-input"
+                                        {{ old('is_pengajar', $role->is_pengajar) ? 'checked' : '' }}>
+                                    <label class="form-check-label" for="isPengajar{{ $role->id }}">
+                                        Bisa jadi Pengajar?
+                                    </label>
+                                    <div class="form-text mb-0">
+                                        Kalau aktif, user dengan role ini akan muncul di dropdown Pengajar pada menu
+                                        Jadwal.
+                                    </div>
                                 </div>
                             </div>
                             <div class="modal-footer">

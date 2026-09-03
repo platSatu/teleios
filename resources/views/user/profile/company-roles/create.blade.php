@@ -76,6 +76,17 @@
                                 @enderror
                             </div>
 
+                            <div class="mb-4 form-check form-switch">
+                                <input type="hidden" name="is_pengajar" value="0">
+                                <input type="checkbox" name="is_pengajar" value="1" id="is_pengajar"
+                                    class="form-check-input" {{ old('is_pengajar') ? 'checked' : '' }}>
+                                <label class="form-check-label" for="is_pengajar">Bisa jadi Pengajar?</label>
+                                <div class="form-text">
+                                    Kalau aktif, user dengan role ini akan muncul di dropdown Pengajar pada menu
+                                    Jadwal. Biarkan kosong untuk role non-pengajar (Admin, Finance, dst).
+                                </div>
+                            </div>
+
                             <div class="d-flex gap-2">
                                 <button type="submit" class="btn btn-primary">Simpan Role</button>
                                 <a href="{{ route('profile.branch-office-units.show', $unit->id) }}" class="btn btn-light">Batal</a>

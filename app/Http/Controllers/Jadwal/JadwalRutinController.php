@@ -248,7 +248,7 @@ class JadwalRutinController extends Controller
 
         return [
             'mataPelajarans' => $mataPelajarans,
-            'teamMembers' => $this->companyTeamMembers($context->company, $branchOfficeId),
+            'teamMembers' => $this->companyPengajarMembers($context->company, $branchOfficeId),
             'ruangans' => JadwalRuangan::where('company_id', $context->company->id)
                 ->where('status', 'active')
                 ->when($branchOfficeId, fn ($q) => $q->where('branch_office_id', $branchOfficeId))
