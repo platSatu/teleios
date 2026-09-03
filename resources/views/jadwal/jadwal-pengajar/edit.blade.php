@@ -5,9 +5,9 @@
     <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
         <div>
             <h4 class="mb-1">Ubah Pengajar</h4>
-            <p class="text-muted mb-0">{{ $kategori->name }} ({{ $mataPelajaran->name }}) — {{ $pengajarKategori->pengajar->name ?? '-' }}</p>
+            <p class="text-muted mb-0">{{ $pengajarKategori->kategori->name ?? '-' }} ({{ $mataPelajaran->name ?? '-' }}) — {{ $pengajarKategori->pengajar->name ?? '-' }}</p>
         </div>
-        <a href="{{ route('jadwal.pengajar.index', ['jadwal_kategori_id' => $kategori->id]) }}" class="btn btn-light">
+        <a href="{{ route('jadwal.pengajar.index', ['jadwal_kategori_id' => $pengajarKategori->jadwal_kategori_id]) }}" class="btn btn-light">
             <i class="ri-arrow-left-line"></i> Kembali
         </a>
     </div>
@@ -33,7 +33,7 @@
 
                         <div class="d-flex gap-2">
                             <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
-                            <a href="{{ route('jadwal.pengajar.index', ['jadwal_kategori_id' => $kategori->id]) }}" class="btn btn-light">Batal</a>
+                            <a href="{{ route('jadwal.pengajar.index', ['jadwal_kategori_id' => $pengajarKategori->jadwal_kategori_id]) }}" class="btn btn-light">Batal</a>
                         </div>
                     </form>
                 </div>

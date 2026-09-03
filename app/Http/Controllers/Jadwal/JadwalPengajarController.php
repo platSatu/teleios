@@ -15,20 +15,31 @@ use Illuminate\View\View;
 
 /**
  * CRUD "Pengajar" (restrukturisasi drill-down Jadwal 14 September 2026,
- * atas permintaan user) — level BARU di antara Kategori dan Student:
- * Branch -> Ruangan -> Jam Operasional -> Mata Pelajaran / Bidang ->
- * Kategori -> **Pengajar** -> Student.
+ * atas permintaan user) — level di antara Kategori dan Student: Branch
+ * -> Ruangan -> Jam Operasional -> Mata Pelajaran / Bidang -> Kategori
+ * -> **Pengajar** -> Student.
  *
- * SEBELUMNYA controller ini cuma index() read-only (pilih dari user
- * perusahaan yang sudah ada, tanpa tabel sendiri, scoped ke Mata
- * Pelajaran / Bidang langsung). SEKARANG full CRUD atas App\Models\
- * JadwalPengajarKategori — penugasan Pengajar (tetap dari user
- * perusahaan yang sama, lihat ResolvesCompanyContext::
+ * Update 3 September 2026 (masih permintaan user, sesi yang sama):
+ * Pengajar SEKARANG PUNYA MENU SENDIRI di sidebar (lihat
+ * resources/views/layouts/partials/menu.blade.php) — TIDAK cuma
+ * dijangkau lewat drill-down "+ Add Pengajar" di index Kategori.
+ * Polanya sama seperti App\Http\Controllers\Jadwal\
+ * JadwalMataPelajaranController / JadwalStudentController: index()
+ * mode GLOBAL (tanpa `jadwal_kategori_id`) menampilkan SEMUA baris
+ * company (+ kolom Kategori), mode SCOPED (dengan `jadwal_kategori_id`,
+ * datang dari tombol drill-down) memfilter ke satu Kategori & sembunyikan
+ * kolom yang jadi redundant. create()/edit() ikut pola locked-vs-free
+ * "ina" project's University Album Photo: Kategori terkunci (disabled +
+ * hidden input) kalau datang dengan `jadwal_kategori_id` valid di query
+ * string, dropdown bebas kalau tidak (termasuk SELALU bebas di edit()).
+ *
+ * Pengajar (App\Models\JadwalPengajarKategori) = penugasan Pengajar
+ * (tetap user perusahaan yang sudah ada, lewat ResolvesCompanyContext::
  * companyTeamMembers()) ke satu Kategori, dengan hari & jam
- * ketersediaannya sendiri untuk Kategori itu (form "hari yang bisa" +
- * "jam ngajar dari - sampai"). Selalu diakses lewat tombol "+ Add
- * Pengajar" di index Kategori (lihat JadwalKategoriController::index()),
- * jadi `jadwal_kategori_id` WAJIB ada di query string.
+ * ketersediaannya sendiri untuk Kategori itu. Validasi (mis. pengajar
+ * sudah terdaftar di Kategori yang sama) ditampilkan lewat alert error
+ * standar di atas form (`$errors->any()`, sama seperti form lain di
+ * seluruh app ini) kalau gagal disimpan.
  *
  * Ketersediaan di sini MURNI INFO ditampilkan di form Add Student
  * (lihat JadwalStudentController::create()) — TIDAK divalidasi silang
@@ -45,18 +56,29 @@ class JadwalPengajarController extends Controller
         $company = $context->company;
 
         $kategoriId = $request->query('jadwal_kategori_id');
+        $kategori = $kategoriId ? $this->ownedKategoriOrFail($context, $kategoriId) : null;
 
-        $kategori = $this->ownedKategoriOrFail($context, $kategoriId);
-
-        if (! $kategori) {
+        if ($kategoriId && ! $kategori) {
             return redirect()
-                ->route('jadwal.mata-pelajaran.index')
-                ->with('error', 'Pilih Kategori terlebih dahulu sebelum mengelola Pengajar.');
+                ->route('jadwal.pengajar.index')
+                ->with('error', 'Kategori tidak ditemukan.');
         }
 
         $query = JadwalPengajarKategori::where('company_id', $company->id)
-            ->where('jadwal_kategori_id', $kategori->id)
-            ->with('pengajar:id,name,email');
+            ->with(['pengajar:id,name,email', 'kategori.mataPelajaran:id,name,branch_office_id']);
+
+        if ($kategori) {
+            $query->where('jadwal_kategori_id', $kategori->id);
+        } elseif ($context->isLockedToBranch()) {
+            // Mode global (tanpa Kategori) tapi anggota branch-locked --
+            // tetap batasi ke Kategori yang Mata Pelajaran-nya milik
+            // branch dia (atau lintas-branch, sama rule seperti
+            // JadwalKategoriController::ownedMataPelajaranOrFail()).
+            $branchOfficeId = $context->branchOffice?->id;
+            $query->whereHas('kategori.mataPelajaran', function ($q) use ($branchOfficeId) {
+                $q->where('branch_office_id', $branchOfficeId)->orWhereNull('branch_office_id');
+            });
+        }
 
         if ($request->filled('search')) {
             $search = $request->string('search');
@@ -68,7 +90,7 @@ class JadwalPengajarController extends Controller
         return view('jadwal.jadwal-pengajar.index', [
             'pengajarKategoris' => $pengajarKategoris,
             'kategori' => $kategori,
-            'mataPelajaran' => $kategori->mataPelajaran,
+            'mataPelajaran' => $kategori?->mataPelajaran,
         ]);
     }
 
@@ -76,14 +98,14 @@ class JadwalPengajarController extends Controller
     {
         $context = $this->companyContext($request);
 
-        $kategori = $this->ownedKategoriOrFail($context, $request->query('jadwal_kategori_id'));
-
-        abort_if(! $kategori, 404);
+        $kategoriId = $request->query('jadwal_kategori_id');
+        $kategori = $kategoriId ? $this->ownedKategoriOrFail($context, $kategoriId) : null;
 
         return view('jadwal.jadwal-pengajar.create', [
             'pengajarKategori' => null,
             'kategori' => $kategori,
-            'mataPelajaran' => $kategori->mataPelajaran,
+            'selectedKategoriId' => $kategoriId,
+            'mataPelajaran' => $kategori?->mataPelajaran,
         ] + $this->formData($context, $kategori));
     }
 
@@ -92,20 +114,23 @@ class JadwalPengajarController extends Controller
         $context = $this->companyContext($request);
         $company = $context->company;
 
-        $kategori = $this->ownedKategoriOrFail($context, $request->input('jadwal_kategori_id'));
-
-        abort_if(! $kategori, 404);
-
-        $validator = $this->validator($request, $company, $kategori);
+        $validator = $this->validator($request, $context);
 
         if ($validator->fails()) {
             return redirect()
-                ->route('jadwal.pengajar.create', ['jadwal_kategori_id' => $kategori->id])
+                ->route('jadwal.pengajar.create', array_filter(['jadwal_kategori_id' => $request->input('jadwal_kategori_id')]))
                 ->withErrors($validator)
                 ->withInput();
         }
 
         $validated = $validator->validated();
+
+        // Divalidasi ulang di sini (bukan cuma exists+company di
+        // validator()) supaya branch-lock ke Mata Pelajaran-nya Kategori
+        // ikut ditegakkan, sama pola seperti findOrFail() di controller
+        // Jadwal lain.
+        $kategori = $this->ownedKategoriOrFail($context, $validated['jadwal_kategori_id']);
+        abort_if(! $kategori, 404);
 
         JadwalPengajarKategori::create([
             'company_id' => $company->id,
@@ -129,11 +154,14 @@ class JadwalPengajarController extends Controller
         $pengajarKategori = $this->findOrFail($context, $id);
         $kategori = $pengajarKategori->kategori;
 
+        // SENGAJA TIDAK mengunci Kategori di sini (selalu dropdown
+        // bebas) -- locking cuma berlaku di create(), sama pola "ina"
+        // project's University Album Photo edit() (lihat class docblock).
         return view('jadwal.jadwal-pengajar.edit', [
             'pengajarKategori' => $pengajarKategori,
-            'kategori' => $kategori,
+            'kategori' => null,
             'mataPelajaran' => $kategori->mataPelajaran,
-        ] + $this->formData($context, $kategori));
+        ] + $this->formData($context, null));
     }
 
     public function update(Request $request, string $id): RedirectResponse
@@ -142,9 +170,8 @@ class JadwalPengajarController extends Controller
         $company = $context->company;
 
         $pengajarKategori = $this->findOrFail($context, $id);
-        $kategori = $pengajarKategori->kategori;
 
-        $validator = $this->validator($request, $company, $kategori, $pengajarKategori->id);
+        $validator = $this->validator($request, $context, $pengajarKategori->id);
 
         if ($validator->fails()) {
             return redirect()
@@ -155,7 +182,11 @@ class JadwalPengajarController extends Controller
 
         $validated = $validator->validated();
 
+        $kategori = $this->ownedKategoriOrFail($context, $validated['jadwal_kategori_id']);
+        abort_if(! $kategori, 404);
+
         $pengajarKategori->update([
+            'jadwal_kategori_id' => $kategori->id,
             'pengajar_id' => $validated['pengajar_id'],
             'hari_bisa' => array_values(array_map('intval', $validated['hari_bisa'])),
             'jam_mulai' => $validated['jam_mulai'],
@@ -186,14 +217,30 @@ class JadwalPengajarController extends Controller
             ->with('success', 'Pengajar berhasil dihapus dari Kategori ini.');
     }
 
-    private function formData($context, JadwalKategori $kategori): array
+    /**
+     * @param  JadwalKategori|null  $kategori  Kalau null, form menampilkan
+     *      dropdown Kategori bebas (lihat class docblock) -- daftar
+     *      `kategoris` di bawah cuma dihitung kalau memang dibutuhkan.
+     */
+    private function formData($context, ?JadwalKategori $kategori): array
     {
         $branchOfficeId = $context->isLockedToBranch()
             ? $context->branchOffice?->id
-            : $kategori->mataPelajaran?->branch_office_id;
+            : $kategori?->mataPelajaran?->branch_office_id;
 
         return [
             'teamMembers' => $this->companyTeamMembers($context->company, $branchOfficeId),
+            'kategoris' => $kategori ? collect() : JadwalKategori::with('mataPelajaran:id,name,branch_office_id')
+                ->where('company_id', $context->company->id)
+                ->where('status', 'active')
+                ->when($context->isLockedToBranch(), function ($q) use ($context) {
+                    $branchOfficeId = $context->branchOffice?->id;
+                    $q->whereHas('mataPelajaran', function ($qq) use ($branchOfficeId) {
+                        $qq->where('branch_office_id', $branchOfficeId)->orWhereNull('branch_office_id');
+                    });
+                })
+                ->orderBy('name')
+                ->get(),
         ];
     }
 
@@ -227,14 +274,26 @@ class JadwalPengajarController extends Controller
             ->firstOrFail();
     }
 
-    private function validator(Request $request, Company $company, JadwalKategori $kategori, ?string $ignoreId = null): ValidatorContract
+    private function validator(Request $request, $context, ?string $ignoreId = null): ValidatorContract
     {
+        $company = $context->company;
+
         return Validator::make($request->all(), [
+            'jadwal_kategori_id' => [
+                'required', 'uuid', 'exists:jadwal_kategori,id',
+                function ($attribute, $value, $fail) use ($company) {
+                    if ($value && ! JadwalKategori::where('company_id', $company->id)->where('id', $value)->exists()) {
+                        $fail('Kategori tidak valid.');
+                    }
+                },
+            ],
             'pengajar_id' => [
                 'required', 'uuid', 'exists:users,id',
-                function ($attribute, $value, $fail) use ($company, $kategori, $ignoreId) {
+                function ($attribute, $value, $fail) use ($company, $request, $ignoreId) {
+                    $kategoriId = $request->input('jadwal_kategori_id');
+
                     $exists = JadwalPengajarKategori::where('company_id', $company->id)
-                        ->where('jadwal_kategori_id', $kategori->id)
+                        ->where('jadwal_kategori_id', $kategoriId)
                         ->where('pengajar_id', $value)
                         ->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))
                         ->exists();

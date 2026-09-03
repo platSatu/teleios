@@ -1,4 +1,33 @@
-<input type="hidden" name="jadwal_kategori_id" value="{{ $kategori->id }}">
+@if($kategori)
+    {{-- Terkunci -- datang dari drill-down "+ Add Pengajar" di index
+             Kategori (jadwal_kategori_id ada & valid di query string).
+             Pola sama seperti "ina" project's University Album Photo
+             create(): input disabled + hidden field terpisah supaya
+             tetap terkirim walau elemen disabled. --}}
+    <div class="mb-3">
+        <label class="form-label">Kategori</label>
+        <input type="text" class="form-control" value="{{ $kategori->name }}" disabled>
+    </div>
+    <input type="hidden" name="jadwal_kategori_id" value="{{ $kategori->id }}">
+@else
+    {{-- Bebas -- mode global (menu sidebar "Pengajar" langsung) atau
+             edit() yang SELALU dropdown bebas (lihat class docblock
+             App\Http\Controllers\Jadwal\JadwalPengajarController). --}}
+    <div class="mb-3">
+        <label class="form-label">Kategori</label>
+        <select name="jadwal_kategori_id" class="form-select @error('jadwal_kategori_id') is-invalid @enderror" required>
+            <option value="">- Pilih Kategori -</option>
+            @foreach ($kategoris as $k)
+                <option value="{{ $k->id }}" @selected(old('jadwal_kategori_id', $pengajarKategori->jadwal_kategori_id ?? '') == $k->id)>
+                    {{ $k->name }}@if($k->mataPelajaran) ({{ $k->mataPelajaran->name }})@endif
+                </option>
+            @endforeach
+        </select>
+        @error('jadwal_kategori_id')
+            <div class="invalid-feedback">{{ $message }}</div>
+        @enderror
+    </div>
+@endif
 
 <div class="mb-3">
     <label class="form-label">Pengajar</label>
@@ -11,7 +40,13 @@
     @error('pengajar_id')
         <div class="invalid-feedback">{{ $message }}</div>
     @enderror
-    <div class="form-text">Anggota tim company (Team Members) yang bisa dijadikan pengajar untuk Kategori "{{ $kategori->name }}".</div>
+    <div class="form-text">
+        @if($kategori)
+            Anggota tim company (Team Members) yang bisa dijadikan pengajar untuk Kategori "{{ $kategori->name }}".
+        @else
+            Anggota tim company (Team Members) yang bisa dijadikan pengajar.
+        @endif
+    </div>
 </div>
 
 @php
@@ -51,7 +86,13 @@
         @enderror
     </div>
 </div>
-<div class="form-text mb-3">Rentang jam pengajar ini bisa mengajar Kategori "{{ $kategori->name }}", berlaku di semua hari yang dipilih di atas. Murni info -- ditampilkan di form Add Student, tidak divalidasi otomatis ke Jadwal Rutin.</div>
+<div class="form-text mb-3">
+    @if($kategori)
+        Rentang jam pengajar ini bisa mengajar Kategori "{{ $kategori->name }}", berlaku di semua hari yang dipilih di atas. Murni info -- ditampilkan di form Add Student, tidak divalidasi otomatis ke Jadwal Rutin.
+    @else
+        Rentang jam pengajar ini bisa mengajar Kategori yang dipilih di atas, berlaku di semua hari yang dipilih di atas. Murni info -- ditampilkan di form Add Student, tidak divalidasi otomatis ke Jadwal Rutin.
+    @endif
+</div>
 
 <div class="mb-3">
     <label class="form-label">Status</label>
