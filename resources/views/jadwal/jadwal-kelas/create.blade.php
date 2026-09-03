@@ -3,13 +3,19 @@
 @section('content')
 <div class="col-12">
     @php
-        // Mode grid asal (lihat class docblock App\Http\Controllers\
-        // Jadwal\JadwalKelasController, update 7 September 2026) --
-        // dipakai link "Kembali"/"Batal" & hidden input `group_by` di
-        // form supaya store() balik ke tab yang sama setelah simpan.
-        $indexParams = ($returnGroupBy ?? 'ruangan') === 'pengajar'
-            ? ['group_by' => 'pengajar', 'pengajar_id' => $selectedPengajarId ?? null, 'date' => $returnDate ?? null]
-            : ['ruangan_id' => $returnRuanganId ?? ($selectedRuanganId ?? 'none'), 'date' => $returnDate ?? null];
+        // Filter list yang aktif waktu admin klik "Tambah" (lihat class
+        // docblock App\Http\Controllers\Jadwal\JadwalKelasController) --
+        // dipakai link "Kembali"/"Batal" supaya balik ke filter yang
+        // sama, BUKAN direset. `pengajar_id`/`jadwal_mata_pelajaran_id`
+        // dibaca dari FIELD form asli ($returnPengajarId/
+        // $returnMataPelajaranId = query awal, sebelum admin sempat
+        // mengubah dropdown), `date` dari hidden input di bawah (tidak
+        // ada field 'date' asli di form ini).
+        $indexParams = [
+            'date' => $returnDate ?? null,
+            'pengajar_id' => $returnPengajarId ?? null,
+            'jadwal_mata_pelajaran_id' => $returnMataPelajaranId ?? null,
+        ];
     @endphp
     <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
         <div>
@@ -48,15 +54,15 @@
                         @endif
                         {{-- Dibawa balik lewat request()->only() di
                         JadwalKelasController::store() kalau validasi
-                        gagal, supaya konteks tab Ruangan/Pengajar + mode
-                        + tanggal tidak hilang -- lihat class docblock. --}}
-                        @if($returnRuanganId ?? null)
-                            <input type="hidden" name="ruangan_id" value="{{ $returnRuanganId }}">
-                        @endif
+                        gagal, supaya konteks filter Tanggal tidak hilang
+                        -- lihat class docblock. Pengajar/Mata Pelajaran
+                        sudah otomatis ikut karena itu FIELD form asli
+                        (name="pengajar_id"/"jadwal_mata_pelajaran_id" di
+                        _form.blade.php), tidak perlu hidden input
+                        terpisah. --}}
                         @if($returnDate ?? null)
                             <input type="hidden" name="date" value="{{ $returnDate }}">
                         @endif
-                        <input type="hidden" name="group_by" value="{{ $returnGroupBy ?? 'ruangan' }}">
                         @include('jadwal.jadwal-kelas._form', ['kelas' => null])
 
                         <div class="d-flex gap-2">

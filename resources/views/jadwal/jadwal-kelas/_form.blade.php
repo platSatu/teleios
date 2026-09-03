@@ -17,10 +17,7 @@
     $lockedStudentId = old('student_id', $selectedStudentId ?? null);
     $lockedStudent = $lockedStudentId ? $students->firstWhere('id', $lockedStudentId) : null;
 
-    // Ruangan -- 'none' (tab "Tanpa Ruangan" di grid index()) BUKAN
-    // sebuah Ruangan asli, jadi tidak pernah dikunci walau datang lewat
-    // query string, cuma jadi dropdown bebas dgn default kosong.
-    $lockedRuanganId = old('jadwal_ruangan_id', ($selectedRuanganId ?? null) !== 'none' ? ($selectedRuanganId ?? null) : null);
+    $lockedRuanganId = old('jadwal_ruangan_id', $selectedRuanganId ?? null);
     $lockedRuangan = $lockedRuanganId ? $ruangans->firstWhere('id', $lockedRuanganId) : null;
 @endphp
 
@@ -112,7 +109,7 @@
     @if ($lockedRuangan && !$errors->has('jadwal_ruangan_id'))
         <input type="text" class="form-control" value="{{ $lockedRuangan->name }}" disabled readonly>
         <input type="hidden" name="jadwal_ruangan_id" value="{{ $lockedRuangan->id }}">
-        <div class="form-text">Jadwal Kelas ini akan muncul di tab Ruangan di atas pada grid Jadwal Kelas.</div>
+        <div class="form-text">Jadwal Kelas ini akan dikaitkan ke Ruangan di atas.</div>
     @else
         <select name="jadwal_ruangan_id" class="form-select @error('jadwal_ruangan_id') is-invalid @enderror">
             <option value="">- Tanpa Ruangan -</option>

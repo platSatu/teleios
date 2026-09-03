@@ -3,14 +3,17 @@
 @section('content')
 <div class="col-12">
     @php
-        // Mode grid asal (lihat class docblock App\Http\Controllers\
-        // Jadwal\JadwalKelasController, update 7 September 2026) --
-        // dipakai link "Kembali"/"Batal" & hidden input `group_by` di
-        // form supaya update() balik ke tab yang sama setelah simpan.
-        $editDate = $kelas->start_time?->toDateString() ?? now()->toDateString();
-        $indexParams = ($groupByReturn ?? 'ruangan') === 'pengajar'
-            ? ['group_by' => 'pengajar', 'pengajar_id' => $kelas->pengajar_id, 'date' => $editDate]
-            : ['ruangan_id' => $kelas->jadwal_ruangan_id ?: 'none', 'date' => $editDate];
+        // Balik ke list dengan filter yang relevan dgn sesi ini APA
+        // ADANYA (sebelum diedit) -- cocok dgn App\Http\Controllers\
+        // Jadwal\JadwalKelasController::filterRedirectParams() yang
+        // dipakai update() setelah simpan, supaya link "Kembali"/
+        // "Batal" konsisten dengan ke mana admin bakal diarahkan
+        // setelah submit.
+        $indexParams = [
+            'date' => $kelas->start_time?->toDateString() ?? '',
+            'pengajar_id' => $kelas->pengajar_id ?? '',
+            'jadwal_mata_pelajaran_id' => $kelas->jadwal_mata_pelajaran_id ?? '',
+        ];
     @endphp
     <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
         <div>
@@ -39,7 +42,6 @@
                     <form action="{{ route('jadwal.kelas.update', $kelas->id) }}" method="POST">
                         @csrf
                         @method('PUT')
-                        <input type="hidden" name="group_by" value="{{ $groupByReturn ?? 'ruangan' }}">
                         @include('jadwal.jadwal-kelas._form')
 
                         <div class="d-flex gap-2">
