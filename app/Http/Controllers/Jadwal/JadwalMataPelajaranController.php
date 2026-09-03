@@ -38,6 +38,14 @@ class JadwalMataPelajaranController extends Controller
 
         $query = JadwalMataPelajaran::where('company_id', $company->id)
             ->withCount('kelas')
+            // Jumlah Kategori (App\Models\JadwalKategori) + list-nya
+            // sekalian di-eager-load -- relasi langsung (hasMany), tidak
+            // perlu correlated subquery kayak pengajar_count/student_count
+            // di bawah karena Kategori memang entitas sendiri per Mata
+            // Pelajaran, bukan diturunkan dari baris JadwalKelas. Dipakai
+            // badge + modal "Kategori" di index.blade.php.
+            ->withCount('kategoris')
+            ->with(['kategoris' => fn ($q) => $q->orderBy('name')])
             // Jumlah PENGAJAR UNIK (bukan jumlah baris Jadwal Kelas --
             // itu sudah 'kelas_count' di atas) -- tidak ada tabel
             // assignment pengajar tersendiri, "pengajar dari Mata

@@ -83,7 +83,7 @@
                                 <th></th>
                                 <th class="text-nowrap">Nama</th>
                                 <th class="text-nowrap">Branch</th>
-                                <th class="text-nowrap">Statistik</th>
+                                <th class="text-nowrap text-center">Statistik</th>
                                 <th class="text-nowrap">Status</th>
                                 <th class="text-nowrap text-end">Aksi</th>
                             </tr>
@@ -102,21 +102,31 @@
                                     </td>
                                     <td class="fw-semibold text-nowrap">{{ $mataPelajaran->name }}</td>
                                     <td class="text-nowrap">{{ $mataPelajaran->branchOffice->name ?? '-' }}</td>
-                                    <td class="text-nowrap">
-                                        <button type="button"
-                                            class="btn btn-link p-0 border-0 text-decoration-none d-flex gap-1"
-                                            data-bs-toggle="modal" data-bs-target="#rosterModal{{ $mataPelajaran->id }}"
-                                            title="Lihat pengajar, murid & ruangan">
-                                            <span class="badge bg-light text-dark border fw-normal" title="Jumlah Kelas">
-                                                <i class="ri-book-2-line align-middle"></i> {{ $mataPelajaran->kelas_count }}
-                                            </span>
-                                            <span class="badge bg-light text-dark border fw-normal" title="Jumlah Pengajar">
-                                                <i class="ri-user-star-line align-middle"></i> {{ $mataPelajaran->pengajar_count }}
-                                            </span>
-                                            <span class="badge bg-light text-dark border fw-normal" title="Jumlah Murid">
-                                                <i class="ri-graduation-cap-line align-middle"></i> {{ $mataPelajaran->student_count }}
-                                            </span>
-                                        </button>
+                                    <td class="text-nowrap text-center">
+                                        <div class="d-flex gap-1 justify-content-center">
+                                            <button type="button"
+                                                class="btn btn-link p-0 border-0 text-decoration-none d-flex gap-1"
+                                                data-bs-toggle="modal" data-bs-target="#rosterModal{{ $mataPelajaran->id }}"
+                                                title="Lihat pengajar, murid & ruangan">
+                                                <span class="badge bg-light text-dark border fw-normal" title="Jumlah Kelas">
+                                                    <i class="ri-book-2-line align-middle"></i> {{ $mataPelajaran->kelas_count }}
+                                                </span>
+                                                <span class="badge bg-light text-dark border fw-normal" title="Jumlah Pengajar">
+                                                    <i class="ri-user-star-line align-middle"></i> {{ $mataPelajaran->pengajar_count }}
+                                                </span>
+                                                <span class="badge bg-light text-dark border fw-normal" title="Jumlah Murid">
+                                                    <i class="ri-graduation-cap-line align-middle"></i> {{ $mataPelajaran->student_count }}
+                                                </span>
+                                            </button>
+                                            <button type="button"
+                                                class="btn btn-link p-0 border-0 text-decoration-none"
+                                                data-bs-toggle="modal" data-bs-target="#kategoriModal{{ $mataPelajaran->id }}"
+                                                title="Lihat daftar Kategori">
+                                                <span class="badge bg-light text-dark border fw-normal" title="Jumlah Kategori">
+                                                    <i class="ri-price-tag-3-line align-middle"></i> {{ $mataPelajaran->kategoris_count }}
+                                                </span>
+                                            </button>
+                                        </div>
                                     </td>
                                     <td class="text-nowrap">
                                         <span class="badge {{ $mataPelajaran->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $mataPelajaran->status }}</span>
@@ -196,6 +206,53 @@
                             @endif
                         </div>
                         <div class="modal-footer">
+                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Tutup</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal fade" id="kategoriModal{{ $mataPelajaran->id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">{{ $mataPelajaran->name }} — Kategori</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            @if($mataPelajaran->kategoris->isEmpty())
+                                <p class="text-muted mb-0">Belum ada Kategori untuk topik ini.</p>
+                            @else
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover align-middle mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th class="text-nowrap">Nama Kategori</th>
+                                                <th class="text-nowrap">Harga/Sesi</th>
+                                                <th class="text-nowrap">Split Company/Pengajar</th>
+                                                <th class="text-nowrap">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($mataPelajaran->kategoris as $kategori)
+                                                <tr>
+                                                    <td class="text-nowrap">{{ $kategori->name }}</td>
+                                                    <td class="text-nowrap">Rp {{ number_format($kategori->harga_per_sesi, 0, ',', '.') }}</td>
+                                                    <td class="text-nowrap">{{ rtrim(rtrim(number_format($kategori->persentase_company, 2), '0'), '.') }}% / {{ rtrim(rtrim(number_format($kategori->persentase_pengajar, 2), '0'), '.') }}%</td>
+                                                    <td class="text-nowrap">
+                                                        <span class="badge {{ $kategori->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $kategori->status }}</span>
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            @endif
+                        </div>
+                        <div class="modal-footer">
+                            <a href="{{ route('jadwal.kategori.index', ['jadwal_mata_pelajaran_id' => $mataPelajaran->id]) }}" class="btn btn-outline-primary">
+                                <i class="ri-price-tag-3-line"></i> Kelola Kategori
+                            </a>
                             <button type="button" class="btn btn-light" data-bs-dismiss="modal">Tutup</button>
                         </div>
                     </div>
