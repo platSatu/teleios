@@ -104,7 +104,8 @@ class JadwalStudentController extends Controller
         // jadwal_student -- tabel itu tetap cuma jadwal_mata_pelajaran_id
         // + pengajar_id seperti sebelumnya, lihat CLAUDE.md item #15).
         $pengajarAvailability = ($kategoriId && $pengajarId)
-            ? JadwalPengajarKategori::where('company_id', $context->company->id)
+            ? JadwalPengajarKategori::with('jadwals')
+                ->where('company_id', $context->company->id)
                 ->where('jadwal_kategori_id', $kategoriId)
                 ->where('pengajar_id', $pengajarId)
                 ->first()

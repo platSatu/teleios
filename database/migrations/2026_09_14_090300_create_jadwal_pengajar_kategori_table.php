@@ -6,31 +6,35 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Backs App\Models\JadwalPengajarKategori — penugasan Pengajar (users)
- * ke satu App\Models\JadwalKategori, dengan ketersediaan hari & jam
- * ngajarnya SENDIRI untuk kategori itu (bukan berlaku global ke semua
- * kategori yang dia ajar). Level BARU di drill-down Jadwal (restrukturisasi
- * 14 September 2026 atas permintaan user, lihat diagram alur & CLAUDE.md
- * item #15): Branch -> Ruangan -> Jam Operasional -> Mata Pelajaran /
- * Bidang -> Kategori -> **Pengajar** -> Student.
+ * ke satu App\Models\JadwalKategori. Level BARU di drill-down Jadwal
+ * (restrukturisasi 14 September 2026 atas permintaan user, lihat
+ * diagram alur & CLAUDE.md item #15): Branch -> Ruangan -> Jam
+ * Operasional -> Mata Pelajaran / Bidang -> Kategori -> **Pengajar** ->
+ * Student.
  *
  * Sebelumnya "Pengajar" di alur ini cuma halaman pilih App\Models\User
  * yang sudah ada (read-only, tanpa tabel sendiri, lihat App\Http\
  * Controllers\Jadwal\JadwalPengajarController versi lama). Sekarang jadi
  * entitas sendiri supaya admin bisa mencatat SIAPA mengajar KATEGORI
- * mana + hari/jam berapa dia available, sebelum lanjut ke "+ Add
- * Student" (form Add Student menampilkan ketersediaan ini, murni info,
- * TIDAK divalidasi silang ke App\Models\JadwalRutin -- validasi bentrok
- * jadwal tetap di JadwalRutinConflictService seperti sebelumnya, baris
- * ini tidak ikut campur di situ).
+ * mana, sebelum lanjut ke "+ Add Student".
  *
- * `hari_bisa` JSON array of int, konvensi SAMA dengan
- * App\Models\JadwalRutin::HARI_LABELS / JadwalBranchSetting::hari_operasional
- * (Carbon::dayOfWeek, 0=Minggu..6=Sabtu) supaya tidak ada konvensi
- * angka hari yang beda-beda di fitur Jadwal.
+ * Update 3 September 2026 (masih sesi yang sama, permintaan user):
+ * `hari_bisa`/`jam_mulai`/`jam_selesai` DIPINDAH dari tabel ini ke
+ * tabel anak `jadwal_pengajar_kategori_jadwal` (lihat migration
+ * create_jadwal_pengajar_kategori_jadwal_table.php). Alasan: kasus
+ * lapangan pengajar TIDAK available nonstop pagi-sore seperti jam
+ * kantor -- satu hari bisa punya lebih dari satu rentang jam (mis.
+ * Senin 10:00-12:00 lalu 17:00-19:00), dan tiap hari bisa punya jam
+ * yang beda-beda, jadi tidak cukup ditampung 1 jam_mulai/jam_selesai
+ * yang berlaku sama ke semua hari yang dicentang. Tabel ini SENGAJA
+ * tetap belum pernah di-`php artisan migrate`-kan saat perubahan ini
+ * dibuat, jadi kolom lama dihapus langsung di sini (bukan migration
+ * alter terpisah) -- tidak ada data yang perlu dimigrasikan.
  *
  * unique(jadwal_kategori_id, pengajar_id) -- satu pengajar cuma bisa
- * punya SATU baris ketersediaan per Kategori (edit baris yang sudah ada
- * kalau mau ubah hari/jam, bukan duplikat baris baru).
+ * punya SATU baris penugasan per Kategori (edit baris yang sudah ada
+ * kalau mau ubah jadwalnya lewat tabel anak, bukan duplikat baris
+ * baru).
  */
 return new class extends Migration
 {
@@ -54,12 +58,6 @@ return new class extends Migration
             $table->foreignUuid('pengajar_id')
                 ->constrained('users')
                 ->cascadeOnDelete();
-
-            // Carbon::dayOfWeek: 0=Minggu, 1=Senin, ... 6=Sabtu.
-            $table->json('hari_bisa');
-
-            $table->time('jam_mulai');
-            $table->time('jam_selesai');
 
             // 'active' | 'inactive'
             $table->string('status', 20)->default('active');

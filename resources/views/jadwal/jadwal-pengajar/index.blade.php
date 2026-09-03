@@ -71,8 +71,7 @@
                                 @unless($kategori)
                                     <th class="text-nowrap">Kategori</th>
                                 @endunless
-                                <th class="text-nowrap">Hari Bisa</th>
-                                <th class="text-nowrap">Jam</th>
+                                <th class="text-nowrap">Hari &amp; Jam Tersedia</th>
                                 <th class="text-nowrap">Status</th>
                                 <th class="text-nowrap text-end">Aksi</th>
                             </tr>
@@ -90,8 +89,18 @@
                                             <div class="text-muted small">{{ $pk->kategori->mataPelajaran->name ?? '' }}</div>
                                         </td>
                                     @endunless
-                                    <td class="text-nowrap">{{ $pk->hariBisaLabel() ?: '-' }}</td>
-                                    <td class="text-nowrap">{{ $pk->jamRangeLabel() }}</td>
+                                    <td>
+                                        @php $jadwalGroups = $pk->jadwalGroupedByHari(); @endphp
+                                        @if($jadwalGroups->isEmpty())
+                                            <span class="text-muted">-</span>
+                                        @else
+                                            <div class="d-flex flex-column gap-1">
+                                                @foreach($jadwalGroups as $group)
+                                                    <div class="text-nowrap"><span class="fw-semibold">{{ $group['label'] }}</span>: {{ implode(', ', $group['ranges']) }}</div>
+                                                @endforeach
+                                            </div>
+                                        @endif
+                                    </td>
                                     <td class="text-nowrap">
                                         <span class="badge {{ $pk->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $pk->status }}</span>
                                     </td>
@@ -115,7 +124,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="{{ $kategori ? 5 : 6 }}" class="text-center text-muted py-4">
+                                    <td colspan="{{ $kategori ? 4 : 5 }}" class="text-center text-muted py-4">
                                         @if($kategori)
                                             Belum ada Pengajar di Kategori ini. Klik "Tambah Pengajar" untuk menambahkan yang pertama.
                                         @else

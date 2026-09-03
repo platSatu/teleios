@@ -9,6 +9,7 @@ use App\Models\JadwalKategori;
 use App\Models\JadwalPengajarKategori;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Validator as ValidatorContract;
 use Illuminate\View\View;
@@ -65,7 +66,7 @@ class JadwalPengajarController extends Controller
         }
 
         $query = JadwalPengajarKategori::where('company_id', $company->id)
-            ->with(['pengajar:id,name,email', 'kategori.mataPelajaran:id,name,branch_office_id']);
+            ->with(['pengajar:id,name,email', 'kategori.mataPelajaran:id,name,branch_office_id', 'jadwals']);
 
         if ($kategori) {
             $query->where('jadwal_kategori_id', $kategori->id);
@@ -132,15 +133,16 @@ class JadwalPengajarController extends Controller
         $kategori = $this->ownedKategoriOrFail($context, $validated['jadwal_kategori_id']);
         abort_if(! $kategori, 404);
 
-        JadwalPengajarKategori::create([
-            'company_id' => $company->id,
-            'jadwal_kategori_id' => $kategori->id,
-            'pengajar_id' => $validated['pengajar_id'],
-            'hari_bisa' => array_values(array_map('intval', $validated['hari_bisa'])),
-            'jam_mulai' => $validated['jam_mulai'],
-            'jam_selesai' => $validated['jam_selesai'],
-            'status' => $validated['status'] ?? 'active',
-        ]);
+        DB::transaction(function () use ($company, $kategori, $validated) {
+            $pengajarKategori = JadwalPengajarKategori::create([
+                'company_id' => $company->id,
+                'jadwal_kategori_id' => $kategori->id,
+                'pengajar_id' => $validated['pengajar_id'],
+                'status' => $validated['status'] ?? 'active',
+            ]);
+
+            $this->syncJadwal($pengajarKategori, $validated['jadwal']);
+        });
 
         return redirect()
             ->route('jadwal.pengajar.index', ['jadwal_kategori_id' => $kategori->id])
@@ -185,14 +187,15 @@ class JadwalPengajarController extends Controller
         $kategori = $this->ownedKategoriOrFail($context, $validated['jadwal_kategori_id']);
         abort_if(! $kategori, 404);
 
-        $pengajarKategori->update([
-            'jadwal_kategori_id' => $kategori->id,
-            'pengajar_id' => $validated['pengajar_id'],
-            'hari_bisa' => array_values(array_map('intval', $validated['hari_bisa'])),
-            'jam_mulai' => $validated['jam_mulai'],
-            'jam_selesai' => $validated['jam_selesai'],
-            'status' => $validated['status'] ?? 'active',
-        ]);
+        DB::transaction(function () use ($pengajarKategori, $kategori, $validated) {
+            $pengajarKategori->update([
+                'jadwal_kategori_id' => $kategori->id,
+                'pengajar_id' => $validated['pengajar_id'],
+                'status' => $validated['status'] ?? 'active',
+            ]);
+
+            $this->syncJadwal($pengajarKategori, $validated['jadwal']);
+        });
 
         return redirect()
             ->route('jadwal.pengajar.index', ['jadwal_kategori_id' => $kategori->id])
@@ -268,17 +271,40 @@ class JadwalPengajarController extends Controller
 
     private function findOrFail($context, string $id): JadwalPengajarKategori
     {
-        return JadwalPengajarKategori::with('kategori.mataPelajaran')
+        return JadwalPengajarKategori::with(['kategori.mataPelajaran', 'jadwals'])
             ->where('company_id', $context->company->id)
             ->where('id', $id)
             ->firstOrFail();
+    }
+
+    /**
+     * Ganti seluruh slot jadwal (App\Models\JadwalPengajarJadwal) milik
+     * satu penugasan Pengajar dengan `$rows` -- hapus semua baris lama,
+     * buat ulang dari input yang baru. Lebih sederhana & aman daripada
+     * diff per-baris (jumlah baris bisa berubah bebas: tambah/hapus
+     * dari form "Tambah Baris" di UI), dan aman dipanggil untuk
+     * penugasan yang baru dibuat (jadwals() kosong, delete() no-op).
+     *
+     * @param  array<int, array{hari: int|string, jam_mulai: string, jam_selesai: string}>  $rows
+     */
+    private function syncJadwal(JadwalPengajarKategori $pengajarKategori, array $rows): void
+    {
+        $pengajarKategori->jadwals()->delete();
+
+        foreach ($rows as $row) {
+            $pengajarKategori->jadwals()->create([
+                'hari' => (int) $row['hari'],
+                'jam_mulai' => $row['jam_mulai'],
+                'jam_selesai' => $row['jam_selesai'],
+            ]);
+        }
     }
 
     private function validator(Request $request, $context, ?string $ignoreId = null): ValidatorContract
     {
         $company = $context->company;
 
-        return Validator::make($request->all(), [
+        $validator = Validator::make($request->all(), [
             'jadwal_kategori_id' => [
                 'required', 'uuid', 'exists:jadwal_kategori,id',
                 function ($attribute, $value, $fail) use ($company) {
@@ -303,11 +329,32 @@ class JadwalPengajarController extends Controller
                     }
                 },
             ],
-            'hari_bisa' => ['required', 'array', 'min:1'],
-            'hari_bisa.*' => ['integer', 'between:0,6'],
-            'jam_mulai' => ['required', 'date_format:H:i'],
-            'jam_selesai' => ['required', 'date_format:H:i', 'after:jam_mulai'],
+            // Ketersediaan sekarang berupa BANYAK slot (hari + jam),
+            // bukan satu hari_bisa[] + satu jam_mulai/jam_selesai yang
+            // berlaku sama ke semua hari -- lihat App\Models\
+            // JadwalPengajarJadwal & class docblock. Satu hari BOLEH
+            // muncul lebih dari sekali (mis. Senin 10-12 dan Senin
+            // 17-19), jadi TIDAK ada rule unique di sini, cuma
+            // dicek jam_selesai > jam_mulai per baris lewat
+            // $validator->after() di bawah.
+            'jadwal' => ['required', 'array', 'min:1'],
+            'jadwal.*.hari' => ['required', 'integer', 'between:0,6'],
+            'jadwal.*.jam_mulai' => ['required', 'date_format:H:i'],
+            'jadwal.*.jam_selesai' => ['required', 'date_format:H:i'],
             'status' => ['nullable', 'in:active,inactive'],
         ]);
+
+        $validator->after(function ($v) use ($request) {
+            foreach ((array) $request->input('jadwal', []) as $i => $row) {
+                $mulai = $row['jam_mulai'] ?? null;
+                $selesai = $row['jam_selesai'] ?? null;
+
+                if ($mulai && $selesai && $mulai >= $selesai) {
+                    $v->errors()->add("jadwal.{$i}.jam_selesai", 'Jam selesai harus setelah jam mulai.');
+                }
+            }
+        });
+
+        return $validator;
     }
 }

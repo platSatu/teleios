@@ -33,9 +33,18 @@
             <div class="col-lg-6">
                 <div class="alert alert-info">
                     <i class="ri-calendar-check-line"></i>
-                    Jadwal pengajar yang available: <strong>{{ $pengajarAvailability->hariBisaLabel() }}</strong>,
-                    jam <strong>{{ $pengajarAvailability->jamRangeLabel() }}</strong>.
-                    Sesuaikan hari &amp; jam Jadwal Rutin murid ini nanti dengan rentang di atas.
+                    Jadwal pengajar yang available:
+                    @php $jadwalGroups = $pengajarAvailability->jadwalGroupedByHari(); @endphp
+                    @if($jadwalGroups->isEmpty())
+                        <span class="fst-italic">belum ada jadwal diisi untuk pengajar ini.</span>
+                    @else
+                        <ul class="mb-0 mt-1">
+                            @foreach($jadwalGroups as $group)
+                                <li><strong>{{ $group['label'] }}</strong>: {{ implode(', ', $group['ranges']) }}</li>
+                            @endforeach
+                        </ul>
+                    @endif
+                    <div class="mt-1">Sesuaikan hari &amp; jam Jadwal Rutin murid ini nanti dengan rentang di atas.</div>
                 </div>
             </div>
         </div>
