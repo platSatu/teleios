@@ -1,5 +1,7 @@
 @extends('layouts.dashboard')
 
+@section('title', 'Data Student')
+
 @section('content')
 <div class="row">
     <div class="col-12">
@@ -29,7 +31,7 @@
             <div class="card-body">
                 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
                     <div>
-                        <h4 class="mb-1">Student{{ $pengajar ? ' — '.$pengajar->name : '' }}</h4>
+                        <h4 class="mb-1">Data Student{{ $pengajar ? ' — '.$pengajar->name : '' }}</h4>
                         <p class="text-muted mb-0">Daftar murid. Sesuai company/branch Anda — bukan seluruh user.</p>
                     </div>
                     <div class="d-flex flex-wrap gap-2">
@@ -69,6 +71,7 @@
                     <table class="table table-centered table-hover align-middle mb-0">
                         <thead class="table-light">
                             <tr>
+                                <th>No</th>
                                 <th>Nama</th>
                                 @unless($mataPelajaran)
                                     <th>Mata Pelajaran / Bidang</th>
@@ -85,6 +88,7 @@
                         <tbody>
                             @forelse($students as $student)
                                 <tr>
+                                    <td class="text-muted">{{ $students->firstItem() + $loop->index }}</td>
                                     <td class="fw-semibold">{{ $student->name }}</td>
                                     @unless($mataPelajaran)
                                         <td>{{ $student->mataPelajaran->name ?? '-' }}</td>
@@ -127,7 +131,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="{{ 5 + ($mataPelajaran ? 0 : 1) + ($pengajar ? 0 : 1) }}" class="text-center text-muted py-4">Belum ada Student. Klik "Tambah Student" untuk membuat yang pertama.</td>
+                                    <td colspan="{{ 6 + ($mataPelajaran ? 0 : 1) + ($pengajar ? 0 : 1) }}" class="text-center text-muted py-4">Belum ada Student. Klik "Tambah Student" untuk membuat yang pertama.</td>
                                 </tr>
                             @endforelse
                         </tbody>
