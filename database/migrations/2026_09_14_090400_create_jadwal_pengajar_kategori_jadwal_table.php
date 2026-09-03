@@ -29,6 +29,12 @@ use Illuminate\Support\Facades\Schema;
  * `hari` konvensi SAMA dengan App\Models\JadwalRutin::HARI_LABELS /
  * JadwalBranchSetting::hari_operasional (Carbon::dayOfWeek,
  * 0=Minggu..6=Sabtu).
+ *
+ * Nama constraint FK & index di bawah SENGAJA dipendekkan manual
+ * (`jpkj_...`) -- nama tabel `jadwal_pengajar_kategori_jadwal` sudah
+ * panjang, kalau dibiarkan auto-generate Laravel hasilnya lebih dari
+ * 64 karakter (limit identifier MySQL) dan migrate gagal dengan error
+ * "Identifier name ... is too long" (ketemu saat dites user).
  */
 return new class extends Migration
 {
@@ -38,7 +44,7 @@ return new class extends Migration
             $table->uuid('id')->primary();
 
             $table->foreignUuid('jadwal_pengajar_kategori_id')
-                ->constrained('jadwal_pengajar_kategori')
+                ->constrained('jadwal_pengajar_kategori', indexName: 'jpkj_pengajar_kategori_id_fk')
                 ->cascadeOnDelete();
 
             // Carbon::dayOfWeek: 0=Minggu, 1=Senin, ... 6=Sabtu. SATU
@@ -52,7 +58,7 @@ return new class extends Migration
 
             $table->timestamps();
 
-            $table->index(['jadwal_pengajar_kategori_id', 'hari']);
+            $table->index(['jadwal_pengajar_kategori_id', 'hari'], 'jpkj_pengajar_kategori_id_hari_idx');
         });
     }
 
