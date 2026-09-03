@@ -7,7 +7,7 @@
             <h4 class="mb-1">{{ ($penggantiDariSesi ?? null) ? 'Tambah Sesi Pengganti' : 'Tambah Jadwal Kelas' }}</h4>
             <p class="text-muted mb-0">Jadwalkan satu sesi kelas — pengajar, murid, dan waktunya.</p>
         </div>
-        <a href="{{ route('jadwal.kelas.index', array_filter(['student_id' => $selectedStudentId ?? null])) }}" class="btn btn-light">
+        <a href="{{ route('jadwal.kelas.index', ['ruangan_id' => $returnRuanganId ?? ($selectedRuanganId ?? 'none'), 'date' => $returnDate ?? null]) }}" class="btn btn-light">
             <i class="ri-arrow-left-line"></i> Kembali
         </a>
     </div>
@@ -37,11 +37,21 @@
                         @if($penggantiDariSesi ?? null)
                             <input type="hidden" name="pengganti_dari_sesi_id" value="{{ $penggantiDariSesi->id }}">
                         @endif
+                        {{-- Dibawa balik lewat request()->only() di
+                        JadwalKelasController::store() kalau validasi
+                        gagal, supaya konteks tab Ruangan + tanggal tidak
+                        hilang -- lihat class docblock. --}}
+                        @if($returnRuanganId ?? null)
+                            <input type="hidden" name="ruangan_id" value="{{ $returnRuanganId }}">
+                        @endif
+                        @if($returnDate ?? null)
+                            <input type="hidden" name="date" value="{{ $returnDate }}">
+                        @endif
                         @include('jadwal.jadwal-kelas._form', ['kelas' => null])
 
                         <div class="d-flex gap-2">
                             <button type="submit" class="btn btn-primary">Simpan</button>
-                            <a href="{{ route('jadwal.kelas.index', array_filter(['student_id' => $selectedStudentId ?? null])) }}" class="btn btn-light">Batal</a>
+                            <a href="{{ route('jadwal.kelas.index', ['ruangan_id' => $returnRuanganId ?? ($selectedRuanganId ?? 'none'), 'date' => $returnDate ?? null]) }}" class="btn btn-light">Batal</a>
                         </div>
                     </form>
                 </div>

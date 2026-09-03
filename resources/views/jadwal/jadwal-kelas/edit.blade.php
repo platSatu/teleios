@@ -7,7 +7,7 @@
             <h4 class="mb-1">Edit Jadwal Kelas</h4>
             <p class="text-muted mb-0">Perbarui jadwal kelas ini.</p>
         </div>
-        <a href="{{ route('jadwal.kelas.index', ['student_id' => $kelas->student_id]) }}" class="btn btn-light">
+        <a href="{{ route('jadwal.kelas.index', ['ruangan_id' => $kelas->jadwal_ruangan_id ?: 'none', 'date' => $kelas->start_time?->toDateString() ?? now()->toDateString()]) }}" class="btn btn-light">
             <i class="ri-arrow-left-line"></i> Kembali
         </a>
     </div>
@@ -33,7 +33,7 @@
 
                         <div class="d-flex gap-2">
                             <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
-                            <a href="{{ route('jadwal.kelas.index', ['student_id' => $kelas->student_id]) }}" class="btn btn-light">Batal</a>
+                            <a href="{{ route('jadwal.kelas.index', ['ruangan_id' => $kelas->jadwal_ruangan_id ?: 'none', 'date' => $kelas->start_time?->toDateString() ?? now()->toDateString()]) }}" class="btn btn-light">Batal</a>
                         </div>
                     </form>
                 </div>

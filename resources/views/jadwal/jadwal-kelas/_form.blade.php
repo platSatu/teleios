@@ -16,6 +16,12 @@
 
     $lockedStudentId = old('student_id', $selectedStudentId ?? null);
     $lockedStudent = $lockedStudentId ? $students->firstWhere('id', $lockedStudentId) : null;
+
+    // Ruangan -- 'none' (tab "Tanpa Ruangan" di grid index()) BUKAN
+    // sebuah Ruangan asli, jadi tidak pernah dikunci walau datang lewat
+    // query string, cuma jadi dropdown bebas dgn default kosong.
+    $lockedRuanganId = old('jadwal_ruangan_id', ($selectedRuanganId ?? null) !== 'none' ? ($selectedRuanganId ?? null) : null);
+    $lockedRuangan = $lockedRuanganId ? $ruangans->firstWhere('id', $lockedRuanganId) : null;
 @endphp
 
 <div class="mb-3">
@@ -101,11 +107,30 @@
     </div>
 </div>
 
+<div class="mb-3">
+    <label class="form-label">Ruangan (opsional)</label>
+    @if ($lockedRuangan && !$errors->has('jadwal_ruangan_id'))
+        <input type="text" class="form-control" value="{{ $lockedRuangan->name }}" disabled readonly>
+        <input type="hidden" name="jadwal_ruangan_id" value="{{ $lockedRuangan->id }}">
+        <div class="form-text">Jadwal Kelas ini akan muncul di tab Ruangan di atas pada grid Jadwal Kelas.</div>
+    @else
+        <select name="jadwal_ruangan_id" class="form-select @error('jadwal_ruangan_id') is-invalid @enderror">
+            <option value="">- Tanpa Ruangan -</option>
+            @foreach ($ruangans as $r)
+                <option value="{{ $r->id }}" @selected(old('jadwal_ruangan_id', $kelas->jadwal_ruangan_id ?? '') == $r->id)>{{ $r->name }}</option>
+            @endforeach
+        </select>
+        @error('jadwal_ruangan_id')
+            <div class="invalid-feedback">{{ $message }}</div>
+        @enderror
+    @endif
+</div>
+
 <div class="row">
     <div class="col-md-6 mb-3">
         <label class="form-label">Waktu Mulai (opsional)</label>
         <input type="datetime-local" name="start_time"
-            value="{{ old('start_time', isset($kelas->start_time) && $kelas->start_time ? $kelas->start_time->format('Y-m-d\TH:i') : '') }}"
+            value="{{ old('start_time', isset($kelas->start_time) && $kelas->start_time ? $kelas->start_time->format('Y-m-d\TH:i') : ($prefillStartTime ?? '')) }}"
             class="form-control @error('start_time') is-invalid @enderror">
         @error('start_time')
             <div class="invalid-feedback">{{ $message }}</div>
