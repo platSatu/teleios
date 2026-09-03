@@ -2,12 +2,21 @@
 
 @section('content')
 <div class="col-12">
+    @php
+        // Mode grid asal (lihat class docblock App\Http\Controllers\
+        // Jadwal\JadwalKelasController, update 7 September 2026) --
+        // dipakai link "Kembali"/"Batal" & hidden input `group_by` di
+        // form supaya store() balik ke tab yang sama setelah simpan.
+        $indexParams = ($returnGroupBy ?? 'ruangan') === 'pengajar'
+            ? ['group_by' => 'pengajar', 'pengajar_id' => $selectedPengajarId ?? null, 'date' => $returnDate ?? null]
+            : ['ruangan_id' => $returnRuanganId ?? ($selectedRuanganId ?? 'none'), 'date' => $returnDate ?? null];
+    @endphp
     <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
         <div>
             <h4 class="mb-1">{{ ($penggantiDariSesi ?? null) ? 'Tambah Sesi Pengganti' : 'Tambah Jadwal Kelas' }}</h4>
             <p class="text-muted mb-0">Jadwalkan satu sesi kelas — pengajar, murid, dan waktunya.</p>
         </div>
-        <a href="{{ route('jadwal.kelas.index', ['ruangan_id' => $returnRuanganId ?? ($selectedRuanganId ?? 'none'), 'date' => $returnDate ?? null]) }}" class="btn btn-light">
+        <a href="{{ route('jadwal.kelas.index', $indexParams) }}" class="btn btn-light">
             <i class="ri-arrow-left-line"></i> Kembali
         </a>
     </div>
@@ -39,19 +48,20 @@
                         @endif
                         {{-- Dibawa balik lewat request()->only() di
                         JadwalKelasController::store() kalau validasi
-                        gagal, supaya konteks tab Ruangan + tanggal tidak
-                        hilang -- lihat class docblock. --}}
+                        gagal, supaya konteks tab Ruangan/Pengajar + mode
+                        + tanggal tidak hilang -- lihat class docblock. --}}
                         @if($returnRuanganId ?? null)
                             <input type="hidden" name="ruangan_id" value="{{ $returnRuanganId }}">
                         @endif
                         @if($returnDate ?? null)
                             <input type="hidden" name="date" value="{{ $returnDate }}">
                         @endif
+                        <input type="hidden" name="group_by" value="{{ $returnGroupBy ?? 'ruangan' }}">
                         @include('jadwal.jadwal-kelas._form', ['kelas' => null])
 
                         <div class="d-flex gap-2">
                             <button type="submit" class="btn btn-primary">Simpan</button>
-                            <a href="{{ route('jadwal.kelas.index', ['ruangan_id' => $returnRuanganId ?? ($selectedRuanganId ?? 'none'), 'date' => $returnDate ?? null]) }}" class="btn btn-light">Batal</a>
+                            <a href="{{ route('jadwal.kelas.index', $indexParams) }}" class="btn btn-light">Batal</a>
                         </div>
                     </form>
                 </div>

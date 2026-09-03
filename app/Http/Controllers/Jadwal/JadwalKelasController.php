@@ -6,6 +6,7 @@ use App\Http\Controllers\Concerns\ResolvesCompanyContext;
 use App\Http\Controllers\Controller;
 use App\Models\BranchOffice;
 use App\Models\Company;
+use App\Models\CompanyToUser;
 use App\Models\JadwalBranchSetting;
 use App\Models\JadwalKelas;
 use App\Models\JadwalMataPelajaran;
@@ -42,6 +43,28 @@ use Throwable;
  * start_time-nya null (tidak bisa ditaruh di grid manapun) ditampilkan
  * flat terpisah per tab supaya tidak pernah hilang dari tampilan.
  *
+ * Update 7 September 2026 (permintaan user, "papan jadwal vs jam
+ * operasional"): index() sekarang punya 2 MODE pengelompokan, dipilih
+ * lewat query `group_by` ('ruangan', default, ATAU 'pengajar') --
+ * grid slot 30-menit & buildSlotGrid() dipakai bersama oleh keduanya
+ * (sumber data + cara pecah jam operasionalnya identik), yang beda
+ * cuma sumbu tab-nya: mode 'ruangan' = tab per App\Models\JadwalRuangan
+ * (seperti sebelumnya, kolom "Pengajar" jadi info per baris), mode
+ * 'pengajar' = tab per Team Member ber-role is_pengajar (lihat
+ * ResolvesCompanyContext::companyPengajarMembers()), kolom "Ruangan"
+ * jadi info per baris (kolom Pengajar dilepas, karena sudah jadi
+ * konteks tab). Kedua mode berbagi 1 partial tabel
+ * (jadwal-kelas/_slot-grid-table.blade.php) supaya markup baris
+ * (dropdown kehadiran, badge sesi pengganti, tombol aksi) tidak
+ * dobel. Jam Operasional grid mode 'pengajar' diambil dari branch
+ * Team Member itu sendiri (App\Models\CompanyToUser::branch_office_id,
+ * fallback ke filter `branch_office_id` di URL kalau ada) -- BUKAN
+ * dari Ruangan (pengajar tidak terikat 1 ruangan tetap). `group_by`
+ * (+ `pengajar_id`/`ruangan_id` yang relevan) dibawa lewat query
+ * string/hidden input ke create()/edit()/store()/update()/destroy()
+ * supaya admin balik ke tab yang sama setelah simpan/hapus -- lihat
+ * gridRedirectParams().
+ *
  * create() mengunci field locked-vs-free seperti sebelumnya (branch,
  * mata pelajaran, pengajar, student kalau datang lengkap dari index
  * Student) DITAMBAH ruangan (+ prefill tanggal/jam mulai) kalau datang
@@ -68,6 +91,12 @@ class JadwalKelasController extends Controller
             ? $context->branchOffice?->id
             : $request->query('branch_office_id');
 
+        // Mode pengelompokan grid -- lihat class docblock, update 7
+        // September 2026. Nilai lain/tidak dikenal jatuh ke 'ruangan'
+        // (default lama, supaya link/bookmark tanpa `group_by` tetap
+        // jalan seperti sebelumnya).
+        $groupBy = $request->query('group_by') === 'pengajar' ? 'pengajar' : 'ruangan';
+
         $ruangans = JadwalRuangan::where('company_id', $company->id)
             ->where('status', JadwalRuangan::STATUS_ACTIVE)
             ->when($branchOfficeId, fn ($q) => $q->where('branch_office_id', $branchOfficeId))
@@ -75,14 +104,11 @@ class JadwalKelasController extends Controller
             ->orderBy('name')
             ->get();
 
-        // 'none' = tab "Tanpa Ruangan" -- sesi yang jadwal_ruangan_id-nya
-        // masih kosong (manual, belum ditentukan ruangannya -- ruangan
-        // SELALU opsional, lihat docblock App\Models\JadwalRuangan &
-        // App\Models\JadwalRutin). Default ke ruangan pertama; kalau
-        // belum ada satu pun Ruangan terdaftar di branch ini, otomatis
-        // jatuh ke tab 'none' supaya halaman tidak kosong-melompong.
-        $activeRuanganId = $request->query('ruangan_id') ?: ($ruangans->first()?->id ?? 'none');
-        $activeRuangan = $activeRuanganId !== 'none' ? $ruangans->firstWhere('id', $activeRuanganId) : null;
+        // Daftar Pengajar (mode 'pengajar') -- lihat
+        // ResolvesCompanyContext::companyPengajarMembers(), sudah
+        // dipakai dropdown Pengajar di formData() bawah, dipakai lagi
+        // di sini sebagai daftar tab.
+        $pengajars = $this->companyPengajarMembers($company, $branchOfficeId);
 
         $date = $request->filled('date')
             ? Carbon::parse($request->query('date'))->startOfDay()
@@ -91,6 +117,7 @@ class JadwalKelasController extends Controller
         $baseQuery = JadwalKelas::where('company_id', $company->id)
             ->with([
                 'pengajar:id,name', 'student:id,name', 'mataPelajaran:id,name', 'kategori:id,name',
+                'ruangan:id,name',
                 'sesiPengganti:id,pengganti_dari_sesi_id,start_time',
                 'penggantiDariSesi:id,start_time',
             ]);
@@ -106,49 +133,113 @@ class JadwalKelasController extends Controller
         $branchSetting = null;
         $noTimeInRoom = collect();
         $noRuanganList = null;
+        $activeRuanganId = null;
+        $activeRuangan = null;
+        $noTimeForPengajar = collect();
+        $activePengajarId = null;
+        $activePengajar = null;
 
-        if ($activeRuangan) {
-            $branchSetting = $activeRuangan->branchOffice?->jadwalBranchSetting;
+        if ($groupBy === 'pengajar') {
+            // Default ke Pengajar pertama; kalau id yang diminta tidak
+            // ketemu (link basi / sudah tidak eligible lagi), tetap
+            // jatuh ke Pengajar pertama daripada nampilin grid kosong.
+            $requestedPengajarId = $request->query('pengajar_id');
+            $activePengajar = $requestedPengajarId ? $pengajars->firstWhere('id', $requestedPengajarId) : null;
+            $activePengajar = $activePengajar ?: $pengajars->first();
+            $activePengajarId = $activePengajar?->id;
 
-            $kelasHariIni = (clone $baseQuery)
-                ->where('jadwal_ruangan_id', $activeRuangan->id)
-                ->whereDate('start_time', $date->toDateString())
-                ->orderBy('start_time')
-                ->get();
+            if ($activePengajar) {
+                // Jam Operasional grid ikut BRANCH si Pengajar (bukan
+                // Ruangan -- pengajar tidak terikat 1 ruangan tetap),
+                // lihat class docblock. Fallback ke filter
+                // `branch_office_id` URL (kalau ada) dulu sebelum ke
+                // branch resmi Team Member itu di App\Models\CompanyToUser.
+                $pengajarBranchOfficeId = $branchOfficeId
+                    ?: CompanyToUser::where('company_id', $company->id)
+                        ->where('user_id', $activePengajar->id)
+                        ->whereNotNull('branch_office_id')
+                        ->value('branch_office_id');
 
-            $slotRows = $this->buildSlotGrid($kelasHariIni, $branchSetting, $date);
+                $branchSetting = $pengajarBranchOfficeId
+                    ? BranchOffice::find($pengajarBranchOfficeId)?->jadwalBranchSetting
+                    : null;
 
-            // Sesi di ruangan ini yang belum punya start_time sama
-            // sekali -- tidak bisa masuk grid slot manapun (grid butuh
-            // tanggal+jam), jadi ditampilkan flat di sini supaya admin
-            // tetap bisa mengelolanya (kasih waktu / hapus), bukan
-            // hilang diam-diam. Tidak terikat tanggal yang dipilih.
-            $noTimeInRoom = (clone $baseQuery)
-                ->where('jadwal_ruangan_id', $activeRuangan->id)
-                ->whereNull('start_time')
-                ->orderBy('created_at', 'desc')
-                ->limit(50)
-                ->get();
+                $kelasHariIni = (clone $baseQuery)
+                    ->where('pengajar_id', $activePengajar->id)
+                    ->whereDate('start_time', $date->toDateString())
+                    ->orderBy('start_time')
+                    ->get();
+
+                $slotRows = $this->buildSlotGrid($kelasHariIni, $branchSetting, $date);
+
+                // Sama seperti $noTimeInRoom di mode 'ruangan' -- sesi
+                // pengajar ini yang belum punya start_time sama sekali,
+                // tidak terikat tanggal yang dipilih.
+                $noTimeForPengajar = (clone $baseQuery)
+                    ->where('pengajar_id', $activePengajar->id)
+                    ->whereNull('start_time')
+                    ->orderBy('created_at', 'desc')
+                    ->limit(50)
+                    ->get();
+            }
         } else {
-            // Tab "Tanpa Ruangan" -- semua sesi yang belum diisi
-            // ruangannya sama sekali, lintas tanggal (tidak ada grid
-            // per-hari yang masuk akal tanpa satu Ruangan spesifik).
-            $noRuanganList = (clone $baseQuery)
-                ->whereNull('jadwal_ruangan_id')
-                ->orderByRaw('start_time IS NULL, start_time DESC')
-                ->paginate(20)
-                ->withQueryString()
-                ->onEachSide(1);
+            // 'none' = tab "Tanpa Ruangan" -- sesi yang jadwal_ruangan_id-nya
+            // masih kosong (manual, belum ditentukan ruangannya -- ruangan
+            // SELALU opsional, lihat docblock App\Models\JadwalRuangan &
+            // App\Models\JadwalRutin). Default ke ruangan pertama; kalau
+            // belum ada satu pun Ruangan terdaftar di branch ini, otomatis
+            // jatuh ke tab 'none' supaya halaman tidak kosong-melompong.
+            $activeRuanganId = $request->query('ruangan_id') ?: ($ruangans->first()?->id ?? 'none');
+            $activeRuangan = $activeRuanganId !== 'none' ? $ruangans->firstWhere('id', $activeRuanganId) : null;
+
+            if ($activeRuangan) {
+                $branchSetting = $activeRuangan->branchOffice?->jadwalBranchSetting;
+
+                $kelasHariIni = (clone $baseQuery)
+                    ->where('jadwal_ruangan_id', $activeRuangan->id)
+                    ->whereDate('start_time', $date->toDateString())
+                    ->orderBy('start_time')
+                    ->get();
+
+                $slotRows = $this->buildSlotGrid($kelasHariIni, $branchSetting, $date);
+
+                // Sesi di ruangan ini yang belum punya start_time sama
+                // sekali -- tidak bisa masuk grid slot manapun (grid butuh
+                // tanggal+jam), jadi ditampilkan flat di sini supaya admin
+                // tetap bisa mengelolanya (kasih waktu / hapus), bukan
+                // hilang diam-diam. Tidak terikat tanggal yang dipilih.
+                $noTimeInRoom = (clone $baseQuery)
+                    ->where('jadwal_ruangan_id', $activeRuangan->id)
+                    ->whereNull('start_time')
+                    ->orderBy('created_at', 'desc')
+                    ->limit(50)
+                    ->get();
+            } else {
+                // Tab "Tanpa Ruangan" -- semua sesi yang belum diisi
+                // ruangannya sama sekali, lintas tanggal (tidak ada grid
+                // per-hari yang masuk akal tanpa satu Ruangan spesifik).
+                $noRuanganList = (clone $baseQuery)
+                    ->whereNull('jadwal_ruangan_id')
+                    ->orderByRaw('start_time IS NULL, start_time DESC')
+                    ->paginate(20)
+                    ->withQueryString()
+                    ->onEachSide(1);
+            }
         }
 
         return view('jadwal.jadwal-kelas.index', [
+            'groupBy' => $groupBy,
             'ruangans' => $ruangans,
             'activeRuanganId' => $activeRuanganId,
             'activeRuangan' => $activeRuangan,
+            'pengajars' => $pengajars,
+            'activePengajarId' => $activePengajarId,
+            'activePengajar' => $activePengajar,
             'branchSetting' => $branchSetting,
             'date' => $date,
             'slotRows' => $slotRows,
             'noTimeInRoom' => $noTimeInRoom,
+            'noTimeForPengajar' => $noTimeForPengajar,
             'noRuanganList' => $noRuanganList,
             'branchOfficeId' => $branchOfficeId,
         ]);
@@ -286,6 +377,10 @@ class JadwalKelasController extends Controller
             'prefillStartTime' => $request->query('start_time'),
             'returnRuanganId' => $request->query('ruangan_id'),
             'returnDate' => $request->query('date'),
+            // Mode grid asal (lihat class docblock update 7 September
+            // 2026) -- dibawa lewat hidden input di form supaya
+            // store() tahu tab mana yang dituju setelah simpan.
+            'returnGroupBy' => $request->query('group_by') === 'pengajar' ? 'pengajar' : 'ruangan',
             'penggantiDariSesi' => $penggantiDariSesi,
         ] + $this->formData($context));
     }
@@ -301,11 +396,18 @@ class JadwalKelasController extends Controller
 
         $validator = $this->validator($request, $company);
 
+        // Mode grid (ruangan/pengajar) admin datang dari -- dibawa lewat
+        // hidden input `group_by` di form (lihat jadwal-kelas/create.
+        // blade.php), dipakai gridRedirectParams() di bawah supaya
+        // admin balik ke tab yang sama setelah simpan, lihat class
+        // docblock update 7 September 2026.
+        $groupBy = $request->input('group_by') === 'pengajar' ? 'pengajar' : 'ruangan';
+
         if ($validator->fails()) {
             return redirect()
                 ->route('jadwal.kelas.create', $request->only([
                     'branch_office_id', 'jadwal_mata_pelajaran_id', 'pengajar_id', 'student_id',
-                    'ruangan_id', 'date', 'start_time',
+                    'ruangan_id', 'date', 'start_time', 'group_by',
                 ]))
                 ->withErrors($validator)
                 ->withInput();
@@ -352,34 +454,48 @@ class JadwalKelasController extends Controller
         } catch (\Illuminate\Database\QueryException $e) {
             if ($e->getCode() === '23000' && $penggantiDariSesi) {
                 return redirect()
-                    ->route('jadwal.kelas.index', $this->gridRedirectParams($penggantiDariSesi->jadwal_ruangan_id, $penggantiDariSesi->start_time))
+                    ->route('jadwal.kelas.index', $this->gridRedirectParams($penggantiDariSesi, $groupBy))
                     ->with('error', 'Sesi ini baru saja dibuatkan sesi pengganti oleh admin lain.');
             }
 
             throw $e;
         }
 
-        // Kembali ke grid (tab Ruangan + tanggal) sesi ini berada --
-        // lihat class docblock soal index() jadi grid, bukan lagi
-        // di-scope ke student (index() tidak lagi punya mode itu).
+        // Kembali ke grid (tab Ruangan/Pengajar + tanggal) sesi ini
+        // berada -- lihat class docblock soal index() jadi grid, bukan
+        // lagi di-scope ke student (index() tidak lagi punya mode itu).
         return redirect()
-            ->route('jadwal.kelas.index', $this->gridRedirectParams($kelas->jadwal_ruangan_id, $kelas->start_time))
+            ->route('jadwal.kelas.index', $this->gridRedirectParams($kelas, $groupBy))
             ->with('success', $penggantiDariSesi
                 ? 'Sesi pengganti berhasil dibuat.'
                 : 'Jadwal Kelas berhasil ditambahkan.');
     }
 
     /**
-     * Route params untuk balik ke index() grid (tab Ruangan yang tepat
-     * + tanggal sesi ini) setelah create/update/destroy -- 'none' kalau
-     * sesi ini belum ada ruangannya, tanggal hari ini kalau sesi ini
-     * belum ada start_time-nya (lihat noTimeInRoom di index()).
+     * Route params untuk balik ke index() grid (tab yang tepat + tanggal
+     * sesi ini) setelah create/update/destroy. `$groupBy` menentukan
+     * SUMBU tab yang dituju (lihat class docblock update 7 September
+     * 2026): 'pengajar' -> tab Pengajar ($kelas->pengajar_id, SELALU
+     * ada, wajib diisi); 'ruangan' (default) -> tab Ruangan ('none'
+     * kalau sesi ini belum ada ruangannya). Tanggal hari ini kalau
+     * sesi ini belum ada start_time-nya (lihat noTimeInRoom/
+     * noTimeForPengajar di index()).
      */
-    private function gridRedirectParams(?string $ruanganId, ?\Carbon\Carbon $startTime): array
+    private function gridRedirectParams(JadwalKelas $kelas, string $groupBy = 'ruangan'): array
     {
+        $date = $kelas->start_time?->toDateString() ?? now()->toDateString();
+
+        if ($groupBy === 'pengajar') {
+            return [
+                'group_by' => 'pengajar',
+                'pengajar_id' => $kelas->pengajar_id,
+                'date' => $date,
+            ];
+        }
+
         return [
-            'ruangan_id' => $ruanganId ?: 'none',
-            'date' => $startTime?->toDateString() ?? now()->toDateString(),
+            'ruangan_id' => $kelas->jadwal_ruangan_id ?: 'none',
+            'date' => $date,
         ];
     }
 
@@ -394,6 +510,10 @@ class JadwalKelasController extends Controller
         // project's University Album Photo edit() (lihat class docblock).
         return view('jadwal.jadwal-kelas.edit', [
             'kelas' => $kelas,
+            // Mode grid asal (lihat class docblock update 7 September
+            // 2026) -- link "Kembali"/hidden input form ikut mode ini
+            // supaya update() balik ke tab yang sama.
+            'groupByReturn' => $request->query('group_by') === 'pengajar' ? 'pengajar' : 'ruangan',
         ] + $this->formData($context));
     }
 
@@ -410,9 +530,11 @@ class JadwalKelasController extends Controller
 
         $validator = $this->validator($request, $company, $id);
 
+        $groupBy = $request->input('group_by') === 'pengajar' ? 'pengajar' : 'ruangan';
+
         if ($validator->fails()) {
             return redirect()
-                ->route('jadwal.kelas.edit', $id)
+                ->route('jadwal.kelas.edit', ['id' => $id, 'group_by' => $groupBy])
                 ->withErrors($validator)
                 ->withInput();
         }
@@ -458,7 +580,7 @@ class JadwalKelasController extends Controller
         }
 
         return redirect()
-            ->route('jadwal.kelas.index', $this->gridRedirectParams($kelas->jadwal_ruangan_id, $kelas->start_time))
+            ->route('jadwal.kelas.index', $this->gridRedirectParams($kelas, $groupBy))
             ->with('success', 'Jadwal Kelas berhasil diperbarui.');
     }
 
@@ -517,7 +639,8 @@ class JadwalKelasController extends Controller
         $context = $this->companyContext($request);
 
         $kelas = $this->findOrFail($context, $id);
-        $redirectParams = $this->gridRedirectParams($kelas->jadwal_ruangan_id, $kelas->start_time);
+        $groupBy = $request->input('group_by') === 'pengajar' ? 'pengajar' : 'ruangan';
+        $redirectParams = $this->gridRedirectParams($kelas, $groupBy);
         $kelas->delete();
 
         return redirect()
