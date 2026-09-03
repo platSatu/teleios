@@ -9,18 +9,18 @@ use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 /**
- * Titik masuk paling atas dari drill-down Jadwal: Branch -> Mata
- * Pelajaran / Bidang -> Pengajar -> Student -> Jadwal (lihat App\Http\
- * Controllers\Jadwal\JadwalMataPelajaranController's docblock dan
- * seterusnya — semuanya mengikuti pola "ina" project's University ->
- * Album -> Photo).
+ * Titik masuk paling atas dari drill-down Jadwal (restrukturisasi 14
+ * September 2026, atas permintaan user): Branch -> Ruangan -> Jam
+ * Operasional -> Mata Pelajaran / Bidang -> Kategori -> Pengajar ->
+ * Student (lihat App\Http\Controllers\Jadwal\JadwalRuanganController's
+ * docblock dan seterusnya — semuanya mengikuti pola "ina" project's
+ * University -> Album -> Photo).
  *
  * Sengaja READ-ONLY (index saja, tanpa create/edit/delete) — ini BUKAN
  * manajemen branch yang sebenarnya (itu sudah ada di User\Profile\
  * BranchOfficeController, menu "Setting > Branch Office"), cuma pintu
  * masuk untuk memilih branch mana yang jadi konteks awal saat membuat
- * Mata Pelajaran / Bidang baru lewat tombol "+ Add Mata Pelajaran /
- * Bidang" di setiap baris.
+ * Ruangan baru lewat tombol "+ Add Ruangan" di setiap baris.
  */
 class JadwalBranchController extends Controller
 {

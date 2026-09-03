@@ -71,6 +71,9 @@
                                         <span class="badge {{ $ruangan->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $ruangan->status }}</span>
                                     </td>
                                     <td class="text-end text-nowrap">
+                                        <a href="{{ route('jadwal.branch-settings.index', ['ruangan_id' => $ruangan->id]) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="ri-add-line"></i> Add Jam Operasional
+                                        </a>
                                         <a href="{{ route('jadwal.ruangan.edit', $ruangan->id) }}" class="btn btn-sm btn-light"><i class="ri-edit-line"></i></a>
                                         <form action="{{ route('jadwal.ruangan.destroy', $ruangan->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Hapus ruangan ini?');">
                                             @csrf

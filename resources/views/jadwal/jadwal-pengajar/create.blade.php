@@ -4,10 +4,10 @@
 <div class="col-12">
     <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
         <div>
-            <h4 class="mb-1">Tambah Mata Pelajaran / Bidang</h4>
-            <p class="text-muted mb-0">Bidang kursus baru — bisa dipakai untuk musik, bahasa, atau bidang pendidikan lainnya.</p>
+            <h4 class="mb-1">Tambah Pengajar</h4>
+            <p class="text-muted mb-0">Pengajar baru untuk Kategori "{{ $kategori->name }}" ({{ $mataPelajaran->name }}).</p>
         </div>
-        <a href="{{ route('jadwal.mata-pelajaran.index', array_filter(['branch_office_id' => $selectedBranchOfficeId ?? null, 'ruangan_id' => $ruanganId ?? null])) }}" class="btn btn-light">
+        <a href="{{ route('jadwal.pengajar.index', ['jadwal_kategori_id' => $kategori->id]) }}" class="btn btn-light">
             <i class="ri-arrow-left-line"></i> Kembali
         </a>
     </div>
@@ -26,16 +26,13 @@
         <div class="col-lg-6">
             <div class="card border-0 shadow-sm">
                 <div class="card-body">
-                    <form action="{{ route('jadwal.mata-pelajaran.store') }}" method="POST" enctype="multipart/form-data">
+                    <form action="{{ route('jadwal.pengajar.store') }}" method="POST">
                         @csrf
-                        @if($ruanganId ?? null)
-                            <input type="hidden" name="ruangan_id" value="{{ $ruanganId }}">
-                        @endif
-                        @include('jadwal.jadwal-mata-pelajaran._form', ['mataPelajaran' => null])
+                        @include('jadwal.jadwal-pengajar._form', ['pengajarKategori' => null])
 
                         <div class="d-flex gap-2">
                             <button type="submit" class="btn btn-primary">Simpan</button>
-                            <a href="{{ route('jadwal.mata-pelajaran.index', array_filter(['branch_office_id' => $selectedBranchOfficeId ?? null, 'ruangan_id' => $ruanganId ?? null])) }}" class="btn btn-light">Batal</a>
+                            <a href="{{ route('jadwal.pengajar.index', ['jadwal_kategori_id' => $kategori->id]) }}" class="btn btn-light">Batal</a>
                         </div>
                     </form>
                 </div>

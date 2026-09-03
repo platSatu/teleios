@@ -16,7 +16,7 @@
                 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
                     <div>
                         <h4 class="mb-1">Branch</h4>
-                        <p class="text-muted mb-0">Titik awal Jadwal — pilih branch untuk menambahkan Mata Pelajaran / Bidang baru. Halaman ini khusus menampilkan branch (tanpa tambah/ubah/hapus di sini).</p>
+                        <p class="text-muted mb-0">Titik awal Jadwal — pilih branch untuk menambahkan Ruangan baru. Halaman ini khusus menampilkan branch (tanpa tambah/ubah/hapus di sini).</p>
                     </div>
                 </div>
 
@@ -49,17 +49,8 @@
                                     </td>
                                     <td class="text-center">{{ $branch->jadwal_mata_pelajaran_count }}</td>
                                     <td class="text-end text-nowrap">
-                                        <a href="{{ route('jadwal.mata-pelajaran.index', ['branch_office_id' => $branch->id]) }}" class="btn btn-sm btn-outline-primary">
-                                            Lihat Mata Pelajaran / Bidang
-                                        </a>
-                                        <a href="{{ route('jadwal.mata-pelajaran.create', ['branch_office_id' => $branch->id]) }}" class="btn btn-sm btn-outline-primary">
-                                            <i class="ri-add-line"></i> Add Mata Pelajaran / Bidang
-                                        </a>
                                         <a href="{{ route('jadwal.ruangan.index', ['branch_office_id' => $branch->id]) }}" class="btn btn-sm btn-outline-primary">
-                                            <i class="ri-door-open-line"></i> Ruangan
-                                        </a>
-                                        <a href="{{ route('jadwal.branch-settings.edit', $branch->id) }}" class="btn btn-sm btn-outline-primary">
-                                            <i class="ri-time-line"></i> Jam Operasional
+                                            <i class="ri-add-line"></i> Add Ruangan
                                         </a>
                                     </td>
                                 </tr>

@@ -95,7 +95,16 @@ class JadwalMataPelajaranController extends Controller
             ? BranchOffice::where('company_id', $company->id)->where('id', $branchOfficeId)->first()
             : null;
 
-        return view('jadwal.jadwal-mata-pelajaran.index', compact('mataPelajarans', 'branch', 'branchOfficeId'));
+        // Konteks Ruangan (kalau index ini dibuka lewat tombol "Add Mata
+        // Pelajaran" di halaman Jam Operasional, lihat
+        // JadwalBranchSettingController::index()) -- murni dibawa
+        // balik-balik lewat query string supaya tombol "Kembali" & "+
+        // Tambah" tetap mengarah ke Jam Operasional Ruangan yang sama,
+        // TIDAK disimpan ke jadwal_mata_pelajaran (tabel itu tetap milik
+        // Branch langsung, tidak berubah, lihat CLAUDE.md item #15).
+        $ruanganId = $request->query('ruangan_id');
+
+        return view('jadwal.jadwal-mata-pelajaran.index', compact('mataPelajarans', 'branch', 'branchOfficeId', 'ruanganId'));
     }
 
     public function create(Request $request): View
@@ -105,6 +114,7 @@ class JadwalMataPelajaranController extends Controller
         return view('jadwal.jadwal-mata-pelajaran.create', [
             'mataPelajaran' => null,
             'selectedBranchOfficeId' => $request->query('branch_office_id'),
+            'ruanganId' => $request->query('ruangan_id'),
             'branchOffices' => $this->branchOfficesFor($context->company, $context),
         ]);
     }
@@ -118,11 +128,13 @@ class JadwalMataPelajaranController extends Controller
             $request->merge(['branch_office_id' => $context->branchOffice?->id]);
         }
 
+        $ruanganId = $request->input('ruangan_id');
+
         $validator = $this->validator($request, $company);
 
         if ($validator->fails()) {
             return redirect()
-                ->route('jadwal.mata-pelajaran.create', array_filter(['branch_office_id' => $request->input('branch_office_id')]))
+                ->route('jadwal.mata-pelajaran.create', array_filter(['branch_office_id' => $request->input('branch_office_id'), 'ruangan_id' => $ruanganId]))
                 ->withErrors($validator)
                 ->withInput();
         }
@@ -144,7 +156,7 @@ class JadwalMataPelajaranController extends Controller
         // global) kalau memang dibuat dengan konteks branch — sesuai alur
         // "ina": create -> kembali ke index yang scoped ke parent-nya.
         return redirect()
-            ->route('jadwal.mata-pelajaran.index', array_filter(['branch_office_id' => $validated['branch_office_id'] ?? null]))
+            ->route('jadwal.mata-pelajaran.index', array_filter(['branch_office_id' => $validated['branch_office_id'] ?? null, 'ruangan_id' => $ruanganId]))
             ->with('success', 'Mata Pelajaran / Bidang berhasil ditambahkan.');
     }
 

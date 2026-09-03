@@ -15,7 +15,8 @@
             <ol class="breadcrumb mb-0">
                 <li class="breadcrumb-item"><a href="{{ route('jadwal.branch.index') }}">Branch</a></li>
                 <li class="breadcrumb-item"><a href="{{ route('jadwal.mata-pelajaran.index') }}">Mata Pelajaran / Bidang</a></li>
-                <li class="breadcrumb-item active" aria-current="page">{{ $mataPelajaran->name }}</li>
+                <li class="breadcrumb-item"><a href="{{ route('jadwal.kategori.index', ['jadwal_mata_pelajaran_id' => $mataPelajaran->id]) }}">{{ $mataPelajaran->name }}</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{{ $kategori->name }}</li>
                 <li class="breadcrumb-item active" aria-current="page">Pengajar</li>
             </ol>
         </nav>
@@ -24,22 +25,27 @@
             <div class="card-body">
                 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
                     <div>
-                        <h4 class="mb-1">Pengajar — {{ $mataPelajaran->name }}</h4>
-                        <p class="text-muted mb-0">Anggota tim company yang bisa dijadikan pengajar. Halaman ini khusus menampilkan pengajar (diambil dari Team Members) — pilih salah satu untuk menambahkan Student baru.</p>
+                        <h4 class="mb-1">Pengajar <span class="text-muted fs-6 fw-normal">— {{ $kategori->name }}</span></h4>
+                        <p class="text-muted mb-0">Pengajar yang ditugaskan ke Kategori "{{ $kategori->name }}", beserta hari & jam ketersediaannya masing-masing.</p>
                     </div>
-                    <a href="{{ route('jadwal.mata-pelajaran.index', array_filter(['branch_office_id' => $mataPelajaran->branch_office_id])) }}" class="btn btn-light">
-                        <i class="ri-arrow-left-line"></i> Kembali ke Mata Pelajaran / Bidang
-                    </a>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="{{ route('jadwal.kategori.index', ['jadwal_mata_pelajaran_id' => $mataPelajaran->id]) }}" class="btn btn-light">
+                            <i class="ri-arrow-left-line"></i> Kembali ke Kategori
+                        </a>
+                        <a href="{{ route('jadwal.pengajar.create', ['jadwal_kategori_id' => $kategori->id]) }}" class="btn btn-primary">
+                            <i class="ri-add-line"></i> Tambah Pengajar
+                        </a>
+                    </div>
                 </div>
 
                 <form method="GET" class="d-flex flex-wrap gap-2 mb-3">
-                    <input type="hidden" name="jadwal_mata_pelajaran_id" value="{{ $mataPelajaran->id }}">
+                    <input type="hidden" name="jadwal_kategori_id" value="{{ $kategori->id }}">
                     <div class="input-group" style="max-width: 260px;">
                         <input type="text" name="search" class="form-control" placeholder="Cari nama pengajar..." value="{{ request('search') }}">
                         <button type="submit" class="btn btn-outline-secondary"><i class="ri-search-line"></i></button>
                     </div>
                     @if(request('search'))
-                        <a href="{{ route('jadwal.pengajar.index', ['jadwal_mata_pelajaran_id' => $mataPelajaran->id]) }}" class="btn btn-light">Reset</a>
+                        <a href="{{ route('jadwal.pengajar.index', ['jadwal_kategori_id' => $kategori->id]) }}" class="btn btn-light">Reset</a>
                     @endif
                 </form>
 
@@ -47,31 +53,54 @@
                     <table class="table table-centered table-hover align-middle mb-0">
                         <thead class="table-light">
                             <tr>
-                                <th>No</th>
-                                <th>Nama</th>
-                                <th>Email</th>
-                                <th class="text-end">Aksi</th>
+                                <th class="text-nowrap">Pengajar</th>
+                                <th class="text-nowrap">Hari Bisa</th>
+                                <th class="text-nowrap">Jam</th>
+                                <th class="text-nowrap">Status</th>
+                                <th class="text-nowrap text-end">Aksi</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @forelse($teamMembers as $index => $member)
+                            @forelse($pengajarKategoris as $pk)
                                 <tr>
-                                    <td>{{ $index + 1 }}</td>
-                                    <td class="fw-semibold">{{ $member->name }}</td>
-                                    <td>{{ $member->email }}</td>
+                                    <td class="text-nowrap">
+                                        <div class="fw-semibold">{{ $pk->pengajar->name ?? '-' }}</div>
+                                        <div class="text-muted small">{{ $pk->pengajar->email ?? '' }}</div>
+                                    </td>
+                                    <td class="text-nowrap">{{ $pk->hariBisaLabel() ?: '-' }}</td>
+                                    <td class="text-nowrap">{{ $pk->jamRangeLabel() }}</td>
+                                    <td class="text-nowrap">
+                                        <span class="badge {{ $pk->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $pk->status }}</span>
+                                    </td>
                                     <td class="text-end text-nowrap">
-                                        <a href="{{ route('jadwal.student.create', ['jadwal_mata_pelajaran_id' => $mataPelajaran->id, 'pengajar_id' => $member->id]) }}" class="btn btn-sm btn-outline-primary">
+                                        <a href="{{ route('jadwal.student.create', [
+                                            'jadwal_mata_pelajaran_id' => $mataPelajaran->id,
+                                            'pengajar_id' => $pk->pengajar_id,
+                                            'jadwal_kategori_id' => $kategori->id,
+                                        ]) }}" class="btn btn-sm btn-outline-primary">
                                             <i class="ri-add-line"></i> Add Student
                                         </a>
+                                        <a href="{{ route('jadwal.pengajar.edit', $pk->id) }}" class="btn btn-sm btn-light">
+                                            <i class="ri-edit-line"></i>
+                                        </a>
+                                        <form action="{{ route('jadwal.pengajar.destroy', $pk->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Hapus pengajar ini dari Kategori &quot;{{ $kategori->name }}&quot;? Jadwal Rutin/sesi yang sudah ada TIDAK ikut terhapus.');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="ri-delete-bin-line"></i></button>
+                                        </form>
                                     </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="4" class="text-center text-muted py-4">Belum ada anggota tim di branch/company ini.</td>
+                                    <td colspan="5" class="text-center text-muted py-4">Belum ada Pengajar di Kategori ini. Klik "Tambah Pengajar" untuk menambahkan yang pertama.</td>
                                 </tr>
                             @endforelse
                         </tbody>
                     </table>
+                </div>
+
+                <div class="mt-3">
+                    {{ $pengajarKategoris->links('pagination::bootstrap-5') }}
                 </div>
             </div>
         </div>

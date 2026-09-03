@@ -29,12 +29,16 @@
                         <p class="text-muted mb-0">Katalog bidang kursus (musik, bahasa, dll.) yang dipakai untuk mengelompokkan Jadwal Kelas.</p>
                     </div>
                     <div class="d-flex flex-wrap gap-2">
-                        @if($branch)
+                        @if($ruanganId)
+                            <a href="{{ route('jadwal.branch-settings.index', ['ruangan_id' => $ruanganId]) }}" class="btn btn-light">
+                                <i class="ri-arrow-left-line"></i> Kembali ke Jam Operasional
+                            </a>
+                        @elseif($branch)
                             <a href="{{ route('jadwal.branch.index') }}" class="btn btn-light">
                                 <i class="ri-arrow-left-line"></i> Kembali ke Branch
                             </a>
                         @endif
-                        <a href="{{ route('jadwal.mata-pelajaran.create', array_filter(['branch_office_id' => $branchOfficeId])) }}" class="btn btn-primary">
+                        <a href="{{ route('jadwal.mata-pelajaran.create', array_filter(['branch_office_id' => $branchOfficeId, 'ruangan_id' => $ruanganId])) }}" class="btn btn-primary">
                             <i class="ri-add-line"></i> Tambah Mata Pelajaran / Bidang
                         </a>
                     </div>
@@ -43,6 +47,9 @@
                 <form method="GET" class="d-flex flex-wrap gap-2 mb-3">
                     @if($branchOfficeId)
                         <input type="hidden" name="branch_office_id" value="{{ $branchOfficeId }}">
+                    @endif
+                    @if($ruanganId)
+                        <input type="hidden" name="ruangan_id" value="{{ $ruanganId }}">
                     @endif
                     <div class="input-group" style="max-width: 260px;">
                         <input type="text" name="search" class="form-control" placeholder="Cari nama..." value="{{ request('search') }}">
@@ -54,7 +61,7 @@
                         <option value="inactive" @selected(request('status') == 'inactive')>Inactive</option>
                     </select>
                     @if(request('search') || request('status'))
-                        <a href="{{ route('jadwal.mata-pelajaran.index', array_filter(['branch_office_id' => $branchOfficeId])) }}" class="btn btn-light">Reset</a>
+                        <a href="{{ route('jadwal.mata-pelajaran.index', array_filter(['branch_office_id' => $branchOfficeId, 'ruangan_id' => $ruanganId])) }}" class="btn btn-light">Reset</a>
                     @endif
                 </form>
 
@@ -132,11 +139,8 @@
                                         <span class="badge {{ $mataPelajaran->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $mataPelajaran->status }}</span>
                                     </td>
                                     <td class="text-nowrap text-end">
-                                        <a href="{{ route('jadwal.kategori.index', ['jadwal_mata_pelajaran_id' => $mataPelajaran->id]) }}" class="btn btn-sm btn-light">
-                                            <i class="ri-price-tag-3-line"></i> Kategori
-                                        </a>
-                                        <a href="{{ route('jadwal.pengajar.index', ['jadwal_mata_pelajaran_id' => $mataPelajaran->id]) }}" class="btn btn-sm btn-outline-primary">
-                                            <i class="ri-add-line"></i> Add Pengajar
+                                        <a href="{{ route('jadwal.kategori.index', ['jadwal_mata_pelajaran_id' => $mataPelajaran->id]) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="ri-add-line"></i> Add Category
                                         </a>
                                         <a href="{{ route('jadwal.mata-pelajaran.edit', $mataPelajaran->id) }}" class="btn btn-sm btn-light">
                                             <i class="ri-edit-line"></i>

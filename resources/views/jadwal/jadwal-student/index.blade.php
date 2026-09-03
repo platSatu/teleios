@@ -1,7 +1,5 @@
 @extends('layouts.dashboard')
 
-@section('title', 'Data Student')
-
 @section('content')
 <div class="row">
     <div class="col-12">
@@ -18,7 +16,11 @@
                 <ol class="breadcrumb mb-0">
                     <li class="breadcrumb-item"><a href="{{ route('jadwal.branch.index') }}">Branch</a></li>
                     <li class="breadcrumb-item"><a href="{{ route('jadwal.mata-pelajaran.index') }}">Mata Pelajaran / Bidang</a></li>
-                    <li class="breadcrumb-item"><a href="{{ route('jadwal.pengajar.index', ['jadwal_mata_pelajaran_id' => $mataPelajaran->id]) }}">{{ $mataPelajaran->name }}</a></li>
+                    @if($kategoriId ?? null)
+                        <li class="breadcrumb-item"><a href="{{ route('jadwal.pengajar.index', ['jadwal_kategori_id' => $kategoriId]) }}">{{ $mataPelajaran->name }}</a></li>
+                    @else
+                        <li class="breadcrumb-item active" aria-current="page">{{ $mataPelajaran->name }}</li>
+                    @endif
                     @if($pengajar)
                         <li class="breadcrumb-item active" aria-current="page">{{ $pengajar->name }}</li>
                     @endif
@@ -31,16 +33,20 @@
             <div class="card-body">
                 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
                     <div>
-                        <h4 class="mb-1">Data Student{{ $pengajar ? ' — '.$pengajar->name : '' }}</h4>
+                        <h4 class="mb-1">Student{{ $pengajar ? ' — '.$pengajar->name : '' }}</h4>
                         <p class="text-muted mb-0">Daftar murid. Sesuai company/branch Anda — bukan seluruh user.</p>
                     </div>
                     <div class="d-flex flex-wrap gap-2">
-                        @if($mataPelajaran)
-                            <a href="{{ route('jadwal.pengajar.index', ['jadwal_mata_pelajaran_id' => $mataPelajaran->id]) }}" class="btn btn-light">
+                        @if($kategoriId ?? null)
+                            <a href="{{ route('jadwal.pengajar.index', ['jadwal_kategori_id' => $kategoriId]) }}" class="btn btn-light">
                                 <i class="ri-arrow-left-line"></i> Kembali ke Pengajar
                             </a>
+                        @elseif($mataPelajaran)
+                            <a href="{{ route('jadwal.mata-pelajaran.index') }}" class="btn btn-light">
+                                <i class="ri-arrow-left-line"></i> Kembali ke Mata Pelajaran / Bidang
+                            </a>
                         @endif
-                        <a href="{{ route('jadwal.student.create', array_filter(['jadwal_mata_pelajaran_id' => $mataPelajaranId, 'pengajar_id' => $pengajarId])) }}" class="btn btn-primary">
+                        <a href="{{ route('jadwal.student.create', array_filter(['jadwal_mata_pelajaran_id' => $mataPelajaranId, 'pengajar_id' => $pengajarId, 'jadwal_kategori_id' => $kategoriId ?? null])) }}" class="btn btn-primary">
                             <i class="ri-add-line"></i> Tambah Student
                         </a>
                     </div>
@@ -53,6 +59,9 @@
                     @if($pengajarId)
                         <input type="hidden" name="pengajar_id" value="{{ $pengajarId }}">
                     @endif
+                    @if($kategoriId ?? null)
+                        <input type="hidden" name="jadwal_kategori_id" value="{{ $kategoriId }}">
+                    @endif
                     <div class="input-group" style="max-width: 260px;">
                         <input type="text" name="search" class="form-control" placeholder="Cari nama student..." value="{{ request('search') }}">
                         <button type="submit" class="btn btn-outline-secondary"><i class="ri-search-line"></i></button>
@@ -63,7 +72,7 @@
                         <option value="inactive" @selected(request('status') == 'inactive')>Inactive</option>
                     </select>
                     @if(request('search') || request('status'))
-                        <a href="{{ route('jadwal.student.index', array_filter(['jadwal_mata_pelajaran_id' => $mataPelajaranId, 'pengajar_id' => $pengajarId])) }}" class="btn btn-light">Reset</a>
+                        <a href="{{ route('jadwal.student.index', array_filter(['jadwal_mata_pelajaran_id' => $mataPelajaranId, 'pengajar_id' => $pengajarId, 'jadwal_kategori_id' => $kategoriId ?? null])) }}" class="btn btn-light">Reset</a>
                     @endif
                 </form>
 
@@ -71,7 +80,6 @@
                     <table class="table table-centered table-hover align-middle mb-0">
                         <thead class="table-light">
                             <tr>
-                                <th>No</th>
                                 <th>Nama</th>
                                 @unless($mataPelajaran)
                                     <th>Mata Pelajaran / Bidang</th>
@@ -88,7 +96,6 @@
                         <tbody>
                             @forelse($students as $student)
                                 <tr>
-                                    <td class="text-muted">{{ $students->firstItem() + $loop->index }}</td>
                                     <td class="fw-semibold">{{ $student->name }}</td>
                                     @unless($mataPelajaran)
                                         <td>{{ $student->mataPelajaran->name ?? '-' }}</td>
@@ -131,7 +138,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="{{ 6 + ($mataPelajaran ? 0 : 1) + ($pengajar ? 0 : 1) }}" class="text-center text-muted py-4">Belum ada Student. Klik "Tambah Student" untuk membuat yang pertama.</td>
+                                    <td colspan="{{ 5 + ($mataPelajaran ? 0 : 1) + ($pengajar ? 0 : 1) }}" class="text-center text-muted py-4">Belum ada Student. Klik "Tambah Student" untuk membuat yang pertama.</td>
                                 </tr>
                             @endforelse
                         </tbody>

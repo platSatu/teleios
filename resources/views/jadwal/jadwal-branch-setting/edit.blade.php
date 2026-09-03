@@ -5,10 +5,10 @@
     <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
         <div>
             <h4 class="mb-1">Jam Operasional</h4>
-            <p class="text-muted mb-0">{{ $branch->name }} — hari & jam buka, jam istirahat, serta default durasi/jumlah sesi generator bulanan.</p>
+            <p class="text-muted mb-0">{{ $branch->name }} — hari & jam buka, jam istirahat, serta default durasi/jumlah sesi generator bulanan. Berlaku untuk seluruh ruangan di branch ini.</p>
         </div>
-        <a href="{{ route('jadwal.branch.index') }}" class="btn btn-light">
-            <i class="ri-arrow-left-line"></i> Kembali ke Branch
+        <a href="{{ route('jadwal.branch-settings.index', array_filter(['ruangan_id' => $ruanganId ?? null])) }}" class="btn btn-light">
+            <i class="ri-arrow-left-line"></i> Kembali
         </a>
     </div>
 
@@ -37,6 +37,9 @@
                     <form action="{{ route('jadwal.branch-settings.update', $branch->id) }}" method="POST">
                         @csrf
                         @method('PUT')
+                        @if($ruanganId ?? null)
+                            <input type="hidden" name="ruangan_id" value="{{ $ruanganId }}">
+                        @endif
 
                         <div class="mb-3">
                             <label class="form-label d-block">Hari Operasional</label>
@@ -127,7 +130,7 @@
 
                         <div class="d-flex gap-2">
                             <button type="submit" class="btn btn-primary">Simpan</button>
-                            <a href="{{ route('jadwal.branch.index') }}" class="btn btn-light">Batal</a>
+                            <a href="{{ route('jadwal.branch-settings.index', array_filter(['ruangan_id' => $ruanganId ?? null])) }}" class="btn btn-light">Batal</a>
                         </div>
                     </form>
                 </div>

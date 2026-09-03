@@ -310,13 +310,17 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
         // project's University -> Album -> Photo).
         Route::get('branch', [JadwalBranchController::class, 'index'])->name('jadwal.branch.index');
 
-        // Jam Operasional per branch (Jadwal v2, spec poin 1) -- singleton
-        // per branch_office_id, lihat JadwalBranchSettingController.
+        // Jam Operasional (Jadwal v2, spec poin 1) -- datanya tetap
+        // singleton per branch_office_id, titik masuknya lewat Ruangan
+        // (restrukturisasi 14 September 2026), lihat
+        // JadwalBranchSettingController's docblock.
         Route::prefix('branch-settings')
             ->controller(JadwalBranchSettingController::class)
             ->group(function () {
+                Route::get('/', 'index')->name('jadwal.branch-settings.index');
                 Route::get('/{branchOfficeId}/edit', 'edit')->name('jadwal.branch-settings.edit');
                 Route::put('/{branchOfficeId}', 'update')->name('jadwal.branch-settings.update');
+                Route::delete('/{branchOfficeId}', 'destroy')->name('jadwal.branch-settings.destroy');
             });
 
         // Ruangan per branch (Jadwal v2, spec poin 2).
@@ -354,9 +358,20 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::delete('/{id}', 'destroy')->name('jadwal.kategori.destroy');
             });
 
-        // Read-only -- tidak ada tabel/CRUD sendiri, lihat
-        // JadwalPengajarController's docblock.
-        Route::get('pengajar', [JadwalPengajarController::class, 'index'])->name('jadwal.pengajar.index');
+        // Pengajar di bawah Kategori (Jadwal v2 restrukturisasi 14
+        // September 2026) -- full CRUD atas App\Models\
+        // JadwalPengajarKategori, lihat JadwalPengajarController's
+        // docblock.
+        Route::prefix('pengajar')
+            ->controller(JadwalPengajarController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('jadwal.pengajar.index');
+                Route::get('/create', 'create')->name('jadwal.pengajar.create');
+                Route::post('/', 'store')->name('jadwal.pengajar.store');
+                Route::get('/{id}/edit', 'edit')->name('jadwal.pengajar.edit');
+                Route::put('/{id}', 'update')->name('jadwal.pengajar.update');
+                Route::delete('/{id}', 'destroy')->name('jadwal.pengajar.destroy');
+            });
 
         Route::prefix('student')
             ->controller(JadwalStudentController::class)

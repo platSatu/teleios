@@ -65,6 +65,9 @@
                                         <span class="badge {{ $kategori->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $kategori->status }}</span>
                                     </td>
                                     <td class="text-end text-nowrap">
+                                        <a href="{{ route('jadwal.pengajar.index', ['jadwal_kategori_id' => $kategori->id]) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="ri-add-line"></i> Add Pengajar
+                                        </a>
                                         <a href="{{ route('jadwal.kategori.edit', $kategori->id) }}" class="btn btn-sm btn-light"><i class="ri-edit-line"></i></a>
                                         <form action="{{ route('jadwal.kategori.destroy', $kategori->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Hapus kategori ini?');">
                                             @csrf

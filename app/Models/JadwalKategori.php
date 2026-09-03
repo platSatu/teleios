@@ -66,6 +66,17 @@ class JadwalKategori extends Model
     }
 
     /**
+     * Pengajar yang ditugaskan ke Kategori ini + jam ketersediaannya
+     * (restrukturisasi drill-down Jadwal 14 September 2026, lihat
+     * App\Models\JadwalPengajarKategori's docblock). Level baru di
+     * antara Kategori dan Student.
+     */
+    public function pengajarKategoris(): HasMany
+    {
+        return $this->hasMany(JadwalPengajarKategori::class, 'jadwal_kategori_id');
+    }
+
+    /**
      * Harga per SESI, dihitung dari harga_bulanan dibagi jumlah
      * sesi/bulan -- kirim `$sesiPerBulan` dari
      * JadwalBranchSetting::sesi_per_bulan_default branch yang relevan
