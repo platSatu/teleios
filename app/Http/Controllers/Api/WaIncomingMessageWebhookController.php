@@ -342,11 +342,14 @@ class WaIncomingMessageWebhookController extends Controller
      * JadwalReminderSetting untuk kenapa nothing hardcoded).
      *
      * Nomor pengirim dicocokkan (via App\Support\PhoneNumber::normalize())
-     * ke `handphone` salah satu anggota company ini (owner atau member,
-     * lihat companyTeamMembers()) -- kalau tidak ada yang cocok, pesan
-     * ini BUKAN dari pengajar company ini, jadi dibiarkan lanjut ke
-     * chain normal (chatbot flow/keyword/AI bot) alih-alih diam-diam
-     * ditelan.
+     * ke `handphone` salah satu anggota company ini yang rolenya
+     * ditandai is_pengajar (lihat companyPengajarMembers()) -- kalau
+     * tidak ada yang cocok, baik karena nomornya tidak dikenal ATAU
+     * dikenal tapi rolenya tidak ditandai sebagai pengajar (mis. Owner
+     * yang sudah punya staff pengajar sendiri dan mematikan toggle-nya
+     * di tab Roles), pesan ini dianggap BUKAN dari pengajar company
+     * ini, jadi dibiarkan lanjut ke chain normal (chatbot flow/keyword/
+     * AI bot) alih-alih diam-diam ditelan.
      *
      * Returns null (falls through) kalau device tidak terhubung ke
      * company mana pun, company belum mengatur pengaturan pengingat
@@ -392,7 +395,7 @@ class WaIncomingMessageWebhookController extends Controller
 
         $normalizedSender = PhoneNumber::normalize($digits);
 
-        $pengajar = $this->companyTeamMembers($company)->first(
+        $pengajar = $this->companyPengajarMembers($company)->first(
             fn (User $u) => $u->handphone && PhoneNumber::normalize($u->handphone) === $normalizedSender
         );
 
