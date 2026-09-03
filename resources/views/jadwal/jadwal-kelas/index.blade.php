@@ -54,16 +54,16 @@
                     <table class="table table-bordered table-centered align-middle mb-0" style="min-width: 1100px;">
                         <thead class="table-light">
                             <tr>
-                                <th class="text-nowrap">Pengajar</th>
-                                <th class="text-nowrap">Ruangan</th>
-                                <th class="text-nowrap">Bidang</th>
-                                <th class="text-nowrap">Kategori</th>
-                                <th class="text-nowrap">Murid</th>
-                                <th class="text-nowrap">Mulai</th>
-                                <th class="text-nowrap">Selesai</th>
-                                <th class="text-nowrap" style="min-width: 340px;">Kehadiran</th>
-                                <th class="text-nowrap">Status</th>
-                                <th class="text-end text-nowrap">Aksi</th>
+                                <th class="text-center text-nowrap">Pengajar</th>
+                                <th class="text-center text-nowrap">Ruangan</th>
+                                <th class="text-center text-nowrap">Bidang</th>
+                                <th class="text-center text-nowrap">Kategori</th>
+                                <th class="text-center text-nowrap">Murid</th>
+                                <th class="text-center text-nowrap">Mulai</th>
+                                <th class="text-center text-nowrap">Selesai</th>
+                                <th class="text-center text-nowrap" style="min-width: 340px;">Kehadiran</th>
+                                <th class="text-center text-nowrap">Status</th>
+                                <th class="text-center text-nowrap">Aksi</th>
                             </tr>
                         </thead>
                         <tbody>
