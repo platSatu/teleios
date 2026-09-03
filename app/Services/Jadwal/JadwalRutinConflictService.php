@@ -73,6 +73,31 @@ class JadwalRutinConflictService
     }
 
     /**
+     * Wrapper publik ke findConflict() untuk SISI PENGAJAR saja --
+     * dipakai App\Http\Controllers\Jadwal\JadwalStudentController untuk
+     * menyaring slot ketersediaan Pengajar (App\Models\
+     * JadwalPengajarJadwal) yang masih kosong di form "Add Student"
+     * (permintaan user 3 September 2026), tanpa perlu jalur error-message
+     * lengkap check() di atas. Return baris Jadwal Rutin yang bentrok
+     * (buat tahu "terisi oleh siapa"), atau null kalau kosong.
+     */
+    public function findPengajarConflict(
+        string $companyId,
+        int $hari,
+        string $jamMulai,
+        string $jamSelesai,
+        string $efektifMulai,
+        ?string $efektifSelesai,
+        string $pengajarId,
+        ?string $ignoreId = null,
+    ): ?JadwalRutin {
+        return $this->findConflict(
+            $companyId, $hari, $jamMulai, $jamSelesai, $efektifMulai, $efektifSelesai, $ignoreId,
+            pengajarId: $pengajarId,
+        );
+    }
+
+    /**
      * Cari satu baris Jadwal Rutin aktif yang bentrok, untuk SATU sisi
      * saja (pengajar ATAU ruangan -- persis salah satu argumen ini yang
      * diisi tiap panggilan, lihat check() di atas).

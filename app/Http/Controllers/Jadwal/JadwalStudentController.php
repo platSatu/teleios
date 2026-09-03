@@ -6,11 +6,18 @@ use App\Http\Controllers\Concerns\ResolvesCompanyContext;
 use App\Http\Controllers\Controller;
 use App\Models\BranchOffice;
 use App\Models\Company;
+use App\Models\JadwalBranchSetting;
 use App\Models\JadwalMataPelajaran;
+use App\Models\JadwalPengajarJadwal;
 use App\Models\JadwalPengajarKategori;
+use App\Models\JadwalRutin;
 use App\Models\JadwalStudent;
+use App\Services\Jadwal\JadwalRutinConflictService;
+use App\Services\Jadwal\JadwalRutinSesiGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\View\View;
 
@@ -28,6 +35,26 @@ use Illuminate\View\View;
  * vs-free seperti "ina" project's University Album Photo create/edit.
  * edit() SENGAJA TIDAK mengunci (dropdown selalu bebas), sama seperti
  * pola ina itu juga.
+ *
+ * Update 3 September 2026 (permintaan user): kalau datang dengan
+ * konteks Kategori+Pengajar (lewat tombol "+ Add Student" di index
+ * Pengajar), form ini juga menampilkan CHECKLIST slot ketersediaan
+ * Pengajar (App\Models\JadwalPengajarJadwal) yang MASIH KOSONG --
+ * "kosong" = belum ada Jadwal Rutin aktif lain punya Pengajar yang
+ * sama, bentrok jam ("1 kelas 1 guru = private", lihat App\Services\
+ * Jadwal\JadwalRutinConflictService::findPengajarConflict(), rule yang
+ * sama dipakai App\Http\Controllers\Jadwal\JadwalRutinController), DAN
+ * masih dalam jam operasional branch (App\Models\JadwalBranchSetting).
+ * Slot yang dicentang admin di form ini otomatis jadi baris
+ * App\Models\JadwalRutin begitu Student disimpan (lihat store()),
+ * durasi = rentang slot itu sendiri (mis. 10:00-12:00 = 120 menit),
+ * DAN sesi bulan berjalan langsung digenerate saat itu juga lewat
+ * App\Services\Jadwal\JadwalRutinSesiGenerator (bukan nunggu command
+ * `jadwal:generate-sesi` yang jalan tiap tanggal 1) -- "checklist,
+ * pilih slot, langsung auto-generate 4x sesi" sesuai permintaan user.
+ * Kalau branch belum punya Jam Operasional, atau tidak ada slot yang
+ * dicentang, Student tetap berhasil dibuat seperti biasa -- fitur ini
+ * murni tambahan, bukan syarat wajib.
  */
 class JadwalStudentController extends Controller
 {
@@ -103,13 +130,33 @@ class JadwalStudentController extends Controller
         // JadwalPengajarKategori, murni info, TIDAK disimpan ke
         // jadwal_student -- tabel itu tetap cuma jadwal_mata_pelajaran_id
         // + pengajar_id seperti sebelumnya, lihat CLAUDE.md item #15).
+        // `kategori.mataPelajaran` ikut di-eager-load supaya branch-nya
+        // bisa dipakai resolve JadwalBranchSetting di bawah, tanpa query
+        // tambahan.
         $pengajarAvailability = ($kategoriId && $pengajarId)
-            ? JadwalPengajarKategori::with('jadwals')
+            ? JadwalPengajarKategori::with(['jadwals', 'kategori.mataPelajaran'])
                 ->where('company_id', $context->company->id)
                 ->where('jadwal_kategori_id', $kategoriId)
                 ->where('pengajar_id', $pengajarId)
                 ->first()
             : null;
+
+        $branchSetting = null;
+        $openSlots = collect();
+
+        if ($pengajarAvailability) {
+            $branchOfficeId = $context->isLockedToBranch()
+                ? $context->branchOffice?->id
+                : $pengajarAvailability->kategori?->mataPelajaran?->branch_office_id;
+
+            $branchSetting = $branchOfficeId
+                ? JadwalBranchSetting::where('branch_office_id', $branchOfficeId)->first()
+                : null;
+
+            if ($branchSetting) {
+                $openSlots = $this->openSlotsFor($context, $pengajarAvailability, $pengajarId, $branchSetting);
+            }
+        }
 
         return view('jadwal.jadwal-student.create', [
             'student' => null,
@@ -117,6 +164,8 @@ class JadwalStudentController extends Controller
             'selectedPengajarId' => $pengajarId,
             'selectedKategoriId' => $kategoriId,
             'pengajarAvailability' => $pengajarAvailability,
+            'branchSettingMissing' => $pengajarAvailability && ! $branchSetting,
+            'openSlots' => $openSlots,
         ] + $this->formData($context));
     }
 
@@ -146,16 +195,36 @@ class JadwalStudentController extends Controller
             ->where('id', $validated['jadwal_mata_pelajaran_id'])
             ->first();
 
-        JadwalStudent::create([
-            'company_id' => $company->id,
-            'branch_office_id' => $validated['branch_office_id'] ?? $mataPelajaran?->branch_office_id,
-            'jadwal_mata_pelajaran_id' => $validated['jadwal_mata_pelajaran_id'],
-            'pengajar_id' => $validated['pengajar_id'],
-            'name' => $validated['name'],
-            'parent_phone_number' => $validated['parent_phone_number'] ?? null,
-            'student_phone_number' => $validated['student_phone_number'] ?? null,
-            'status' => $validated['status'] ?? 'active',
-        ]);
+        $slotIds = array_values(array_filter((array) $request->input('jadwal_rutin_slot_ids', [])));
+
+        [$student, $rutinCreated, $rutinSkipped] = DB::transaction(function () use ($company, $validated, $mataPelajaran, $kategoriId, $slotIds) {
+            $student = JadwalStudent::create([
+                'company_id' => $company->id,
+                'branch_office_id' => $validated['branch_office_id'] ?? $mataPelajaran?->branch_office_id,
+                'jadwal_mata_pelajaran_id' => $validated['jadwal_mata_pelajaran_id'],
+                'pengajar_id' => $validated['pengajar_id'],
+                'name' => $validated['name'],
+                'parent_phone_number' => $validated['parent_phone_number'] ?? null,
+                'student_phone_number' => $validated['student_phone_number'] ?? null,
+                'status' => $validated['status'] ?? 'active',
+            ]);
+
+            [$rutinCreated, $rutinSkipped] = $kategoriId && $slotIds
+                ? $this->createRutinFromSlots($company, $student, $kategoriId, $validated['pengajar_id'], $slotIds)
+                : [0, []];
+
+            return [$student, $rutinCreated, $rutinSkipped];
+        });
+
+        $message = 'Student berhasil ditambahkan.';
+
+        if ($rutinCreated > 0) {
+            $message .= " {$rutinCreated} Jadwal Rutin otomatis dibuat dari slot yang dicentang, sesi bulan ini langsung digenerate.";
+        }
+
+        if (! empty($rutinSkipped)) {
+            $message .= ' Slot yang dilewati: '.implode('; ', $rutinSkipped).'.';
+        }
 
         return redirect()
             ->route('jadwal.student.index', array_filter([
@@ -163,7 +232,147 @@ class JadwalStudentController extends Controller
                 'pengajar_id' => $validated['pengajar_id'],
                 'jadwal_kategori_id' => $kategoriId,
             ]))
-            ->with('success', 'Student berhasil ditambahkan.');
+            ->with('success', $message);
+    }
+
+    /**
+     * Buat App\Models\JadwalRutin untuk tiap slot ketersediaan Pengajar
+     * (App\Models\JadwalPengajarJadwal) yang dicentang admin di form Add
+     * Student, lalu langsung generate sesi bulan berjalan lewat
+     * App\Services\Jadwal\JadwalRutinSesiGenerator. Divalidasi ULANG di
+     * sini (bukan cuma percaya `$slotIds` dari form) -- kepemilikan slot
+     * (company+kategori+pengajar cocok), jam operasional branch, DAN
+     * bentrok pengajar (race condition: slot yang kelihatan kosong saat
+     * form dibuka bisa saja baru saja terisi admin lain sebelum submit
+     * ini) -- lihat class docblock untuk konteks lengkap fitur ini.
+     *
+     * @param  array<int, string>  $slotIds
+     * @return array{0: int, 1: array<int, string>} [jumlah Jadwal Rutin dibuat, daftar alasan slot yang dilewati]
+     */
+    private function createRutinFromSlots(Company $company, JadwalStudent $student, string $kategoriId, string $pengajarId, array $slotIds): array
+    {
+        $branchOfficeId = $student->branch_office_id;
+        $branchSetting = $branchOfficeId
+            ? JadwalBranchSetting::where('branch_office_id', $branchOfficeId)->first()
+            : null;
+
+        if (! $branchSetting) {
+            return [0, ['branch belum punya Jam Operasional -- atur dulu lewat menu Jadwal > Branch > Jam Operasional']];
+        }
+
+        $slots = JadwalPengajarJadwal::whereIn('id', $slotIds)
+            ->whereHas('pengajarKategori', function ($q) use ($company, $kategoriId, $pengajarId) {
+                $q->where('company_id', $company->id)
+                    ->where('jadwal_kategori_id', $kategoriId)
+                    ->where('pengajar_id', $pengajarId);
+            })
+            ->orderBy('hari')
+            ->orderBy('jam_mulai')
+            ->get();
+
+        $conflictService = app(JadwalRutinConflictService::class);
+        $generator = app(JadwalRutinSesiGenerator::class);
+        $today = now()->toDateString();
+
+        $created = 0;
+        $skipped = [];
+
+        foreach ($slots as $slot) {
+            $jamMulai = substr($slot->jam_mulai, 0, 5);
+            $jamSelesai = substr($slot->jam_selesai, 0, 5);
+            $label = $slot->hariLabel()." {$jamMulai}-{$jamSelesai}";
+
+            if (! $branchSetting->isHariOperasional($slot->hari) || ! $branchSetting->isWithinOperationalHours($jamMulai, $jamSelesai)) {
+                $skipped[] = "{$label} (di luar jam operasional branch)";
+
+                continue;
+            }
+
+            $conflict = $conflictService->findPengajarConflict(
+                companyId: $company->id,
+                hari: $slot->hari,
+                jamMulai: $jamMulai,
+                jamSelesai: $jamSelesai,
+                efektifMulai: $today,
+                efektifSelesai: null,
+                pengajarId: $pengajarId,
+            );
+
+            if ($conflict) {
+                $skipped[] = "{$label} (baru saja terisi murid lain: ".($conflict->student?->name ?? '-').')';
+
+                continue;
+            }
+
+            $rutin = JadwalRutin::create([
+                'company_id' => $company->id,
+                'branch_office_id' => $branchOfficeId,
+                'student_id' => $student->id,
+                'jadwal_kategori_id' => $kategoriId,
+                'pengajar_id' => $pengajarId,
+                'jadwal_ruangan_id' => null,
+                'hari' => $slot->hari,
+                'jam_mulai' => $jamMulai,
+                'durasi_menit' => \Carbon\Carbon::createFromFormat('H:i', $jamMulai)->diffInMinutes(\Carbon\Carbon::createFromFormat('H:i', $jamSelesai)),
+                'efektif_mulai' => $today,
+                'efektif_selesai' => null,
+                'status' => 'active',
+            ]);
+
+            $generator->generateForRutin($rutin);
+            $created++;
+        }
+
+        return [$created, $skipped];
+    }
+
+    /**
+     * Slot ketersediaan Pengajar (App\Models\JadwalPengajarJadwal) yang
+     * MASIH KOSONG -- dipakai create() untuk checklist di form Add
+     * Student (lihat class docblock). Kriteria sama persis dengan yang
+     * dicek ulang createRutinFromSlots() saat submit: dalam jam
+     * operasional branch DAN tidak bentrok Jadwal Rutin aktif lain punya
+     * Pengajar yang sama.
+     *
+     * @return Collection<int, array{id: string, hari: int, hari_label: string, jam_mulai: string, jam_selesai: string, durasi_menit: int}>
+     */
+    private function openSlotsFor($context, JadwalPengajarKategori $pengajarAvailability, string $pengajarId, JadwalBranchSetting $branchSetting): Collection
+    {
+        $conflictService = app(JadwalRutinConflictService::class);
+        $today = now()->toDateString();
+
+        return $pengajarAvailability->jadwals
+            ->filter(function (JadwalPengajarJadwal $slot) use ($branchSetting) {
+                $jamMulai = substr($slot->jam_mulai, 0, 5);
+                $jamSelesai = substr($slot->jam_selesai, 0, 5);
+
+                return $branchSetting->isHariOperasional($slot->hari)
+                    && $branchSetting->isWithinOperationalHours($jamMulai, $jamSelesai);
+            })
+            ->reject(function (JadwalPengajarJadwal $slot) use ($context, $conflictService, $pengajarId, $today) {
+                $jamMulai = substr($slot->jam_mulai, 0, 5);
+                $jamSelesai = substr($slot->jam_selesai, 0, 5);
+
+                return (bool) $conflictService->findPengajarConflict(
+                    companyId: $context->company->id,
+                    hari: $slot->hari,
+                    jamMulai: $jamMulai,
+                    jamSelesai: $jamSelesai,
+                    efektifMulai: $today,
+                    efektifSelesai: null,
+                    pengajarId: $pengajarId,
+                );
+            })
+            ->map(fn (JadwalPengajarJadwal $slot) => [
+                'id' => $slot->id,
+                'hari' => $slot->hari,
+                'hari_label' => $slot->hariLabel(),
+                'jam_mulai' => substr($slot->jam_mulai, 0, 5),
+                'jam_selesai' => substr($slot->jam_selesai, 0, 5),
+                'durasi_menit' => \Carbon\Carbon::createFromFormat('H:i', substr($slot->jam_mulai, 0, 5))
+                    ->diffInMinutes(\Carbon\Carbon::createFromFormat('H:i', substr($slot->jam_selesai, 0, 5))),
+            ])
+            ->values();
     }
 
     public function edit(Request $request, string $id): View
