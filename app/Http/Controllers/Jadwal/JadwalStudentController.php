@@ -236,20 +236,25 @@ class JadwalStudentController extends Controller
     }
 
     /**
-     * Buat App\Models\JadwalRutin untuk tiap slot ketersediaan Pengajar
-     * (App\Models\JadwalPengajarJadwal) yang dicentang admin di form Add
-     * Student, lalu langsung generate sesi bulan berjalan lewat
-     * App\Services\Jadwal\JadwalRutinSesiGenerator. Divalidasi ULANG di
-     * sini (bukan cuma percaya `$slotIds` dari form) -- kepemilikan slot
-     * (company+kategori+pengajar cocok), jam operasional branch, DAN
-     * bentrok pengajar (race condition: slot yang kelihatan kosong saat
-     * form dibuka bisa saja baru saja terisi admin lain sebelum submit
-     * ini) -- lihat class docblock untuk konteks lengkap fitur ini.
+     * Buat App\Models\JadwalRutin untuk tiap CHUNK ketersediaan Pengajar
+     * yang dicentang admin di form Add Student (lihat splitSlotIntoChunks()
+     * & class docblock -- satu blok panjang App\Models\JadwalPengajarJadwal,
+     * mis. Jumat 13:30-17:00, dipecah jadi beberapa sesi 30 menit sesuai
+     * `durasi_sesi_default_menit` branch, masing-masing bisa dipilih murid
+     * BEDA), lalu langsung generate sesi bulan berjalan lewat
+     * App\Services\Jadwal\JadwalRutinSesiGenerator. Divalidasi ULANG dari
+     * NOL di sini (bukan cuma percaya `$chunkIds` dari form -- lihat
+     * parseChunkId()) -- kepemilikan slot induk (company+kategori+pengajar
+     * cocok), chunk itu memang salah satu hasil pecahan yang sah dari slot
+     * induknya (bukan jam sembarangan hasil tempering request), jam
+     * operasional branch, DAN bentrok pengajar (race condition: chunk yang
+     * kelihatan kosong saat form dibuka bisa saja baru saja terisi admin
+     * lain sebelum submit ini).
      *
-     * @param  array<int, string>  $slotIds
-     * @return array{0: int, 1: array<int, string>} [jumlah Jadwal Rutin dibuat, daftar alasan slot yang dilewati]
+     * @param  array<int, string>  $chunkIds  Format tiap elemen: "{jadwal_pengajar_kategori_jadwal_id}|{H:i jam mulai chunk}" (lihat openSlotsFor()).
+     * @return array{0: int, 1: array<int, string>} [jumlah Jadwal Rutin dibuat, daftar alasan chunk yang dilewati]
      */
-    private function createRutinFromSlots(Company $company, JadwalStudent $student, string $kategoriId, string $pengajarId, array $slotIds): array
+    private function createRutinFromSlots(Company $company, JadwalStudent $student, string $kategoriId, string $pengajarId, array $chunkIds): array
     {
         $branchOfficeId = $student->branch_office_id;
         $branchSetting = $branchOfficeId
@@ -260,29 +265,52 @@ class JadwalStudentController extends Controller
             return [0, ['branch belum punya Jam Operasional -- atur dulu lewat menu Jadwal > Branch > Jam Operasional']];
         }
 
-        $slots = JadwalPengajarJadwal::whereIn('id', $slotIds)
+        $parsed = array_filter(array_map([$this, 'parseChunkId'], $chunkIds));
+        $parentSlotIds = array_values(array_unique(array_column($parsed, 'slot_id')));
+
+        $parentSlots = JadwalPengajarJadwal::whereIn('id', $parentSlotIds)
             ->whereHas('pengajarKategori', function ($q) use ($company, $kategoriId, $pengajarId) {
                 $q->where('company_id', $company->id)
                     ->where('jadwal_kategori_id', $kategoriId)
                     ->where('pengajar_id', $pengajarId);
             })
-            ->orderBy('hari')
-            ->orderBy('jam_mulai')
-            ->get();
+            ->get()
+            ->keyBy('id');
 
         $conflictService = app(JadwalRutinConflictService::class);
         $generator = app(JadwalRutinSesiGenerator::class);
         $today = now()->toDateString();
+        $durasiMenit = $branchSetting->durasi_sesi_default_menit;
 
         $created = 0;
         $skipped = [];
 
-        foreach ($slots as $slot) {
-            $jamMulai = substr($slot->jam_mulai, 0, 5);
-            $jamSelesai = substr($slot->jam_selesai, 0, 5);
-            $label = $slot->hariLabel()." {$jamMulai}-{$jamSelesai}";
+        foreach ($parsed as $item) {
+            $parentSlot = $parentSlots->get($item['slot_id']);
 
-            if (! $branchSetting->isHariOperasional($slot->hari) || ! $branchSetting->isWithinOperationalHours($jamMulai, $jamSelesai)) {
+            if (! $parentSlot) {
+                // Slot induk tidak ditemukan/bukan milik kategori+pengajar
+                // ini -- kemungkinan request di-tempering, lewati diam-diam
+                // (tidak masuk pesan skip supaya tidak bocorin detail ke
+                // pengguna yang mungkin memang lagi coba-coba).
+                continue;
+            }
+
+            // Chunk yang diminta HARUS persis salah satu hasil pecahan sah
+            // dari slot induknya -- bukan percaya begitu saja jam_mulai
+            // yang dikirim form.
+            $validChunk = collect($this->splitSlotIntoChunks(substr($parentSlot->jam_mulai, 0, 5), substr($parentSlot->jam_selesai, 0, 5), $durasiMenit))
+                ->first(fn ($c) => $c['jam_mulai'] === $item['jam_mulai']);
+
+            if (! $validChunk) {
+                continue;
+            }
+
+            $jamMulai = $validChunk['jam_mulai'];
+            $jamSelesai = $validChunk['jam_selesai'];
+            $label = $parentSlot->hariLabel()." {$jamMulai}-{$jamSelesai}";
+
+            if (! $branchSetting->isHariOperasional($parentSlot->hari) || ! $branchSetting->isWithinOperationalHours($jamMulai, $jamSelesai)) {
                 $skipped[] = "{$label} (di luar jam operasional branch)";
 
                 continue;
@@ -290,7 +318,7 @@ class JadwalStudentController extends Controller
 
             $conflict = $conflictService->findPengajarConflict(
                 companyId: $company->id,
-                hari: $slot->hari,
+                hari: $parentSlot->hari,
                 jamMulai: $jamMulai,
                 jamSelesai: $jamSelesai,
                 efektifMulai: $today,
@@ -311,9 +339,9 @@ class JadwalStudentController extends Controller
                 'jadwal_kategori_id' => $kategoriId,
                 'pengajar_id' => $pengajarId,
                 'jadwal_ruangan_id' => null,
-                'hari' => $slot->hari,
+                'hari' => $parentSlot->hari,
                 'jam_mulai' => $jamMulai,
-                'durasi_menit' => \Carbon\Carbon::createFromFormat('H:i', $jamMulai)->diffInMinutes(\Carbon\Carbon::createFromFormat('H:i', $jamSelesai)),
+                'durasi_menit' => $durasiMenit,
                 'efektif_mulai' => $today,
                 'efektif_selesai' => null,
                 'status' => 'active',
@@ -327,8 +355,61 @@ class JadwalStudentController extends Controller
     }
 
     /**
-     * Slot ketersediaan Pengajar (App\Models\JadwalPengajarJadwal) yang
-     * MASIH KOSONG -- dipakai create() untuk checklist di form Add
+     * Parse ID checkbox chunk ("{slotId}|{H:i}") jadi ['slot_id' =>
+     * ..., 'jam_mulai' => ...], atau null kalau formatnya tidak valid
+     * sama sekali (request di-tempering) -- dipakai createRutinFromSlots().
+     *
+     * @return array{slot_id: string, jam_mulai: string}|null
+     */
+    private function parseChunkId(string $chunkId): ?array
+    {
+        $parts = explode('|', $chunkId, 2);
+
+        if (count($parts) !== 2 || $parts[0] === '' || ! preg_match('/^\d{2}:\d{2}$/', $parts[1])) {
+            return null;
+        }
+
+        return ['slot_id' => $parts[0], 'jam_mulai' => $parts[1]];
+    }
+
+    /**
+     * Pecah SATU blok ketersediaan Pengajar (mis. Jumat 13:30-17:00) jadi
+     * beberapa chunk berdurasi tetap `$durasiMenit` (dari
+     * App\Models\JadwalBranchSetting::durasi_sesi_default_menit) --
+     * permintaan user: blok panjang yang dideklarasikan Pengajar BUKAN
+     * satu sesi mingguan, tapi rentang yang bisa diisi murid BEDA-BEDA di
+     * jam berbeda di dalam rentang itu, masing-masing sepanjang durasi
+     * sesi default branch (mis. Jumat 13:30-14:00, 14:00-14:30, dst).
+     * Sisa waktu yang kurang dari satu durasi penuh di ujung blok
+     * (mis. blok 13:30-14:45 dengan durasi 30 menit -> chunk terakhir
+     * cuma sampai 14:30, 15 menit sisanya tidak jadi chunk) SENGAJA tidak
+     * diikutkan, supaya setiap chunk yang ditampilkan punya durasi penuh.
+     *
+     * @return list<array{jam_mulai: string, jam_selesai: string}>
+     */
+    private function splitSlotIntoChunks(string $jamMulai, string $jamSelesai, int $durasiMenit): array
+    {
+        if ($durasiMenit <= 0) {
+            return [];
+        }
+
+        $chunks = [];
+        $cursor = \Carbon\Carbon::createFromFormat('H:i', $jamMulai);
+        $end = \Carbon\Carbon::createFromFormat('H:i', $jamSelesai);
+
+        while ($cursor->copy()->addMinutes($durasiMenit)->lte($end)) {
+            $chunkEnd = $cursor->copy()->addMinutes($durasiMenit);
+            $chunks[] = ['jam_mulai' => $cursor->format('H:i'), 'jam_selesai' => $chunkEnd->format('H:i')];
+            $cursor = $chunkEnd;
+        }
+
+        return $chunks;
+    }
+
+    /**
+     * Chunk ketersediaan Pengajar (App\Models\JadwalPengajarJadwal, sudah
+     * dipecah per durasi sesi default branch lewat splitSlotIntoChunks())
+     * yang MASIH KOSONG -- dipakai create() untuk checklist di form Add
      * Student (lihat class docblock). Kriteria sama persis dengan yang
      * dicek ulang createRutinFromSlots() saat submit: dalam jam
      * operasional branch DAN tidak bentrok Jadwal Rutin aktif lain punya
@@ -340,37 +421,37 @@ class JadwalStudentController extends Controller
     {
         $conflictService = app(JadwalRutinConflictService::class);
         $today = now()->toDateString();
+        $durasiMenit = $branchSetting->durasi_sesi_default_menit;
 
         return $pengajarAvailability->jadwals
-            ->filter(function (JadwalPengajarJadwal $slot) use ($branchSetting) {
-                $jamMulai = substr($slot->jam_mulai, 0, 5);
-                $jamSelesai = substr($slot->jam_selesai, 0, 5);
-
-                return $branchSetting->isHariOperasional($slot->hari)
-                    && $branchSetting->isWithinOperationalHours($jamMulai, $jamSelesai);
+            ->flatMap(function (JadwalPengajarJadwal $slot) use ($durasiMenit) {
+                return collect($this->splitSlotIntoChunks(substr($slot->jam_mulai, 0, 5), substr($slot->jam_selesai, 0, 5), $durasiMenit))
+                    ->map(fn ($chunk) => [
+                        'slot_id' => $slot->id,
+                        'hari' => $slot->hari,
+                        'hari_label' => $slot->hariLabel(),
+                        'jam_mulai' => $chunk['jam_mulai'],
+                        'jam_selesai' => $chunk['jam_selesai'],
+                    ]);
             })
-            ->reject(function (JadwalPengajarJadwal $slot) use ($context, $conflictService, $pengajarId, $today) {
-                $jamMulai = substr($slot->jam_mulai, 0, 5);
-                $jamSelesai = substr($slot->jam_selesai, 0, 5);
-
-                return (bool) $conflictService->findPengajarConflict(
-                    companyId: $context->company->id,
-                    hari: $slot->hari,
-                    jamMulai: $jamMulai,
-                    jamSelesai: $jamSelesai,
-                    efektifMulai: $today,
-                    efektifSelesai: null,
-                    pengajarId: $pengajarId,
-                );
-            })
-            ->map(fn (JadwalPengajarJadwal $slot) => [
-                'id' => $slot->id,
-                'hari' => $slot->hari,
-                'hari_label' => $slot->hariLabel(),
-                'jam_mulai' => substr($slot->jam_mulai, 0, 5),
-                'jam_selesai' => substr($slot->jam_selesai, 0, 5),
-                'durasi_menit' => \Carbon\Carbon::createFromFormat('H:i', substr($slot->jam_mulai, 0, 5))
-                    ->diffInMinutes(\Carbon\Carbon::createFromFormat('H:i', substr($slot->jam_selesai, 0, 5))),
+            ->filter(fn (array $chunk) => $branchSetting->isHariOperasional($chunk['hari'])
+                && $branchSetting->isWithinOperationalHours($chunk['jam_mulai'], $chunk['jam_selesai']))
+            ->reject(fn (array $chunk) => (bool) $conflictService->findPengajarConflict(
+                companyId: $context->company->id,
+                hari: $chunk['hari'],
+                jamMulai: $chunk['jam_mulai'],
+                jamSelesai: $chunk['jam_selesai'],
+                efektifMulai: $today,
+                efektifSelesai: null,
+                pengajarId: $pengajarId,
+            ))
+            ->map(fn (array $chunk) => [
+                'id' => "{$chunk['slot_id']}|{$chunk['jam_mulai']}",
+                'hari' => $chunk['hari'],
+                'hari_label' => $chunk['hari_label'],
+                'jam_mulai' => $chunk['jam_mulai'],
+                'jam_selesai' => $chunk['jam_selesai'],
+                'durasi_menit' => $durasiMenit,
             ])
             ->values();
     }
