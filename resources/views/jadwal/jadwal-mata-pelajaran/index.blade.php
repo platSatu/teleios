@@ -103,7 +103,10 @@
                                     <td class="fw-semibold text-nowrap">{{ $mataPelajaran->name }}</td>
                                     <td class="text-nowrap">{{ $mataPelajaran->branchOffice->name ?? '-' }}</td>
                                     <td class="text-nowrap">
-                                        <div class="d-flex gap-1">
+                                        <button type="button"
+                                            class="btn btn-link p-0 border-0 text-decoration-none d-flex gap-1"
+                                            data-bs-toggle="modal" data-bs-target="#rosterModal{{ $mataPelajaran->id }}"
+                                            title="Lihat pengajar, murid & ruangan">
                                             <span class="badge bg-light text-dark border fw-normal" title="Jumlah Kelas">
                                                 <i class="ri-book-2-line align-middle"></i> {{ $mataPelajaran->kelas_count }}
                                             </span>
@@ -113,7 +116,7 @@
                                             <span class="badge bg-light text-dark border fw-normal" title="Jumlah Murid">
                                                 <i class="ri-graduation-cap-line align-middle"></i> {{ $mataPelajaran->student_count }}
                                             </span>
-                                        </div>
+                                        </button>
                                     </td>
                                     <td class="text-nowrap">
                                         <span class="badge {{ $mataPelajaran->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $mataPelajaran->status }}</span>
@@ -149,6 +152,56 @@
                 </div>
             </div>
         </div>
+
+        {{-- Detail Pengajar/Murid/Ruangan per Mata Pelajaran, dibuka dari
+             klik badge Statistik di atas -- lihat
+             JadwalMataPelajaranController::attachRoster(). --}}
+        @foreach($mataPelajarans as $mataPelajaran)
+            <div class="modal fade" id="rosterModal{{ $mataPelajaran->id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">{{ $mataPelajaran->name }} — Pengajar, Murid & Ruangan</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            @if($mataPelajaran->roster->isEmpty())
+                                <p class="text-muted mb-0">Belum ada Jadwal Kelas aktif untuk topik ini.</p>
+                            @else
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover align-middle mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th class="text-nowrap">Pengajar</th>
+                                                <th class="text-nowrap">Murid</th>
+                                                <th class="text-nowrap">Ruangan</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($mataPelajaran->roster as $kelas)
+                                                <tr>
+                                                    <td class="text-nowrap">{{ $kelas->pengajar->name ?? '-' }}</td>
+                                                    <td class="text-nowrap">{{ $kelas->student->name ?? '-' }}</td>
+                                                    <td class="text-nowrap">{{ $kelas->ruangan->name ?? '-' }}</td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                                @if($mataPelajaran->roster_truncated_count > 0)
+                                    <p class="text-muted small mt-2 mb-0">
+                                        + {{ $mataPelajaran->roster_truncated_count }} penugasan lainnya tidak ditampilkan.
+                                    </p>
+                                @endif
+                            @endif
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Tutup</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        @endforeach
     </div>
 </div>
 @endsection

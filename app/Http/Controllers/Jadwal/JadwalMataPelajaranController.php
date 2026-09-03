@@ -9,6 +9,7 @@ use App\Models\BranchOffice;
 use App\Models\Company;
 use App\Models\JadwalKelas;
 use App\Models\JadwalMataPelajaran;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -76,6 +77,8 @@ class JadwalMataPelajaranController extends Controller
         }
 
         $mataPelajarans = $query->latest()->paginate(15)->withQueryString()->onEachSide(1);
+
+        $this->attachRoster($mataPelajarans, $company);
 
         // Konteks Branch (kalau index ini dibuka scoped) — dipakai untuk
         // breadcrumb + tombol "Back to Branch" + mengunci branch_office_id
@@ -208,6 +211,64 @@ class JadwalMataPelajaranController extends Controller
         return redirect()
             ->route('jadwal.mata-pelajaran.index')
             ->with('success', 'Mata Pelajaran / Bidang berhasil dihapus.');
+    }
+
+    /**
+     * Ringkasan "siapa mengajar siapa, di ruangan mana" untuk tiap
+     * Mata Pelajaran / Bidang di halaman index — dipakai modal yang
+     * dibuka dari klik badge Statistik (lihat index.blade.php), supaya
+     * owner tidak perlu drill-down manual lewat Pengajar -> Student
+     * satu-satu cuma untuk melihat roster yang sudah ada.
+     *
+     * Diambil dari baris JadwalKelas yang masih aktif saja (bukan
+     * seluruh histori sesi -- kelas_count di kolom Statistik bisa jauh
+     * lebih besar untuk kelas rutin yang sudah lama jalan), lalu
+     * dedup ke kombinasi unik (pengajar, murid, ruangan) per Mata
+     * Pelajaran -- satu baris di modal mewakili satu penugasan yang
+     * sedang berjalan, bukan satu baris per sesi/tanggal.
+     *
+     * Satu query untuk semua baris di halaman ini (bukan query per
+     * baris di dalam loop) supaya tidak N+1 walau paginate menampilkan
+     * 15 Mata Pelajaran sekaligus.
+     */
+    private function attachRoster(LengthAwarePaginator $mataPelajarans, Company $company): void
+    {
+        $mataPelajaranIds = $mataPelajarans->pluck('id');
+
+        if ($mataPelajaranIds->isEmpty()) {
+            return;
+        }
+
+        $rosterByMataPelajaran = JadwalKelas::where('company_id', $company->id)
+            ->whereIn('jadwal_mata_pelajaran_id', $mataPelajaranIds)
+            ->where('status', JadwalKelas::STATUS_ACTIVE)
+            ->with(['pengajar:id,name', 'student:id,name', 'ruangan:id,name'])
+            ->get()
+            // Kunci dedup ikut sertakan jadwal_mata_pelajaran_id --
+            // tanpa itu, murid yang sama diajar pengajar yang sama di
+            // ruangan yang sama untuk DUA Mata Pelajaran berbeda (mis.
+            // Piano & Vokal) akan salah kebuang jadi cuma satu baris.
+            ->unique(fn (JadwalKelas $kelas) => implode('|', [
+                $kelas->jadwal_mata_pelajaran_id,
+                $kelas->pengajar_id,
+                $kelas->student_id,
+                $kelas->jadwal_ruangan_id,
+            ]))
+            ->groupBy('jadwal_mata_pelajaran_id');
+
+        // Batas tampilan per Mata Pelajaran -- murni jaga-jaga (roster
+        // realistisnya sudah kecil, sebesar pengajar_count x
+        // student_count di kolom Statistik), bukan pembatas normal.
+        $maxRosterRows = 300;
+
+        foreach ($mataPelajarans as $mataPelajaran) {
+            $roster = ($rosterByMataPelajaran->get($mataPelajaran->id) ?? collect())
+                ->sortBy([['pengajar.name', 'asc'], ['student.name', 'asc']])
+                ->values();
+
+            $mataPelajaran->setRelation('roster', $roster->take($maxRosterRows));
+            $mataPelajaran->roster_truncated_count = max(0, $roster->count() - $maxRosterRows);
+        }
     }
 
     /**
