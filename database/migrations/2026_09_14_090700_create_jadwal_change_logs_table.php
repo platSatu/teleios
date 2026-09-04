@@ -65,7 +65,7 @@ return new class extends Migration
 
             $table->foreignUuid('student_id')
                 ->nullable()
-                ->constrained('jadwal_students')
+                ->constrained('jadwal_student')
                 ->nullOnDelete();
 
             $table->foreignUuid('jadwal_kelas_id')
