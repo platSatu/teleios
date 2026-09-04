@@ -33,6 +33,16 @@ use Throwable;
  * PackageLimitService's docblock soal metric generik itu; kalau nanti
  * perlu quota sendiri, tambahkan LimitMetric baru, jangan pinjam
  * 'broadcast_send' milik Chat).
+ *
+ * Update 7 September 2026 (fitur multi waktu pengingat) -- constructor
+ * SEKARANG juga menerima `$reminderRuleId` (App\Models\
+ * JadwalReminderRule yang memicu pengiriman ini) supaya
+ * `findLog()`/`middleware()` bisa membedakan baris log MANA yang
+ * sedang diproses ketika satu Jadwal Kelas punya beberapa baris log
+ * (satu per rule). Isi pesan/penerima TIDAK bergantung rule-nya sama
+ * sekali (semua rule milik satu company berbagi template & target
+ * pengingat yang sama, cuma beda WAKTU kirim) -- jadi
+ * `resolveRecipients()`/`composeMessage()` tidak berubah.
  */
 class SendJadwalReminder implements ShouldQueue
 {
@@ -42,20 +52,22 @@ class SendJadwalReminder implements ShouldQueue
 
     public array $backoff = [30, 120, 300];
 
-    public function __construct(protected string $jadwalKelasId)
+    public function __construct(protected string $jadwalKelasId, protected string $reminderRuleId)
     {
     }
 
     /**
-     * Keyed on jadwal_kelas_id saja -- satu Jadwal Kelas cuma pernah
-     * punya SATU baris log (unique, lihat migration-nya), jadi tidak
-     * perlu komponen lain seperti WaMessageSchedule punya
-     * (recipient/day/step) yang memang bisa berulang per hari.
+     * Update 7 September 2026 -- keyed on (jadwal_kelas_id,
+     * reminderRuleId), BUKAN jadwal_kelas_id saja lagi, supaya
+     * pengiriman untuk rule berbeda pada Jadwal Kelas yang sama tidak
+     * saling menahan (WithoutOverlapping lama akan salah menganggap
+     * rule kedua "sedang diproses" padahal itu job yang berbeda sama
+     * sekali).
      */
     public function middleware(): array
     {
         return [
-            (new WithoutOverlapping("jadwal-reminder-{$this->jadwalKelasId}"))
+            (new WithoutOverlapping("jadwal-reminder-{$this->jadwalKelasId}-{$this->reminderRuleId}"))
                 ->releaseAfter(120)
                 ->expireAfter(180),
         ];
@@ -180,7 +192,9 @@ class SendJadwalReminder implements ShouldQueue
 
     protected function findLog(): ?JadwalKelasReminderLog
     {
-        return JadwalKelasReminderLog::where('jadwal_kelas_id', $this->jadwalKelasId)->first();
+        return JadwalKelasReminderLog::where('jadwal_kelas_id', $this->jadwalKelasId)
+            ->where('jadwal_reminder_rule_id', $this->reminderRuleId)
+            ->first();
     }
 
     protected function skip(JadwalKelasReminderLog $log, string $reason): void

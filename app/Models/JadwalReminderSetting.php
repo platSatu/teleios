@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\HasUuidPrimaryKey;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Satu baris pengaturan pengingat WA Jadwal PER COMPANY (company_id
@@ -39,6 +40,26 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * semua package existing ditandai kategorinya) -- fitur baru ini aman
  * memakainya sejak awal karena tidak ada customer existing yang
  * bergantung padanya.
+ *
+ * Update 7 September 2026 (permintaan user: "kita siapin fitur biar
+ * admin set sendiri mngkn mau ditambahkan 1 hari sblmnya 6 jam
+ * sblmnya") -- kolom `remind_value`/`remind_unit` DI BAWAH INI
+ * **DEPRECATED, JANGAN DIPAKAI KODE BARU**: satu company sekarang bisa
+ * punya BANYAK waktu pengingat lewat `rules()` (hasMany
+ * App\Models\JadwalReminderRule) -- lihat docblock lengkap migration
+ * create_jadwal_reminder_rules_table.php untuk alasan & migrasi
+ * datanya. Kolom lama TETAP ADA di skema (tidak di-drop) MURNI sebagai
+ * data historis/fallback, bukan sumber kebenaran lagi -- method
+ * `remindMinutesBefore()` yang dulu membacanya SUDAH DIHAPUS dari
+ * class ini (satu-satunya pemakainya, App\Console\Commands\
+ * DispatchDueJadwalReminders, sekarang loop `rules()` dan pakai
+ * App\Models\JadwalReminderRule::minutesBefore() per baris).
+ * `remind_notify_pengajar_time` (kolom baru, default `'19:00'`) --
+ * permintaan terpisah ("kirim rekap tambahkan jam, jam brp mau
+ * dikirim") -- jam kirim rekap H-1 ke pengajar, PER COMPANY (sebelumnya
+ * hardcode global di bootstrap/app.php's scheduler, lihat docblock
+ * migration add_pengajar_reminder_time_to_....php & App\Console\
+ * Commands\DispatchJadwalPengajarDailyReminders).
  */
 class JadwalReminderSetting extends Model
 {
@@ -71,6 +92,7 @@ class JadwalReminderSetting extends Model
         'remind_unit',
         'remind_target',
         'remind_notify_pengajar',
+        'remind_notify_pengajar_time',
         'wa_message_template_id_pengajar',
         'pengajar_request_keyword',
         'reschedule_notify_pengajar',
@@ -115,11 +137,18 @@ class JadwalReminderSetting extends Model
         return $this->belongsTo(WaMessageTemplate::class, 'wa_message_template_id_reschedule_rejected');
     }
 
-    /** Selisih waktu (dalam menit) sebelum start_time pengingat harus dikirim. */
-    public function remindMinutesBefore(): int
+    /**
+     * Update 7 September 2026 -- lihat docblock class di atas. Diurutkan
+     * `remind_value`/`remind_unit` (bukan created_at) MURNI supaya
+     * urutan tampil di UI (& log/debug) konsisten dan predictable, bukan
+     * urutan-dibuat yang bisa acak kalau admin edit/hapus/tambah rule
+     * berkali-kali.
+     */
+    public function rules(): HasMany
     {
-        return $this->remind_unit === self::UNIT_HOURS
-            ? $this->remind_value * 60
-            : $this->remind_value * 60 * 24;
+        return $this->hasMany(JadwalReminderRule::class, 'jadwal_reminder_setting_id')
+            ->orderBy('remind_unit')
+            ->orderBy('remind_value');
     }
+
 }

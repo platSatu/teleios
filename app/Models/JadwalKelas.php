@@ -154,13 +154,22 @@ class JadwalKelas extends Model
     /**
      * Jejak klaim/kirim pengingat WA untuk baris ini -- lihat
      * App\Models\JadwalKelasReminderLog & App\Console\Commands\
-     * DispatchDueJadwalReminders. Selalu paling banyak satu (unique
-     * jadwal_kelas_id), karena satu Jadwal Kelas = satu sesi yang cuma
-     * butuh satu pengingat, bukan jadwal berulang.
+     * DispatchDueJadwalReminders.
+     *
+     * Update 7 September 2026 (fitur multi waktu pengingat, lihat
+     * docblock App\Models\JadwalReminderRule) -- SEBELUMNYA `hasOne`
+     * (unique jadwal_kelas_id saja, satu Jadwal Kelas cuma pernah
+     * dikirimi SATU pengingat seumur hidup). SEKARANG `hasMany` --
+     * unique key jadi komposit (jadwal_kelas_id, jadwal_reminder_rule_id),
+     * jadi satu Jadwal Kelas bisa punya SATU baris log PER rule
+     * pengingat milik company-nya (mis. baris terpisah untuk "1 hari
+     * sebelumnya" dan "6 jam sebelumnya"). Method lama `reminderLog()`
+     * (singular) DIHAPUS -- satu-satunya pemakainya (DispatchDueJadwalReminders)
+     * sudah diupdate memakai `reminderLogs()` + filter per rule_id.
      */
-    public function reminderLog()
+    public function reminderLogs()
     {
-        return $this->hasOne(JadwalKelasReminderLog::class);
+        return $this->hasMany(JadwalKelasReminderLog::class);
     }
 
     /** Nominal fee bagian company untuk sesi ini, dari snapshot harga_sesi/persentase_company. */

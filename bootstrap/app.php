@@ -39,9 +39,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // wa-schedules:dispatch-due di atas (beda tabel, beda job,
         // gating package kategori Chat/WhatsApp sendiri) supaya kalau
         // ada masalah di salah satu, yang lain tidak ikut terdampak.
-        // Setiap 5 menit cukup -- jendela pengingat (remind_value/
-        // remind_unit per company) biasanya dalam hitungan jam/hari,
-        // bukan sesuatu yang butuh presisi per menit seperti SLA chat.
+        // Setiap 5 menit cukup -- jendela pengingat (App\Models\
+        // JadwalReminderRule per company, bisa lebih dari satu) biasanya
+        // dalam hitungan jam/hari, bukan sesuatu yang butuh presisi per
+        // menit seperti SLA chat.
         $schedule->command('jadwal:dispatch-due-reminders')
             ->everyFiveMinutes()
             ->withoutOverlapping();
@@ -59,10 +60,16 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // H-1 rekap WA otomatis ke pengajar (Jadwal v2, spec poin 9) --
         // lihat App\Console\Commands\DispatchJadwalPengajarDailyReminders.
-        // Sore hari supaya pengajar terima rekap besok pagi/sore ini
-        // juga, bukan tengah malam.
+        // Update 7 September 2026 (permintaan user: "kirim rekap
+        // tambahkan jam, jam brp mau dikirim") -- SEBELUMNYA
+        // `->dailyAt('19:00')`, jam yang SAMA untuk SEMUA company,
+        // hardcode (melanggar CLAUDE.md item #15: "semua harus via
+        // setting, tidak ada yang hardcode"). SEKARANG tiap 15 menit --
+        // command ITU SENDIRI yang menyaring company mana yang jam
+        // kirimnya (kolom `remind_notify_pengajar_time` per company,
+        // default '19:00') sudah lewat, lihat docblock command-nya.
         $schedule->command('jadwal:dispatch-pengajar-reminders')
-            ->dailyAt('19:00')
+            ->everyFifteenMinutes()
             ->withoutOverlapping();
 
         // H-7/H-3/H-1/H0 package expiry reminder emails — see
