@@ -140,12 +140,10 @@ class JadwalKelasController extends Controller
         $ruangans = $f['ruangans'];
         $sesiByRuangan = $f['sesiByRuangan'];
 
-        $timeSlots = ($branchSetting && $isHariOperasional) ? $this->buildTimeSlots($branchSetting) : collect();
-
         $ruanganTabs = $ruangans->map(fn (JadwalRuangan $ruangan) => [
             'id' => $ruangan->id,
             'name' => $ruangan->name,
-        ] + $this->buildRuanganGrid($timeSlots, $sesiByRuangan->get($ruangan->id, collect())));
+        ] + $this->buildRuanganGrid($branchSetting, $isHariOperasional, $sesiByRuangan->get($ruangan->id, collect())));
 
         // "Tanpa Ruangan" -- lihat docblock method ini -- cuma
         // ditambahkan sebagai tab kalau memang ada datanya, supaya
@@ -156,7 +154,7 @@ class JadwalKelasController extends Controller
             $ruanganTabs->push([
                 'id' => 'tanpa-ruangan',
                 'name' => 'Tanpa Ruangan',
-            ] + $this->buildRuanganGrid($timeSlots, $tanpaRuanganSesi));
+            ] + $this->buildRuanganGrid($branchSetting, $isHariOperasional, $tanpaRuanganSesi));
         }
 
         return view('jadwal.jadwal-kelas.index', [
@@ -541,87 +539,158 @@ class JadwalKelasController extends Controller
     }
 
     /**
-     * Pecah jam_buka..jam_tutup branch jadi list slot waktu tetap
-     * `durasi_sesi_default_menit` (pola sama dengan
-     * JadwalStudentController::splitSlotIntoChunks() -- sisa di ujung
-     * yang kurang dari satu durasi penuh SENGAJA dibuang), tiap slot
-     * ditandai `istirahat` kalau tumpang tindih jam_istirahat_mulai/
-     * selesai. Dipakai buildRuanganGrid() jadi baris grid tiap tab
-     * Ruangan.
+     * Update 4 September 2026 (masih sesi yang sama, permintaan user
+     * SETELAH grid slot-30-menit di atas jalan, dari pertanyaan "gimana
+     * kalau 1 ruangan itu ada 3 pengajar atau lebih, pasti jam tidak
+     * akan bentrok" lalu ditegaskan dengan contoh konkret: "baiknya
+     * bagaimana ya supaya tidak bentrok dan dalam 1 table ... mngkn ga
+     * diurutkan sesuai dengan jam ngajarnya. contoh jam 10 - 12 diajar
+     * oleh guru a , jam 1 - 4 guru b , jam 4 - 6 guru c dst. tapi tetap
+     * dalam 1 table") -- ITERASI KELIMA baris grid ini (lihat class
+     * docblock index() untuk riwayat lengkap sebelumnya). Baris grid
+     * SEBELUMNYA fixed per `durasi_sesi_default_menit` (mis. tiap 30
+     * menit) -- satu App\Models\JadwalKelas yang durasinya LEBIH dari
+     * satu slot (mis. sesi 2 jam) cuma nampil di baris slot AWALNYA
+     * saja, baris-baris slot berikutnya yang sebenarnya masih
+     * "terpakai" oleh sesi yang sama salah tampil "Belum ada sesi" --
+     * inilah akar pertanyaan user (screenshot tab Studio B yang semua
+     * baris "Belum ada sesi" padahal seharusnya sebagian terisi).
      *
-     * @return Collection<int, array{start: string, end: string, istirahat: bool}>
+     * SEKARANG baris dibangun KRONOLOGIS mengikuti durasi ASLI tiap
+     * sesi (bukan lagi dipotong-potong per slot tetap) -- persis contoh
+     * user: satu baris "10:00-12:00" untuk sesi Guru A, baris berikutnya
+     * "12:00-13:00" kosong (gap), baris "13:00-16:00" Guru B, dst, semua
+     * TETAP dalam SATU tabel per tab Ruangan (markup tabel/blade SAMA
+     * PERSIS, tidak diubah -- lihat catatan bawah). `buildTimeSlots()`
+     * versi lama (list slot tetap) DIHAPUS, tidak dipakai lagi.
+     *
+     * Algoritma (murni menyusuri garis waktu jam_buka..jam_tutup sekali
+     * jalan, tidak ada lagi konsep "slot tetap"):
+     * 1. Sesi yang start_time-nya jatuh dalam [jam_buka, jam_tutup) DAN
+     *    tidak menabrak jam istirahat masuk himpunan "in range";
+     *    selainnya (start_time null, di luar jam operasional, atau
+     *    kebetulan menabrak jam istirahat -- data lama sebelum
+     *    validasi bentrok/jam operasional ditambahkan) masuk `unmatched`
+     *    SAMA seperti sebelumnya (lihat docblock index() soal kenapa
+     *    ini penting -- tidak ada sesi yang diam-diam hilang).
+     * 2. Sesi "in range" diurutkan by start_time, lalu sesi yang
+     *    jamnya TUMPANG TINDIH (bentrok -- seharusnya sudah dicegah
+     *    validator() SEKARANG, tapi data lama sebelum pengecekan ini
+     *    ditambahkan tetap mungkin ada) DIGABUNG jadi SATU baris/
+     *    cluster (properti `sesi` baris itu berisi lebih dari satu
+     *    App\Models\JadwalKelas) -- supaya tidak ada sesi yang
+     *    "ketiban"/hilang dari tampilan gara-gara cuma baris pertama
+     *    yang muncul.
+     * 3. Baris istirahat (`istirahat` => true, sama seperti sebelumnya)
+     *    disisipkan otomatis di titik jam istirahat branch, dipecah dari
+     *    baris kosong ("gap") kalau kebetulan gap itu lebih lebar dari
+     *    jam istirahat sendiri.
+     * 4. Sisa waktu antar sesi (atau sebelum sesi pertama / setelah sesi
+     *    terakhir) jadi baris "kosong" (properti `sesi` = Collection
+     *    kosong, sama makna dengan slot kosong versi lama -- blade tidak
+     *    berubah, tetap render "Belum ada sesi" + tombol tambah cepat).
+     *
+     * PENTING: kontrak return (`rows`: Collection baris masing-masing
+     * `array{start, end, istirahat, sesi}`, DAN `unmatched`) SAMA PERSIS
+     * dengan versi lama -- resources/views/jadwal/jadwal-kelas/
+     * index.blade.php & _sesi-row.blade.php TIDAK PERLU diubah SAMA
+     * SEKALI (baris kosong/istirahat/terisi dirender dari struktur yang
+     * sama, cuma sekarang `start`/`end` tiap baris tidak lagi kelipatan
+     * `durasi_sesi_default_menit` yang seragam).
+     *
+     * @return array{rows: Collection, unmatched: Collection}
      */
-    private function buildTimeSlots(JadwalBranchSetting $branchSetting): Collection
+    private function buildRuanganGrid(?JadwalBranchSetting $branchSetting, bool $isHariOperasional, Collection $sesiList): array
     {
-        $durasi = $branchSetting->durasi_sesi_default_menit ?: 30;
+        if (! $branchSetting || ! $isHariOperasional) {
+            return ['rows' => collect(), 'unmatched' => $sesiList->values()];
+        }
+
         $jamBuka = substr($branchSetting->jam_buka, 0, 5);
         $jamTutup = substr($branchSetting->jam_tutup, 0, 5);
         $istirahatMulai = $branchSetting->jam_istirahat_mulai ? substr($branchSetting->jam_istirahat_mulai, 0, 5) : null;
         $istirahatSelesai = $branchSetting->jam_istirahat_selesai ? substr($branchSetting->jam_istirahat_selesai, 0, 5) : null;
 
-        $slots = collect();
-        $cursor = Carbon::createFromFormat('H:i', $jamBuka);
-        $end = Carbon::createFromFormat('H:i', $jamTutup);
+        $inRange = collect();
+        $unmatched = collect();
 
-        while ($cursor->copy()->addMinutes($durasi)->lte($end)) {
-            $slotStart = $cursor->format('H:i');
-            $slotEnd = $cursor->copy()->addMinutes($durasi)->format('H:i');
+        foreach ($sesiList as $kelas) {
+            $startStr = $kelas->start_time?->format('H:i');
 
-            $slots->push([
-                'start' => $slotStart,
-                'end' => $slotEnd,
-                'istirahat' => $istirahatMulai && $istirahatSelesai
-                    && $slotStart < $istirahatSelesai && $slotEnd > $istirahatMulai,
-            ]);
+            $menabrakIstirahat = $startStr && $istirahatMulai && $istirahatSelesai
+                && $startStr >= $istirahatMulai && $startStr < $istirahatSelesai;
 
-            $cursor->addMinutes($durasi);
+            if (! $startStr || $startStr < $jamBuka || $startStr >= $jamTutup || $menabrakIstirahat) {
+                $unmatched->push($kelas);
+
+                continue;
+            }
+
+            $inRange->push($kelas);
         }
 
-        return $slots;
-    }
+        $sorted = $inRange->sortBy(fn (JadwalKelas $kelas) => $kelas->start_time->format('H:i:s').$kelas->id)->values();
 
-    /**
-     * Bangun baris grid (satu per slot dari $timeSlots, tiap slot dapat
-     * property `sesi` -- Collection App\Models\JadwalKelas yang jam
-     * mulainya jatuh dalam slot itu, kosong kalau tidak ada) PLUS daftar
-     * `unmatched` -- sesi di $sesiList yang TIDAK ke-plot ke slot manapun
-     * (start_time null, atau di luar rentang $timeSlots sama sekali,
-     * termasuk kalau $timeSlots kosong karena branch belum punya Jam
-     * Operasional / hari ini bukan hari operasional) -- lihat docblock
-     * index() soal kenapa ini penting (supaya tidak ada sesi yang diam-
-     * diam hilang dari tampilan gara-gara redesign grid ini).
-     *
-     * @return array{rows: Collection, unmatched: Collection}
-     */
-    private function buildRuanganGrid(Collection $timeSlots, Collection $sesiList): array
-    {
-        $matchedIds = [];
+        // Gabung sesi yang jamnya tumpang tindih jadi satu cluster/baris
+        // -- lihat poin 2 docblock di atas.
+        $clusters = collect();
 
-        $rows = $timeSlots->map(function (array $slot) use ($sesiList, &$matchedIds) {
-            if ($slot['istirahat']) {
-                return $slot + ['sesi' => collect()];
+        foreach ($sorted as $kelas) {
+            $startStr = $kelas->start_time->format('H:i');
+            $endStr = $kelas->end_time ? $kelas->end_time->format('H:i') : $startStr;
+            $endStr = min(max($endStr, $startStr), $jamTutup);
+
+            $last = $clusters->last();
+
+            if ($last && $startStr < $last['end']) {
+                $clusters->pop();
+                $last['end'] = max($last['end'], $endStr);
+                $last['sesi']->push($kelas);
+                $clusters->push($last);
+            } else {
+                $clusters->push(['start' => $startStr, 'end' => $endStr, 'sesi' => collect([$kelas])]);
+            }
+        }
+
+        $rows = collect();
+        $cursor = $jamBuka;
+
+        $emitGap = function (string $from, string $to) use (&$rows, $istirahatMulai, $istirahatSelesai) {
+            if ($from >= $to) {
+                return;
             }
 
-            $inSlot = $sesiList->filter(function (JadwalKelas $kelas) use ($slot) {
-                if (! $kelas->start_time) {
-                    return false;
+            if ($istirahatMulai && $istirahatSelesai && $from < $istirahatSelesai && $to > $istirahatMulai) {
+                if ($from < $istirahatMulai) {
+                    $rows->push(['start' => $from, 'end' => $istirahatMulai, 'istirahat' => false, 'sesi' => collect()]);
                 }
 
-                $t = $kelas->start_time->format('H:i');
+                $rows->push([
+                    'start' => max($from, $istirahatMulai),
+                    'end' => min($to, $istirahatSelesai),
+                    'istirahat' => true,
+                    'sesi' => collect(),
+                ]);
 
-                return $t >= $slot['start'] && $t < $slot['end'];
-            })->values();
+                if ($to > $istirahatSelesai) {
+                    $rows->push(['start' => $istirahatSelesai, 'end' => $to, 'istirahat' => false, 'sesi' => collect()]);
+                }
 
-            foreach ($inSlot as $kelas) {
-                $matchedIds[] = $kelas->id;
+                return;
             }
 
-            return $slot + ['sesi' => $inSlot];
-        });
+            $rows->push(['start' => $from, 'end' => $to, 'istirahat' => false, 'sesi' => collect()]);
+        };
 
-        $unmatched = $sesiList->reject(fn (JadwalKelas $kelas) => in_array($kelas->id, $matchedIds, true))->values();
+        foreach ($clusters as $cluster) {
+            $emitGap($cursor, $cluster['start']);
+            $rows->push(['start' => $cluster['start'], 'end' => $cluster['end'], 'istirahat' => false, 'sesi' => $cluster['sesi']]);
+            $cursor = max($cursor, $cluster['end']);
+        }
 
-        return ['rows' => $rows, 'unmatched' => $unmatched];
+        $emitGap($cursor, $jamTutup);
+
+        return ['rows' => $rows->values(), 'unmatched' => $unmatched->values()];
     }
 
     public function create(Request $request): View
@@ -1178,19 +1247,37 @@ class JadwalKelasController extends Controller
         // belum ada jam) atau branch_office_id kosong/belum punya Jam
         // Operasional diatur -- tidak ada dasar untuk menolak kalau
         // memang belum ada aturan jamnya.
-        $validator->after(function ($v) use ($request) {
+        //
+        // Update 4 September 2026 (masih sesi yang sama, permintaan user
+        // "baiknya bagaimana ya supaya tidak bentrok" -- jawaban atas
+        // pertanyaan sebelumnya soal 1 ruangan dipakai beberapa
+        // pengajar): DITAMBAHKAN pengecekan bentrok Pengajar & Ruangan
+        // di SINI juga, menutup gap yang sebelumnya didokumentasikan di
+        // docblock class ini ("TIDAK menambah pengecekan bentrok di
+        // SERVER yang MENOLAK submit ... di luar permintaan user,
+        // sengaja tidak ditambah") -- sekarang MEMANG diminta eksplisit.
+        // Alur manual create()/update() SEBELUMNYA satu-satunya jalur
+        // Jadwal Kelas yang tidak divalidasi bentrok sama sekali (beda
+        // dari alur checklist Student yang pakai
+        // App\Services\Jadwal\JadwalRutinConflictService, dan popup Edit
+        // yang cuma cek bentrok di KLIEN lewat badge "Terisi" -- lihat
+        // docblock editModalData(), proteksi klien itu TETAP ada, ini
+        // MENAMBAHKAN lapisan server supaya tidak bisa dilewati). Dicek
+        // terhadap App\Models\JadwalKelas lain yang company_id + status
+        // sama (STATUS_ACTIVE saja -- pola sama dengan
+        // App\Services\Chat\ChatbotFlowService::findOpenSlots() &
+        // JadwalRutinConflictService) dan RENTANG WAKTU-nya tumpang
+        // tindih (start < $end DAN end > $start, overlap klasik), TIDAK
+        // bergantung pada branch_office_id/Jam Operasional diatur atau
+        // tidak (beda dari pengecekan jam operasional di atas) --
+        // bentrok jam tetap bentrok jam walau branch itu belum punya
+        // Jam Operasional tersimpan. $ignoreId dikecualikan supaya
+        // update() sesi itu sendiri (tanpa ganti jam/pengajar/ruangan)
+        // tidak "bentrok lawan dirinya sendiri".
+        $validator->after(function ($v) use ($request, $company, $ignoreId) {
             $startTimeRaw = $request->input('start_time');
 
             if (! $startTimeRaw) {
-                return;
-            }
-
-            $branchOfficeId = $request->input('branch_office_id');
-            $branchSetting = $branchOfficeId
-                ? JadwalBranchSetting::where('branch_office_id', $branchOfficeId)->first()
-                : null;
-
-            if (! $branchSetting) {
                 return;
             }
 
@@ -1200,26 +1287,79 @@ class JadwalKelasController extends Controller
                 return; // format tanggal tidak valid -- biar rule 'date' di atas yang menolak
             }
 
+            $branchOfficeId = $request->input('branch_office_id');
+            $branchSetting = $branchOfficeId
+                ? JadwalBranchSetting::where('branch_office_id', $branchOfficeId)->first()
+                : null;
+
             $endTimeRaw = $request->input('end_time');
-            $end = $endTimeRaw ? Carbon::parse($endTimeRaw) : $start->copy()->addMinutes((int) ($branchSetting->durasi_sesi_default_menit ?: 30));
+            $end = $endTimeRaw ? Carbon::parse($endTimeRaw) : $start->copy()->addMinutes((int) ($branchSetting?->durasi_sesi_default_menit ?: 30));
 
-            if (! $branchSetting->isHariOperasional($start->dayOfWeek)) {
-                $v->errors()->add('start_time', 'Hari '.$start->translatedFormat('l').' bukan hari operasional branch ini.');
+            if ($branchSetting) {
+                if (! $branchSetting->isHariOperasional($start->dayOfWeek)) {
+                    $v->errors()->add('start_time', 'Hari '.$start->translatedFormat('l').' bukan hari operasional branch ini.');
 
-                return;
+                    return;
+                }
+
+                if (! $branchSetting->isWithinOperationalHours($start->format('H:i'), $end->format('H:i'))) {
+                    $v->errors()->add('start_time', sprintf(
+                        'Jam sesi (%s-%s) di luar jam operasional branch (%s-%s)%s.',
+                        $start->format('H:i'),
+                        $end->format('H:i'),
+                        substr($branchSetting->jam_buka, 0, 5),
+                        substr($branchSetting->jam_tutup, 0, 5),
+                        ($branchSetting->jam_istirahat_mulai && $branchSetting->jam_istirahat_selesai)
+                            ? ' atau menabrak jam istirahat ('.substr($branchSetting->jam_istirahat_mulai, 0, 5).'-'.substr($branchSetting->jam_istirahat_selesai, 0, 5).')'
+                            : ''
+                    ));
+
+                    return;
+                }
             }
 
-            if (! $branchSetting->isWithinOperationalHours($start->format('H:i'), $end->format('H:i'))) {
-                $v->errors()->add('start_time', sprintf(
-                    'Jam sesi (%s-%s) di luar jam operasional branch (%s-%s)%s.',
-                    $start->format('H:i'),
-                    $end->format('H:i'),
-                    substr($branchSetting->jam_buka, 0, 5),
-                    substr($branchSetting->jam_tutup, 0, 5),
-                    ($branchSetting->jam_istirahat_mulai && $branchSetting->jam_istirahat_selesai)
-                        ? ' atau menabrak jam istirahat ('.substr($branchSetting->jam_istirahat_mulai, 0, 5).'-'.substr($branchSetting->jam_istirahat_selesai, 0, 5).')'
-                        : ''
-                ));
+            $pengajarId = $request->input('pengajar_id');
+
+            if ($pengajarId) {
+                $pengajarConflict = JadwalKelas::where('company_id', $company->id)
+                    ->where('pengajar_id', $pengajarId)
+                    ->where('status', JadwalKelas::STATUS_ACTIVE)
+                    ->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))
+                    ->where('start_time', '<', $end)
+                    ->where('end_time', '>', $start)
+                    ->with('student:id,name')
+                    ->first();
+
+                if ($pengajarConflict) {
+                    $v->errors()->add('pengajar_id', sprintf(
+                        'Pengajar ini sudah punya jadwal jam %s-%s (bentrok dengan sesi %s).',
+                        $pengajarConflict->start_time->format('H:i'),
+                        $pengajarConflict->end_time?->format('H:i') ?? '-',
+                        $pengajarConflict->student?->name ?? 'lain'
+                    ));
+                }
+            }
+
+            $ruanganId = $request->input('jadwal_ruangan_id');
+
+            if ($ruanganId) {
+                $ruanganConflict = JadwalKelas::where('company_id', $company->id)
+                    ->where('jadwal_ruangan_id', $ruanganId)
+                    ->where('status', JadwalKelas::STATUS_ACTIVE)
+                    ->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))
+                    ->where('start_time', '<', $end)
+                    ->where('end_time', '>', $start)
+                    ->with('pengajar:id,name')
+                    ->first();
+
+                if ($ruanganConflict) {
+                    $v->errors()->add('jadwal_ruangan_id', sprintf(
+                        'Ruangan ini sudah dipakai jam %s-%s (bentrok dengan sesi pengajar %s).',
+                        $ruanganConflict->start_time->format('H:i'),
+                        $ruanganConflict->end_time?->format('H:i') ?? '-',
+                        $ruanganConflict->pengajar?->name ?? 'lain'
+                    ));
+                }
             }
         });
 
