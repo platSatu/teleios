@@ -35,6 +35,7 @@ use App\Http\Controllers\Superadmin\AuditLogController;
 
 use App\Http\Controllers\Superadmin\QueueMonitorController;
 use App\Http\Controllers\Superadmin\PaymentWebhookController;
+use App\Http\Controllers\Superadmin\DuitkuSettingController;
 
 use App\Http\Controllers\Superadmin\RoleController;
 
@@ -1345,6 +1346,18 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
             ->group(function () {
                 Route::get('/', 'index')->name('payment-webhooks.index');
                 Route::get('/{id}', 'show')->name('payment-webhooks.show');
+            });
+
+        // Kredensial merchant Duitku (Merchant Code + API Key, sandbox &
+        // production terpisah) + mode aktif -- dulu di .env
+        // (DUITKU_MERCHANT_CODE/DUITKU_API_KEY/DUITKU_SANDBOX), sekarang
+        // di database lewat App\Models\DuitkuSetting. Lihat
+        // Superadmin\DuitkuSettingController's docblock.
+        Route::prefix('duitku-setting')
+            ->controller(DuitkuSettingController::class)
+            ->group(function () {
+                Route::get('/', 'edit')->name('duitku-setting.edit');
+                Route::put('/', 'update')->name('duitku-setting.update');
             });
 
         Route::prefix('roles')

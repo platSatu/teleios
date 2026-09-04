@@ -3,6 +3,7 @@
 namespace App\Services\Payment;
 
 use App\Models\Deposit;
+use App\Models\DuitkuSetting;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -33,18 +34,28 @@ class DuitkuService
     ) {
     }
 
+    /**
+     * Merchant code + API key sekarang datang dari App\Models\
+     * DuitkuSetting (database), BUKAN lagi config('services.duitku.*') /
+     * .env — lihat migration create_duitku_settings_table's docblock
+     * untuk alasan pindahnya. expiry_minutes/checkout_timeout_minutes
+     * TETAP dari config (belum diminta ikut pindah), jadi masih dibaca
+     * langsung dari config('services.duitku.*') di createInvoice() dan
+     * App\Http\Controllers\User\Deposit\DepositController.
+     */
     public static function make(): self
     {
-        $merchantCode = config('services.duitku.merchant_code');
-        $apiKey = config('services.duitku.api_key');
+        $setting = DuitkuSetting::current();
 
-        if (! $merchantCode || ! $apiKey) {
+        if (! $setting->isConfigured()) {
             throw new RuntimeException(
-                'Duitku belum dikonfigurasi — set DUITKU_MERCHANT_CODE dan DUITKU_API_KEY di .env.'
+                'Duitku belum dikonfigurasi — isi Merchant Code dan API Key ('
+                . ($setting->isSandbox() ? 'Sandbox' : 'Production')
+                . ') di Superadmin > Deposits > Pengaturan Duitku.'
             );
         }
 
-        return new self($merchantCode, $apiKey, (bool) config('services.duitku.sandbox', true));
+        return new self($setting->activeMerchantCode(), $setting->activeApiKey(), $setting->isSandbox());
     }
 
     /**

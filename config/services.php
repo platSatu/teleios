@@ -115,12 +115,17 @@ return [
     | "POP" integration (Duitku hosts the payment-method picker), via the
     | duitkupg/duitku-php SDK already required in composer.json.
     |
+    | merchant_code/api_key/sandbox used to live here (env DUITKU_MERCHANT_
+    | CODE/DUITKU_API_KEY/DUITKU_SANDBOX) — moved to the database as of the
+    | create_duitku_settings_table migration, editable from Superadmin >
+    | Deposits > Pengaturan Duitku, so a superadmin can switch sandbox/
+    | production without touching .env. See App\Models\DuitkuSetting.
+    | expiry_minutes/checkout_timeout_minutes below were NOT part of that
+    | move and still come from .env as before.
+    |
     */
 
     'duitku' => [
-        'merchant_code' => env('DUITKU_MERCHANT_CODE'),
-        'api_key' => env('DUITKU_API_KEY'),
-        'sandbox' => env('DUITKU_SANDBOX', true),
         // How long Duitku itself keeps the invoice open once created
         // (sent as expiryPeriod in createInvoice).
         'expiry_minutes' => env('DUITKU_EXPIRY_MINUTES', 60),

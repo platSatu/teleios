@@ -769,6 +769,11 @@
                                     Payment Callback Log
                                 </a>
                             </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('duitku-setting.edit') }}" class="pe-nav-link">
+                                    Pengaturan Duitku
+                                </a>
+                            </li>
                         </ul>
                     </li>
 
