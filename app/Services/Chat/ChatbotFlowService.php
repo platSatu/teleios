@@ -5,6 +5,7 @@ namespace App\Services\Chat;
 use App\Models\Company;
 use App\Models\JadwalKelas;
 use App\Models\JadwalKelasRescheduleRequest;
+use App\Models\JadwalPengajarKategori;
 use App\Models\JadwalStudent;
 use App\Models\WaChatbotFlow;
 use App\Models\WaChatbotFlowStep;
@@ -613,39 +614,131 @@ class ChatbotFlowService
     }
 
     /**
-     * Heuristik sederhana untuk "jam kosong pengajar yang sama" -- coba
-     * jam & durasi yang SAMA dengan $original, mundur maju sampai 14
-     * hari ke depan, berhenti begitu dapat $limit kandidat yang tidak
-     * bentrok dengan JadwalKelas manapun milik pengajar itu (murid
-     * manapun, company yang sama). BUKAN sistem ketersediaan pengajar
-     * yang sesungguhnya (sistem ini belum punya konsep "jam kerja
-     * pengajar" tersendiri) -- cukup untuk menyodorkan beberapa
-     * kandidat wajar tanpa perlu tabel/konsep baru.
+     * Jam kosong PENGAJAR YANG SAMA dengan jadwal lama ($original) --
+     * lihat App\Models\JadwalPengajarKategori & App\Models\
+     * JadwalPengajarJadwal (jam ketersediaan pengajar per Kategori,
+     * diisi admin lewat menu Jadwal > Pengajar), durasi sesi SAMA
+     * dengan $original.
+     *
+     * Update 4 September 2026 (permintaan user, laporan "menu
+     * permintaan reschedule jadwal ... ketika murid request jadwal,
+     * tampilkan jadwal si pengajar agar murid pilih di hari dan jam
+     * yang kosong"): method ini SEBELUMNYA cuma heuristik "coba jam &
+     * durasi yang SAMA dengan $original, mundur-maju sampai 14 hari,
+     * asal tidak bentrok JadwalKelas lain" -- SAMA SEKALI TIDAK
+     * MELIHAT ketersediaan pengajar sebenarnya, jadi bisa saja
+     * menawarkan hari yang pengajarnya sendiri tidak pernah bilang
+     * bisa (ditulis SEBELUM restrukturisasi Jadwal v2 menambahkan
+     * konsep "jam kerja pengajar" lewat JadwalPengajarKategori/
+     * JadwalPengajarJadwal -- docblock lama secara eksplisit bilang
+     * "sistem ini belum punya konsep jam kerja pengajar tersendiri",
+     * yang sekarang TIDAK BENAR lagi).
+     *
+     * Sekarang kandidat slot HANYA diambil dari blok yang benar-benar
+     * dideklarasikan pengajar untuk Kategori jadwal lama ini
+     * (`$original->jadwal_kategori_id`), dipecah jadi chunk non-
+     * overlap sepanjang durasi $original (pola sama dengan
+     * App\Http\Controllers\Jadwal\JadwalStudentController::
+     * splitSlotIntoChunks()/slotsFor()), lalu difilter:
+     * - tidak bentrok JadwalKelas AKTIF lain milik pengajar itu (murid
+     *   manapun, sesi $original sendiri dikecualikan lewat `id != `);
+     * - tidak bentrok Ruangan yang sama ($original->jadwal_ruangan_id,
+     *   kalau ada) -- staff approve() TIDAK mengganti Ruangan (lihat
+     *   App\Http\Controllers\Jadwal\JadwalRescheduleRequestController::
+     *   approve(), cuma start_time/end_time yang diupdate), jadi
+     *   Ruangan lama ikut terbawa ke jadwal baru dan harus dicek juga
+     *   supaya tidak diam-diam bentrok begitu disetujui.
+     *
+     * Kosong (tidak ada kandidat sama sekali) kalau pengajar TIDAK
+     * punya baris JadwalPengajarKategori AKTIF untuk Kategori jadwal
+     * lama ini (belum pernah diisi admin lewat menu Jadwal > Pengajar
+     * -- lihat emptyDynamicOptionsMessage()), $original tidak
+     * (lagi) punya jadwal_kategori_id, atau memang tidak ada slot
+     * kosong dalam $searchDays ke depan.
      *
      * @return \Illuminate\Support\Collection<int, array{start: Carbon, end: Carbon}>
      */
-    private function findOpenSlots(JadwalKelas $original, int $limit = 5): \Illuminate\Support\Collection
+    private function findOpenSlots(JadwalKelas $original, int $limit = 5, int $searchDays = 30): \Illuminate\Support\Collection
     {
         $durationMinutes = $original->start_time->diffInMinutes($original->end_time);
+
+        if ($durationMinutes <= 0 || ! $original->jadwal_kategori_id) {
+            return collect();
+        }
+
+        $pengajarKategori = JadwalPengajarKategori::with('jadwals')
+            ->where('company_id', $original->company_id)
+            ->where('pengajar_id', $original->pengajar_id)
+            ->where('jadwal_kategori_id', $original->jadwal_kategori_id)
+            ->where('status', JadwalPengajarKategori::STATUS_ACTIVE)
+            ->first();
+
+        if (! $pengajarKategori) {
+            return collect();
+        }
+
+        // Carbon::dayOfWeek: 0=Minggu..6=Sabtu -- konvensi SAMA dengan
+        // kolom `hari` di jadwal_pengajar_kategori_jadwal (lihat
+        // migration-nya).
+        $blocksByHari = $pengajarKategori->jadwals->groupBy('hari');
+
+        if ($blocksByHari->isEmpty()) {
+            return collect();
+        }
+
         $candidates = collect();
 
-        for ($daysAhead = 1; $daysAhead <= 14 && $candidates->count() < $limit; $daysAhead++) {
-            $start = $original->start_time->copy()->addDays($daysAhead);
-            $end = $start->copy()->addMinutes($durationMinutes);
+        for ($daysAhead = 1; $daysAhead <= $searchDays && $candidates->count() < $limit; $daysAhead++) {
+            $date = $original->start_time->copy()->startOfDay()->addDays($daysAhead);
+            $blocksForDay = $blocksByHari->get($date->dayOfWeek, collect());
 
-            $conflict = JadwalKelas::where('company_id', $original->company_id)
-                ->where('pengajar_id', $original->pengajar_id)
-                ->where('status', JadwalKelas::STATUS_ACTIVE)
-                ->where('start_time', '<', $end)
-                ->where('end_time', '>', $start)
-                ->exists();
+            foreach ($blocksForDay as $block) {
+                if ($candidates->count() >= $limit) {
+                    break;
+                }
 
-            if (! $conflict) {
-                $candidates->push(['start' => $start, 'end' => $end]);
+                $blockStart = $date->copy()->setTimeFromTimeString($block->jam_mulai);
+                $blockEnd = $date->copy()->setTimeFromTimeString($block->jam_selesai);
+
+                for (
+                    $slotStart = $blockStart->copy();
+                    $candidates->count() < $limit && $slotStart->copy()->addMinutes($durationMinutes)->lte($blockEnd);
+                    $slotStart->addMinutes($durationMinutes)
+                ) {
+                    $slotEnd = $slotStart->copy()->addMinutes($durationMinutes);
+
+                    $pengajarConflict = JadwalKelas::where('company_id', $original->company_id)
+                        ->where('pengajar_id', $original->pengajar_id)
+                        ->where('status', JadwalKelas::STATUS_ACTIVE)
+                        ->where('id', '!=', $original->id)
+                        ->where('start_time', '<', $slotEnd)
+                        ->where('end_time', '>', $slotStart)
+                        ->exists();
+
+                    if ($pengajarConflict) {
+                        continue;
+                    }
+
+                    if ($original->jadwal_ruangan_id) {
+                        $ruanganConflict = JadwalKelas::where('company_id', $original->company_id)
+                            ->where('jadwal_ruangan_id', $original->jadwal_ruangan_id)
+                            ->where('status', JadwalKelas::STATUS_ACTIVE)
+                            ->where('id', '!=', $original->id)
+                            ->where('start_time', '<', $slotEnd)
+                            ->where('end_time', '>', $slotStart)
+                            ->exists();
+
+                        if ($ruanganConflict) {
+                            continue;
+                        }
+                    }
+
+                    $candidates->push(['start' => $slotStart->copy(), 'end' => $slotEnd]);
+                }
             }
         }
 
-        return $candidates;
+        return $candidates->values();
     }
 
     /**
