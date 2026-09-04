@@ -3,11 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ $header->name }} | {{ config('app.name', 'Konexa') }}</title>
+    {{-- Sengaja HARDCODE "Konexa" di sini, BUKAN config('app.name') --
+         .env project ini APP_NAME=teleios (nama internal/dev), sementara
+         brand publik yang dikenal pengisi form adalah "Konexa" (lihat
+         juga link footer ke https://konexa.id di bawah). Ganti .env
+         bukan pilihan aman (bisa kena title/branding lain di seluruh
+         app), jadi cukup di-hardcode di halaman publik form ini saja. --}}
+    <title>Konexa | {{ $header->name }}</title>
     <meta name="robots" content="noindex, nofollow">
     @if ($header->description)
         <meta name="description" content="{{ \Illuminate\Support\Str::limit(strip_tags($header->description), 160) }}">
     @endif
+    <link rel="shortcut icon" href="{{ asset('be') }}/assets/images/favicon.png">
     <link href="{{ asset('be') }}/assets/css/icons.min.css" rel="stylesheet" type="text/css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -36,11 +43,16 @@
 
         /* ===== Page shell — kartu besar 2 kolom (panel visual + form),
                  meniru layout referensi "Sign Up" modern/minimalis yang
-                 diminta: panel kiri jadi tempat identitas form (nama,
-                 periode, deskripsi) dengan warna brand polos sebagai
-                 pengganti ilustrasi (tidak ada aset ilustrasi di app
-                 ini), atau foto banner form kalau admin sudah upload
-                 satu lewat pengaturan Form Header. ===== */
+                 diminta. Update (revisi klien): panel kiri (.pf-visual)
+                 SEKARANG cuma gambar polos -- background foto banner
+                 form (App\Models\FormHeader::getBackgroundUrlAttribute())
+                 kalau admin sudah upload satu, atau gradient warna brand
+                 sebagai fallback kalau belum -- TANPA teks apa pun di
+                 atasnya. Nama form + deskripsi (dulu di panel kiri)
+                 sekarang tampil di ATAS panel form (kanan), lihat
+                 .pf-form-header di bawah; info periode buka/tutup
+                 sengaja tidak ditampilkan sama sekali di halaman publik
+                 ini. ===== */
         .pf-page { min-height: 100vh; padding: 40px 20px; }
         .pf-shell {
             max-width: 1120px;
@@ -65,60 +77,19 @@
             background: linear-gradient(155deg, var(--brand) 0%, var(--brand-dark) 100%);
             background-size: cover;
             background-position: center;
-            color: #fff;
-            padding: 44px 36px;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-end;
-            position: relative;
             overflow: hidden;
         }
         @media (max-width: 860px) {
             .pf-visual { position: static; min-height: 0; padding: 32px 24px; }
         }
-        .pf-visual.pf-has-photo::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(180deg, rgba(30, 15, 60, .25) 0%, rgba(20, 10, 45, .85) 100%);
-        }
-        .pf-visual-decor {
-            position: absolute;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, .08);
-        }
-        .pf-visual-decor.d1 { width: 180px; height: 180px; top: -60px; right: -60px; }
-        .pf-visual-decor.d2 { width: 110px; height: 110px; bottom: 30%; left: -40px; }
-        .pf-visual-inner { position: relative; z-index: 1; }
-        .pf-visual-eyebrow {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 12.5px;
-            font-weight: 600;
-            letter-spacing: .3px;
-            text-transform: uppercase;
-            background: rgba(255, 255, 255, .16);
-            padding: 6px 14px;
-            border-radius: 999px;
-            margin-bottom: 18px;
-        }
-        .pf-visual-title { font-size: 30px; font-weight: 800; margin: 0 0 12px; line-height: 1.2; }
-        .pf-visual-desc { font-size: 14.5px; opacity: .88; margin: 0 0 22px; white-space: pre-line; }
-        .pf-visual-period {
-            font-size: 13px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding-top: 18px;
-            border-top: 1px solid rgba(255, 255, 255, .22);
-            opacity: .92;
-        }
-
         .pf-form-col { padding: 44px 40px; }
         @media (max-width: 860px) { .pf-form-col { padding: 28px 22px; } }
         @media (max-width: 460px) { .pf-form-col { padding: 24px 16px; } }
         .pf-form-inner { max-width: 480px; margin: 0 auto; }
+
+        .pf-form-header { margin-bottom: 28px; }
+        .pf-form-title { font-size: 26px; font-weight: 800; margin: 0 0 8px; line-height: 1.25; color: var(--text); }
+        .pf-form-desc { font-size: 14.5px; color: var(--muted); margin: 0; white-space: pre-line; }
 
         .pf-alert {
             border-radius: 14px;
@@ -236,7 +207,6 @@
         }
         .pf-btn:hover { background: var(--brand); }
         .pf-btn:active { transform: translateY(1px); }
-        .pf-submit-note { text-align: center; font-size: 12px; color: var(--muted); margin-top: 12px; }
 
         .pf-closed { text-align: center; padding: 40px 10px; color: var(--muted); }
         .pf-closed i { font-size: 40px; display: block; margin-bottom: 14px; color: var(--brand); }
@@ -245,32 +215,27 @@
         .pf-footer-note { font-size: 12.5px; color: var(--muted); white-space: pre-line; margin: 0 0 8px; }
         .pf-footer-notes { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); }
         .pf-page-footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 24px; }
+        .pf-page-footer a { color: var(--muted); font-weight: 600; text-decoration: none; }
+        .pf-page-footer a:hover { color: var(--brand-dark); text-decoration: underline; }
     </style>
 </head>
 <body>
     <div class="pf-page">
         <div class="pf-shell">
 
-            <div class="pf-visual {{ $header->background_url ? 'pf-has-photo' : '' }}"
+            <div class="pf-visual"
                 @if ($header->background_url) style="background-image: url('{{ $header->background_url }}');" @endif>
-                <div class="pf-visual-decor d1"></div>
-                <div class="pf-visual-decor d2"></div>
-                <div class="pf-visual-inner">
-                    <span class="pf-visual-eyebrow"><i class="ri-quill-pen-line"></i> Form Pendaftaran</span>
-                    <h1 class="pf-visual-title">{{ $header->name }}</h1>
-                    @if ($header->description)
-                        <p class="pf-visual-desc">{{ $header->description }}</p>
-                    @endif
-                    <div class="pf-visual-period">
-                        <i class="ri-time-line"></i>
-                        Dibuka {{ $header->start_date?->translatedFormat('d M Y H:i') }}
-                        &ndash; Ditutup {{ $header->end_date?->translatedFormat('d M Y H:i') }}
-                    </div>
-                </div>
             </div>
 
             <div class="pf-form-col">
                 <div class="pf-form-inner">
+
+                    <div class="pf-form-header">
+                        <h1 class="pf-form-title">{{ $header->name }}</h1>
+                        @if ($header->description)
+                            <p class="pf-form-desc">{{ $header->description }}</p>
+                        @endif
+                    </div>
 
                     @if (session('success'))
                         <div class="pf-alert pf-alert-success"><i class="ri-checkbox-circle-line fs-16"></i> {{ session('success') }}</div>
@@ -356,7 +321,6 @@
                             @endforeach
 
                             <button type="submit" class="pf-btn"><i class="ri-send-plane-2-line"></i> Kirim</button>
-                            <div class="pf-submit-note"><span class="pf-required">*</span> Wajib diisi</div>
                         </form>
                     @endif
 
@@ -372,7 +336,7 @@
             </div>
 
         </div>
-        <div class="pf-page-footer">&copy; {{ date('Y') }} {{ config('app.name', 'Konexa') }}</div>
+        <div class="pf-page-footer">&copy; {{ date('Y') }} <a href="https://konexa.id" target="_blank" rel="noopener">Konexa</a></div>
     </div>
 </body>
 </html>
