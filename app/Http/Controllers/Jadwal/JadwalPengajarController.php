@@ -7,6 +7,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\JadwalKategori;
 use App\Models\JadwalPengajarKategori;
+use App\Models\JadwalStudent;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -88,11 +90,65 @@ class JadwalPengajarController extends Controller
 
         $pengajarKategoris = $query->orderBy('created_at')->paginate(15)->withQueryString()->onEachSide(1);
 
+        $this->attachMuridCounts($pengajarKategoris, $company);
+
         return view('jadwal.jadwal-pengajar.index', [
             'pengajarKategoris' => $pengajarKategoris,
             'kategori' => $kategori,
             'mataPelajaran' => $kategori?->mataPelajaran,
         ]);
+    }
+
+    /**
+     * Update 4 September 2026 (permintaan user): jumlah MURID per baris
+     * Pengajar -- diklik pindah ke jadwal.student.index (badge, sama
+     * pola link "Add Student" di index.blade.php). App\Models\
+     * JadwalStudent TIDAK menyimpan jadwal_kategori_id (cuma
+     * jadwal_mata_pelajaran_id + pengajar_id), jadi "murid dari
+     * Kategori ini" didekati dengan pasangan (pengajar_id, Mata
+     * Pelajaran milik Kategori itu) -- sama scoping yang sudah dipakai
+     * link "Add Student"/"Jadwal Rutin" di tempat lain, bukan filter
+     * baru.
+     *
+     * Satu query dikelompokkan (bukan query per baris di dalam loop)
+     * supaya tidak N+1 walau paginate menampilkan 15 baris sekaligus.
+     */
+    private function attachMuridCounts(LengthAwarePaginator $pengajarKategoris, Company $company): void
+    {
+        $pairs = collect($pengajarKategoris->items())
+            ->map(fn (JadwalPengajarKategori $pk) => [
+                'pengajar_id' => $pk->pengajar_id,
+                'jadwal_mata_pelajaran_id' => $pk->kategori->jadwal_mata_pelajaran_id ?? null,
+            ])
+            ->filter(fn (array $p) => $p['jadwal_mata_pelajaran_id'])
+            ->unique(fn (array $p) => $p['pengajar_id'].'|'.$p['jadwal_mata_pelajaran_id']);
+
+        if ($pairs->isEmpty()) {
+            foreach ($pengajarKategoris as $pk) {
+                $pk->murid_count = 0;
+            }
+
+            return;
+        }
+
+        $counts = JadwalStudent::where('company_id', $company->id)
+            ->where(function ($q) use ($pairs) {
+                foreach ($pairs as $p) {
+                    $q->orWhere(function ($qq) use ($p) {
+                        $qq->where('pengajar_id', $p['pengajar_id'])
+                            ->where('jadwal_mata_pelajaran_id', $p['jadwal_mata_pelajaran_id']);
+                    });
+                }
+            })
+            ->selectRaw('pengajar_id, jadwal_mata_pelajaran_id, count(*) as total')
+            ->groupBy('pengajar_id', 'jadwal_mata_pelajaran_id')
+            ->get()
+            ->keyBy(fn ($row) => $row->pengajar_id.'|'.$row->jadwal_mata_pelajaran_id);
+
+        foreach ($pengajarKategoris as $pk) {
+            $mpId = $pk->kategori->jadwal_mata_pelajaran_id ?? null;
+            $pk->murid_count = $mpId ? (int) ($counts->get($pk->pengajar_id.'|'.$mpId)?->total ?? 0) : 0;
+        }
     }
 
     public function create(Request $request): View

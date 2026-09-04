@@ -63,6 +63,17 @@ class JadwalMataPelajaranController extends Controller
             ->addSelect(['student_count' => JadwalKelas::selectRaw('count(distinct student_id)')
                 ->whereColumn('jadwal_kelas.jadwal_mata_pelajaran_id', 'jadwal_mata_pelajaran.id'),
             ])
+            // Update 4 September 2026 (permintaan user): badge "Kelas"
+            // di atas itu jumlah BARIS Jadwal Kelas (sesi), BUKAN jumlah
+            // Ruangan unik yang dipakai -- dua hal beda yang sebelumnya
+            // ketuker/tercampur di kepala user cuma dari satu badge itu.
+            // Ditambah badge terpisah di sini, logika sama dengan
+            // pengajar_count/student_count (COUNT(DISTINCT ...) otomatis
+            // skip NULL, jadi sesi yang belum punya Ruangan tidak ikut
+            // kehitung).
+            ->addSelect(['ruangan_count' => JadwalKelas::selectRaw('count(distinct jadwal_ruangan_id)')
+                ->whereColumn('jadwal_kelas.jadwal_mata_pelajaran_id', 'jadwal_mata_pelajaran.id'),
+            ])
             ->with('branchOffice:id,name');
 
         if ($context->isLockedToBranch()) {

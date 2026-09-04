@@ -72,6 +72,7 @@
                                     <th class="text-nowrap">Kategori</th>
                                 @endunless
                                 <th class="text-nowrap">Hari &amp; Jam Tersedia</th>
+                                <th class="text-nowrap text-center">Murid</th>
                                 <th class="text-nowrap">Status</th>
                                 <th class="text-nowrap text-end">Aksi</th>
                             </tr>
@@ -101,6 +102,19 @@
                                             </div>
                                         @endif
                                     </td>
+                                    <td class="text-center text-nowrap">
+                                        {{-- Update 4 September 2026 (permintaan user): jumlah murid
+                                        pengajar ini (dari Mata Pelajaran yang sama, lihat docblock
+                                        JadwalPengajarController::attachMuridCounts()) -- diklik pindah
+                                        ke list Student yang sudah di-filter, bukan modal. --}}
+                                        <a href="{{ route('jadwal.student.index', [
+                                            'jadwal_mata_pelajaran_id' => $pk->kategori->mataPelajaran->id ?? ($mataPelajaran->id ?? null),
+                                            'pengajar_id' => $pk->pengajar_id,
+                                            'jadwal_kategori_id' => $pk->jadwal_kategori_id,
+                                        ]) }}" class="badge bg-light text-dark border fw-normal text-decoration-none" title="Lihat murid pengajar ini">
+                                            <i class="ri-graduation-cap-line align-middle"></i> {{ $pk->murid_count ?? 0 }}
+                                        </a>
+                                    </td>
                                     <td class="text-nowrap">
                                         <span class="badge {{ $pk->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $pk->status }}</span>
                                     </td>
@@ -124,7 +138,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="{{ $kategori ? 4 : 5 }}" class="text-center text-muted py-4">
+                                    <td colspan="{{ $kategori ? 5 : 6 }}" class="text-center text-muted py-4">
                                         @if($kategori)
                                             Belum ada Pengajar di Kategori ini. Klik "Tambah Pengajar" untuk menambahkan yang pertama.
                                         @else

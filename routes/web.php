@@ -401,6 +401,10 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
             ->controller(JadwalKelasController::class)
             ->group(function () {
                 Route::get('/', 'index')->name('jadwal.kelas.index');
+                // Update 4 September 2026 (permintaan user: "tambahkan
+                // fungsi export to excel sesuai dengan filter") -- lihat
+                // JadwalKelasController::export().
+                Route::get('/export', 'export')->name('jadwal.kelas.export');
                 Route::get('/create', 'create')->name('jadwal.kelas.create');
                 Route::post('/', 'store')->name('jadwal.kelas.store');
                 Route::get('/{id}/edit', 'edit')->name('jadwal.kelas.edit');

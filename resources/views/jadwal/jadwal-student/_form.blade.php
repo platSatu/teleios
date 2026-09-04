@@ -6,19 +6,34 @@
     // JadwalStudentController::edit()) -- $selectedMataPelajaranId/
     // $selectedPengajarId cuma pernah ke-set oleh create().
     //
-    // Branch IKUT terkunci (mengikuti branch_office_id dari Mata
-    // Pelajaran/Bidang yang dipilih) kalau datang dari drill-down --
-    // lihat JadwalStudentController::create(). Ini supaya admin tidak
-    // bisa salah pilih branch yang beda dari branch Mata Pelajaran itu
-    // sendiri. Tanpa konteks drill-down (akses langsung lewat menu
-    // sidebar "Student"), branch tetap jadi select manual di sini.
+    // Branch TIDAK pernah datang terkunci lewat drill-down (tombol
+    // "+ Add Student" cuma bawa jadwal_mata_pelajaran_id & pengajar_id,
+    // branch-nya otomatis mengikuti mata pelajaran yang dipilih di
+    // JadwalStudentController::store()/update()) -- tapi tetap
+    // ditampilkan sebagai select manual di sini supaya akses langsung
+    // lewat menu sidebar "Student" bisa pilih branch sendiri tanpa
+    // harus lewat index Branch/Mata Pelajaran dulu.
     $lockedBranchOfficeId = old('branch_office_id', $selectedBranchOfficeId ?? null);
     $lockedBranch = $lockedBranchOfficeId ? $branchOffices->firstWhere('id', $lockedBranchOfficeId) : null;
 
     $lockedMataPelajaranId = old('jadwal_mata_pelajaran_id', $selectedMataPelajaranId ?? null);
     $lockedMataPelajaran = $lockedMataPelajaranId ? $mataPelajarans->firstWhere('id', $lockedMataPelajaranId) : null;
 
-    $lockedPengajarId = old('pengajar_id', $selectedPengajarId ?? null);
+    // Update 4 September 2026 (bug fix, laporan user: "pada form tambah
+    // student tidak keluar ya jadwal pengajar nya"): Pengajar SEKARANG
+    // cuma dikunci (disabled) kalau controller eksplisit bilang
+    // `$pengajarLocked` true -- SEBELUMNYA field ini terkunci begitu
+    // saja tiap kali `$selectedPengajarId` (atau `old('pengajar_id')`
+    // dari redisplay validasi gagal) ada nilainya, termasuk di skenario
+    // dropdown BEBAS yang cuma reload lewat query string `pengajar_id`
+    // (bukan drill-down penuh) -- akibatnya field jadi disabled padahal
+    // seharusnya tetap bisa diganti-ganti buat lihat checklist Pengajar
+    // lain. create() cuma set true di skenario drill-down PENUH
+    // (Kategori+Pengajar sekaligus dari tombol "+ Add Student" index
+    // Pengajar); edit() SELALU false (tidak pernah mengunci, lihat
+    // class docblock controller).
+    $pengajarLocked = $pengajarLocked ?? false;
+    $lockedPengajarId = $pengajarLocked ? old('pengajar_id', $selectedPengajarId ?? null) : null;
     $lockedPengajar = $lockedPengajarId ? $teamMembers->firstWhere('id', $lockedPengajarId) : null;
 @endphp
 
@@ -28,7 +43,10 @@
         <input type="text" class="form-control" value="{{ $lockedBranch->name }}" disabled readonly>
         <input type="hidden" name="branch_office_id" value="{{ $lockedBranch->id }}">
         <div class="form-text">
-            Otomatis mengikuti branch dari Mata Pelajaran / Bidang yang dipilih.
+            Student ini akan dikaitkan ke branch di atas.
+            @if ($branchOffices->count() > 1)
+                <a href="{{ route('jadwal.student.create') }}">Ganti branch</a>
+            @endif
         </div>
     @elseif ($branchOffices->count() <= 1 && $branchOffices->isNotEmpty())
         {{-- Branch-locked member: satu-satunya opsi otomatis dipakai. --}}
@@ -81,16 +99,93 @@
             <a href="{{ route('jadwal.student.create', array_filter(['jadwal_mata_pelajaran_id' => $lockedMataPelajaranId])) }}">Ganti Pengajar</a>
         </div>
     @else
-        <select name="pengajar_id" class="form-select @error('pengajar_id') is-invalid @enderror" required>
+        {{--
+            Update 4 September 2026 (permintaan user, revisi kedua, lalu
+            bug fix lanjutan): dropdown INI SENDIRI yang jadi pemicu
+            reload panel ketersediaan Pengajar (lihat
+            JadwalStudentController::edit()/pengajarSlotsPanel() DAN
+            create()) -- SATU dropdown saja, bukan dropdown terpisah
+            untuk "preview", berlaku di KEDUA form (awalnya cuma Edit
+            Student, sekarang Tambah Student juga ikut, supaya konsisten
+            -- lihat komentar $pengajarLocked di atas). Reload target-nya
+            beda per form: Edit balik ke `jadwal.student.edit` (entity
+            sudah ada); Create balik ke `jadwal.student.create` sambil
+            membawa `jadwal_mata_pelajaran_id`/`jadwal_kategori_id` yang
+            mungkin masih terkunci (supaya konteks itu tidak hilang
+            waktu ganti Pengajar). `($student ?? null)` truthy HANYA di
+            Edit (create selalu meng-override `$student` jadi null lewat
+            `@include('_form', ['student' => null])`). Reload murni GET
+            -- TIDAK menyimpan apa pun, field lain yang mungkin sedang
+            diisi admin akan ke-reset ke nilai tersimpan (trade-off yang
+            sama seperti link "Ganti Pengajar"/"Ganti Mata Pelajaran /
+            Bidang" di atas, pola yang sudah ada).
+        --}}
+        @php
+            $pengajarReloadUrl = ($student ?? null)
+                ? route('jadwal.student.edit', $student->id)
+                : route('jadwal.student.create', array_filter([
+                    'jadwal_mata_pelajaran_id' => $selectedMataPelajaranId ?? null,
+                    'jadwal_kategori_id' => $selectedKategoriId ?? null,
+                ]));
+            // create() bisa menghasilkan URL yang SUDAH punya query
+            // string sendiri (jadwal_mata_pelajaran_id/jadwal_kategori_id)
+            // -- pakai `&` kalau begitu, `?` kalau belum ada query sama
+            // sekali (selalu kasusnya di edit()), supaya tidak jadi dua
+            // "?" yang malah bikin `pengajar_id` gagal ke-parse.
+            $pengajarReloadSeparator = str_contains($pengajarReloadUrl, '?') ? '&' : '?';
+        @endphp
+        <select name="pengajar_id" class="form-select @error('pengajar_id') is-invalid @enderror" required
+            onchange="window.location.href = '{{ $pengajarReloadUrl }}' + (this.value ? ('{{ $pengajarReloadSeparator }}pengajar_id=' + encodeURIComponent(this.value)) : '')">
             <option value="">- Pilih Pengajar -</option>
             @foreach ($teamMembers as $member)
-                <option value="{{ $member->id }}" @selected(old('pengajar_id', $student->pengajar_id ?? '') == $member->id)>{{ $member->name }}</option>
+                <option value="{{ $member->id }}" @selected(old('pengajar_id', $previewPengajarId ?? ($student->pengajar_id ?? '')) == $member->id)>{{ $member->name }}</option>
             @endforeach
         </select>
         @error('pengajar_id')
             <div class="invalid-feedback">{{ $message }}</div>
         @enderror
     @endif
+</div>
+
+{{--
+    Update 4 September 2026 (permintaan user: "tambahkan kolom ruangan
+    pada edit student ya dan add student juga") -- satu dropdown Ruangan
+    (opsional) yang berlaku untuk SEMUA jadwal murid ini (bukan per
+    Kategori/tab), sama semangatnya dengan field Pengajar di atas: satu
+    murid = satu Ruangan yang sama untuk semua Kategori yang dia ambil.
+    Diterapkan ke Jadwal Rutin BARU yang dibuat dari checklist di bawah
+    MAUPUN (khusus Edit Student) baris yang sudah ada & tetap dipakai --
+    lihat JadwalStudentController::update()'s reconciliation Ruangan.
+    Sesi (Jadwal Kelas) yang sudah ter-generate bulan ini TIDAK ikut
+    berubah Ruangannya (konsisten dengan kebijakan jam/hari di atas).
+
+    $ruangans (dari JadwalStudentController::formData()) di-scope ke
+    branch yang sama seperti Mata Pelajaran/Pengajar; App\Models\
+    JadwalStudent sendiri TIDAK menyimpan Ruangan (lihat komentar
+    $selectedRuanganId/$ruanganMixed di JadwalStudentController::edit())
+    -- nilai "sekarang" DI-DERIVE dari Jadwal Rutin aktif murid ini, null
+    kalau belum pernah diisi atau kalau ternyata beda-beda antar baris
+    (`$ruanganMixed`, admin perlu pilih satu untuk menyeragamkan).
+--}}
+<div class="mb-3">
+    <label class="form-label">Ruangan (opsional)</label>
+    @if ($ruanganMixed ?? false)
+        <div class="alert alert-warning py-2 px-3 mb-2 small">
+            <i class="ri-error-warning-line"></i> Murid ini punya lebih dari satu Ruangan berbeda di jadwalnya saat ini. Pilih satu Ruangan di bawah untuk menyeragamkan semua jadwalnya, atau biarkan "- Tanpa Ruangan -" untuk mengosongkan semuanya.
+        </div>
+    @endif
+    <select name="jadwal_ruangan_id" class="form-select @error('jadwal_ruangan_id') is-invalid @enderror">
+        <option value="">- Tanpa Ruangan -</option>
+        @foreach ($ruangans as $r)
+            <option value="{{ $r->id }}" @selected(old('jadwal_ruangan_id', $selectedRuanganId ?? '') == $r->id)>
+                {{ $r->name }}{{ ($branchOffices->count() > 1 && $r->branchOffice) ? ' -- '.$r->branchOffice->name : '' }}
+            </option>
+        @endforeach
+    </select>
+    @error('jadwal_ruangan_id')
+        <div class="invalid-feedback">{{ $message }}</div>
+    @enderror
+    <div class="form-text">Diterapkan ke semua Jadwal Rutin murid ini. Ruangan yang sudah dipakai murid lain di jam yang bentrok akan dilewati/tidak diubah (dilaporkan setelah Simpan).</div>
 </div>
 
 <div class="mb-3">

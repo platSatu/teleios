@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers\Jadwal;
 
+use App\Exports\Jadwal\JadwalKelasExport;
 use App\Http\Controllers\Concerns\ResolvesCompanyContext;
 use App\Http\Controllers\Controller;
 use App\Models\BranchOffice;
 use App\Models\Company;
 use App\Models\JadwalBranchSetting;
+use App\Models\JadwalKategori;
 use App\Models\JadwalKelas;
 use App\Models\JadwalMataPelajaran;
+use App\Models\JadwalPengajarKategori;
 use App\Models\JadwalReminderSetting;
 use App\Models\JadwalRuangan;
 use App\Models\JadwalStudent;
@@ -19,9 +22,12 @@ use App\Support\PhoneNumber;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\View\View;
+use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Throwable;
 
 /**
@@ -75,74 +81,545 @@ class JadwalKelasController extends Controller
     ) {
     }
 
+    /**
+     * Update 4 September 2026 (permintaan user, dari contoh gambar
+     * grid Excel yang dikirim): index() DIGANTI TOTAL lagi dari tabel
+     * flat jadi GRID per jam, di-tab per Ruangan -- iterasi KETIGA di
+     * riwayat halaman ini (lihat class docblock: flat -> grid lama ->
+     * flat lagi -> grid BARU ini, beda dari grid lama yang di-tab per
+     * Ruangan/Pengajar). Alasan eksplisit user: "page ini yang akan di
+     * pantau terus oleh admin" -- satu tab Ruangan menampilkan SATU
+     * tabel berisi SEMUA slot waktu (durasi = `durasi_sesi_default_menit`
+     * branch) dari `jam_buka` sampai `jam_tutup` untuk TANGGAL yang
+     * difilter (bukan lagi bisa "semua tanggal" -- grid butuh satu
+     * sumbu waktu, `date` SELALU di-default hari ini kalau kosong).
+     * Jam istirahat ditandai (baris `table-danger`, tidak bisa diisi).
+     * Baris yang ADA App\Models\JadwalKelas beneran (match jam mulainya
+     * masuk rentang slot itu) menampilkan datanya PERSIS seperti kolom
+     * tabel lama (Pengajar/Bidang/Kategori/Murid/Mulai/Selesai/
+     * Kehadiran/Status/Aksi, markup di-extract ke
+     * jadwal-kelas/_sesi-row.blade.php supaya sama persis dipakai di
+     * grid maupun daftar "Tanpa Jam" di bawah) -- baris tanpa sesi
+     * kosong. Ditegaskan user (lewat AskUserQuestion): TIDAK menambah
+     * langkah pilih Ruangan di alur checklist Tambah/Edit Student --
+     * fitur ini MURNI tampilan, sesi yang `jadwal_ruangan_id`-nya belum
+     * ke-isi (semua sesi auto-generate dari checklist Student SELAMA
+     * INI selalu begitu, lihat JadwalStudentController::
+     * createRutinFromSlots()) masuk tab "Tanpa Ruangan" tersendiri di
+     * akhir (cuma muncul kalau memang ada datanya), admin bisa isi
+     * Ruangan-nya manual kalau perlu lewat Edit (field itu sudah ada
+     * dari dulu, tidak berubah).
+     *
+     * Sesi yang start_time-nya null ("slot kosong" tanpa jam sama
+     * sekali) ATAU jatuh di luar rentang jam_buka-jam_tutup (data lama/
+     * anomali, atau branch belum punya Jam Operasional/hari ini bukan
+     * hari operasional -- grid-nya jadi kosong semua) TETAP ditampilkan,
+     * bukan hilang begitu saja -- masuk daftar "Sesi Tanpa Jam / Di
+     * Luar Jam Operasional" di ATAS grid tiap tab (lihat
+     * buildRuanganGrid()) supaya tidak ada data yang diam-diam tidak
+     * kelihatan gara-gara redesign ini.
+     *
+     * Pagination DIHAPUS (grid dibatasi jam_buka-jam_tutup 1 hari,
+     * jumlah baris wajar tanpa perlu di-page). Filter Pengajar/Mata
+     * Pelajaran tetap ada, cuma MENYARING isi grid (baris di luar
+     * filter jadi kosong), bukan menghilangkan slot-nya. Filter Branch
+     * BARU (dropdown, cuma muncul kalau company punya >1 branch DAN
+     * user bukan locked ke satu branch) -- WAJIB ada satu branch aktif
+     * supaya Jam Operasional-nya jelas dipakai yang mana; default ke
+     * branch PERTAMA kalau belum pernah pilih.
+     */
     public function index(Request $request): View
     {
-        $context = $this->companyContext($request);
-        $company = $context->company;
+        $f = $this->resolveFilteredSesi($request);
+        $context = $f['context'];
+        $company = $f['company'];
+        $branchSetting = $f['branchSetting'];
+        $isHariOperasional = $f['isHariOperasional'];
+        $ruangans = $f['ruangans'];
+        $sesiByRuangan = $f['sesiByRuangan'];
 
-        $branchOfficeId = $context->isLockedToBranch()
-            ? $context->branchOffice?->id
-            : $request->query('branch_office_id');
+        $timeSlots = ($branchSetting && $isHariOperasional) ? $this->buildTimeSlots($branchSetting) : collect();
 
-        // Filter -- lihat class docblock update 7 September 2026.
-        // `date` default hari ini kalau query-nya belum ada SAMA SEKALI
-        // (kunjungan pertama); tetap dihormati kalau admin sengaja
-        // mengosongkan field-nya lalu submit (query ada tapi string
-        // kosong -- lihat pengecekan `if ($date)` di bawah, jadi berarti
-        // "semua tanggal").
-        $date = $request->query('date', now()->toDateString());
-        $pengajarId = $request->query('pengajar_id');
-        $mataPelajaranId = $request->query('jadwal_mata_pelajaran_id');
+        $ruanganTabs = $ruangans->map(fn (JadwalRuangan $ruangan) => [
+            'id' => $ruangan->id,
+            'name' => $ruangan->name,
+        ] + $this->buildRuanganGrid($timeSlots, $sesiByRuangan->get($ruangan->id, collect())));
 
-        $query = JadwalKelas::where('company_id', $company->id)
-            ->with([
-                'pengajar:id,name', 'student:id,name', 'mataPelajaran:id,name', 'kategori:id,name',
-                'ruangan:id,name',
-                'sesiPengganti:id,pengganti_dari_sesi_id,start_time',
-                'penggantiDariSesi:id,start_time',
-            ]);
-
-        if ($context->isLockedToBranch()) {
-            $query->where(function ($q) use ($context) {
-                $q->where('branch_office_id', $context->branchOffice?->id)
-                    ->orWhereNull('branch_office_id');
-            });
-        } elseif ($branchOfficeId) {
-            $query->where('branch_office_id', $branchOfficeId);
+        // "Tanpa Ruangan" -- lihat docblock method ini -- cuma
+        // ditambahkan sebagai tab kalau memang ada datanya, supaya
+        // tidak nambah tab kosong kalau semua sesi sudah rapi ke-assign
+        // Ruangan-nya.
+        $tanpaRuanganSesi = $sesiByRuangan->get(null, collect());
+        if ($tanpaRuanganSesi->isNotEmpty()) {
+            $ruanganTabs->push([
+                'id' => 'tanpa-ruangan',
+                'name' => 'Tanpa Ruangan',
+            ] + $this->buildRuanganGrid($timeSlots, $tanpaRuanganSesi));
         }
-
-        if ($date) {
-            $query->whereDate('start_time', $date);
-        }
-
-        if ($pengajarId) {
-            $query->where('pengajar_id', $pengajarId);
-        }
-
-        if ($mataPelajaranId) {
-            $query->where('jadwal_mata_pelajaran_id', $mataPelajaranId);
-        }
-
-        // Kronologis (ascending) kalau lagi lihat 1 tanggal spesifik --
-        // paling masuk akal buat agenda 1 hari. Tanpa filter tanggal
-        // (semua tanggal), descending (aktivitas terbaru dulu) lebih
-        // berguna daripada mulai dari baris tertua di halaman pertama.
-        $query->orderByRaw('start_time IS NULL, start_time '.($date ? 'asc' : 'desc'));
-
-        $sesiList = $query->paginate(20)->withQueryString()->onEachSide(1);
 
         return view('jadwal.jadwal-kelas.index', [
-            'sesiList' => $sesiList,
-            'pengajars' => $this->companyPengajarMembers($company, $branchOfficeId),
+            'ruanganTabs' => $ruanganTabs,
+            'branchSetting' => $branchSetting,
+            'isHariOperasional' => $isHariOperasional,
+            'carbonDate' => $f['carbonDate'],
+            'pengajars' => $this->companyPengajarMembers($company, $f['branchOfficeId']),
             'mataPelajarans' => JadwalMataPelajaran::where('company_id', $company->id)
                 ->where('status', 'active')
                 ->orderBy('name')
                 ->get(['id', 'name']),
-            'filterDate' => $date,
-            'filterPengajarId' => $pengajarId,
-            'filterMataPelajaranId' => $mataPelajaranId,
-            'branchOfficeId' => $branchOfficeId,
-        ]);
+            'branchOffices' => $f['branchOffices'],
+            'filterDate' => $f['date'],
+            'filterPengajarId' => $f['pengajarId'],
+            'filterMataPelajaranId' => $f['mataPelajaranId'],
+            'branchOfficeId' => $f['branchOfficeId'],
+            // Update 4 September 2026 (permintaan user: "tambahkan
+            // fungsi export to excel sesuai dengan filter" & "fungsi
+            // print sesuai dengan filter") -- label filter yang lagi
+            // aktif, MURNI dipakai buat header halaman cetak (lihat
+            // index.blade.php's @media print) supaya kertas yang
+            // dicetak tetap jelas ini "Jadwal Kelas" filter yang mana,
+            // walau chrome (navbar/sidebar/form filter) disembunyikan
+            // saat dicetak. Tombol "Export ke Excel" & "Cetak" juga baru
+            // di sini -- lihat export() untuk Excel-nya.
+            'filterPengajarName' => $f['pengajarName'],
+            'filterMataPelajaranName' => $f['mataPelajaranName'],
+            'filterBranchName' => $f['branchName'],
+            // Update 4 September 2026 (permintaan user: "perbaiki fungsi
+            // edit nya ... di buat modern popup saja ... pilih dulu
+            // kelas dan category nya, pilih pengajar nya baru tampilkan
+            // jam pengajarnya berupa tab") -- data pendukung popup Edit
+            // (dibuka dari tombol pensil tiap baris, lihat _sesi-row.
+            // blade.php & index.blade.php) di-embed SEKALI di sini
+            // (bukan AJAX per klik admin buka popup) supaya popup-nya
+            // terasa instan. Lihat docblock editModalData().
+            'students' => JadwalStudent::where('company_id', $company->id)
+                ->where('status', 'active')
+                ->with(['mataPelajaran:id,name', 'pengajar:id,name'])
+                ->orderBy('name')
+                ->get(),
+            'ruangans' => $ruangans,
+        ] + $this->editModalData($context, $f['carbonDate']));
+    }
+
+    /**
+     * Update 4 September 2026 (permintaan user: "tambahkan fungsi
+     * export to excel sesuai dengan filter"): export SEMUA sesi yang
+     * cocok filter index() (Tanggal/Pengajar/Mata Pelajaran/Branch) ke
+     * Excel, SATU sheet per tab Ruangan (termasuk "Tanpa Ruangan" kalau
+     * ada) -- struktur sheet-nya mengikuti tab di layar, TAPI isinya
+     * cuma baris App\Models\JadwalKelas yang BENERAN ADA (tidak meniru
+     * baris kosong grid di layar -- Excel yang isinya baris kosong
+     * berulang cuma bikin file panjang tanpa guna), diurutkan ascending
+     * by start_time. Filter dijamin SAMA PERSIS dengan yang di layar
+     * lewat resolveFilteredSesi() (SATU SUMBER dipakai index() DAN
+     * export() ini) -- tidak mungkin filter Excel "kelewatan" beda dari
+     * yang sedang dilihat admin di layar.
+     */
+    public function export(Request $request): BinaryFileResponse
+    {
+        $f = $this->resolveFilteredSesi($request);
+
+        $sheets = $f['ruangans']->map(fn (JadwalRuangan $r) => [
+            'name' => $r->name,
+            'sesi' => $f['sesiByRuangan']->get($r->id, collect())->sortBy('start_time')->values(),
+        ])->values();
+
+        $tanpaRuanganSesi = $f['sesiByRuangan']->get(null, collect());
+        if ($tanpaRuanganSesi->isNotEmpty()) {
+            $sheets->push(['name' => 'Tanpa Ruangan', 'sesi' => $tanpaRuanganSesi->sortBy('start_time')->values()]);
+        }
+
+        // Tetap export SATU sheet (kosong) kalau memang tidak ada
+        // Ruangan aktif & tidak ada sesi tanpa Ruangan sama sekali --
+        // lebih jelas daripada file Excel tanpa sheet sama sekali
+        // (invalid/bikin error dibuka Excel).
+        if ($sheets->isEmpty()) {
+            $sheets->push(['name' => 'Jadwal Kelas', 'sesi' => collect()]);
+        }
+
+        $filename = 'jadwal-kelas-'.$f['company']->slug.'-'.$f['date'].'.xlsx';
+
+        return Excel::download(
+            new JadwalKelasExport($sheets->all(), $f['carbonDate'], $f['branchName'], $f['pengajarName'], $f['mataPelajaranName']),
+            $filename
+        );
+    }
+
+    /**
+     * Resolve context perusahaan + filter (Branch/Tanggal/Pengajar/Mata
+     * Pelajaran, sama urutan resolusi seperti index() sebelum di-
+     * refactor) DAN query mentah App\Models\JadwalKelas yang cocok
+     * filter itu, dikelompokkan per `jadwal_ruangan_id` -- di-extract
+     * dari index() (Update 4 September 2026, permintaan fitur Export
+     * Excel & Cetak) supaya SATU SUMBER filter dipakai index() (grid
+     * layar), export() (Excel), DAN halaman itu sendiri saat dicetak
+     * (cetak murni CSS @media print di atas HTML yang sama dengan
+     * index(), bukan route terpisah -- lihat index.blade.php) --
+     * menjamin ketiganya TIDAK PERNAH menampilkan/meng-export data yang
+     * beda dari filter yang sedang aktif.
+     *
+     * @return array{context: mixed, company: Company, branchOffices: Collection, branchOfficeId: ?string, date: string, pengajarId: ?string, mataPelajaranId: ?string, branchSetting: ?JadwalBranchSetting, carbonDate: Carbon, isHariOperasional: bool, ruangans: Collection, sesiByRuangan: Collection, pengajarName: ?string, mataPelajaranName: ?string, branchName: ?string}
+     */
+    private function resolveFilteredSesi(Request $request): array
+    {
+        $context = $this->companyContext($request);
+        $company = $context->company;
+
+        $branchOffices = $context->isLockedToBranch()
+            ? collect()
+            : BranchOffice::where('company_id', $company->id)->orderBy('name')->get(['id', 'name']);
+
+        $branchOfficeId = $context->isLockedToBranch()
+            ? $context->branchOffice?->id
+            : ($request->query('branch_office_id') ?: $branchOffices->first()?->id);
+
+        // `date` SELALU ke-isi (grid butuh satu sumbu waktu) -- beda
+        // dari versi tabel flat sebelumnya yang bisa dikosongkan untuk
+        // "semua tanggal" (konsep itu tidak berlaku lagi di grid).
+        $date = $request->query('date') ?: now()->toDateString();
+        $pengajarId = $request->query('pengajar_id');
+        $mataPelajaranId = $request->query('jadwal_mata_pelajaran_id');
+
+        $branchSetting = $branchOfficeId
+            ? JadwalBranchSetting::where('branch_office_id', $branchOfficeId)->first()
+            : null;
+
+        $carbonDate = Carbon::parse($date);
+        $isHariOperasional = $branchSetting?->isHariOperasional($carbonDate->dayOfWeek) ?? false;
+
+        $ruangans = $branchOfficeId
+            ? JadwalRuangan::where('company_id', $company->id)
+                ->where('branch_office_id', $branchOfficeId)
+                ->where('status', JadwalRuangan::STATUS_ACTIVE)
+                ->orderBy('name')
+                ->get()
+            : collect();
+
+        $sesiQuery = JadwalKelas::where('company_id', $company->id)
+            ->with([
+                'pengajar:id,name', 'student:id,name', 'mataPelajaran:id,name', 'kategori:id,name',
+                'sesiPengganti:id,pengganti_dari_sesi_id,start_time',
+                'penggantiDariSesi:id,start_time',
+            ])
+            ->whereDate('start_time', $date);
+
+        if ($branchOfficeId) {
+            $sesiQuery->where(function ($q) use ($branchOfficeId) {
+                $q->where('branch_office_id', $branchOfficeId)->orWhereNull('branch_office_id');
+            });
+        }
+
+        if ($pengajarId) {
+            $sesiQuery->where('pengajar_id', $pengajarId);
+        }
+
+        if ($mataPelajaranId) {
+            $sesiQuery->where('jadwal_mata_pelajaran_id', $mataPelajaranId);
+        }
+
+        $sesiByRuangan = $sesiQuery->get()->groupBy('jadwal_ruangan_id');
+
+        // Label nama filter yang aktif -- dipakai header halaman cetak
+        // (index.blade.php) & baris info tiap sheet Excel (JadwalKelasExport),
+        // dihitung SEKALI di sini (bukan duplikat di index()/export())
+        // supaya konsisten.
+        $pengajarName = $pengajarId
+            ? $this->companyPengajarMembers($company, $branchOfficeId)->firstWhere('id', $pengajarId)?->name
+            : null;
+        $mataPelajaranName = $mataPelajaranId
+            ? JadwalMataPelajaran::where('company_id', $company->id)->where('id', $mataPelajaranId)->value('name')
+            : null;
+        $branchName = $branchOfficeId
+            ? BranchOffice::where('company_id', $company->id)->where('id', $branchOfficeId)->value('name')
+            : null;
+
+        return compact(
+            'context', 'company', 'branchOffices', 'branchOfficeId', 'date', 'pengajarId', 'mataPelajaranId',
+            'branchSetting', 'carbonDate', 'isHariOperasional', 'ruangans', 'sesiByRuangan',
+            'pengajarName', 'mataPelajaranName', 'branchName'
+        );
+    }
+
+    /**
+     * Update 4 September 2026 (permintaan user: "perbaiki fungsi edit
+     * nya ya dari jadwal kelas, itu masih yang lama, di buat modern
+     * popup saja. jadi pilih dulu kelas dan category nya, pilih
+     * pengajar nya baru tampilkan jam pengajarnya berupa tab seperti
+     * sblm sblmnya"). Sebelumnya Edit Jadwal Kelas cuma halaman penuh
+     * dengan dropdown Pengajar bebas + 2 field datetime-local mentah
+     * (jadwal-kelas/edit.blade.php lewat _form.blade.php) -- admin
+     * harus ketik tanggal & jam manual sendiri, tidak tahu jam
+     * ketersediaan Pengajar itu apa.
+     *
+     * Update 7 September 2026 (permintaan user, SETELAH popup pertama
+     * di atas jalan: "yang harus di modifikasi adalah tampilkan seluruh
+     * pengajar dan jam pengajar yang available atau yang kosong seperti
+     * di student. triger pertama kali itu pilih pengajar, ketika
+     * pengajar itu dipilih baru keluarkan bidang dan category di
+     * lanjut dengan jam pelajaran yang available. mngkn murid itu mau
+     * pindah pengajar dan pindah kelas juga jadi, 1 rangkaian pindah")
+     * -- URUTAN PEMICU DIBALIK dari versi pertama: SEKARANG (1) admin
+     * pilih Pengajar DULU (dropdown isinya SEMUA pengajar yang punya
+     * penugasan Kategori aktif, bukan lagi menunggu Kategori dipilih
+     * dulu), (2) begitu Pengajar dipilih, dropdown Bidang & Kategori
+     * ke-filter ke yang DIAJARKAN pengajar itu (lihat pengajarBidangMap
+     * & pengajarKategoriMap di bawah, KEBALIKAN arah dari
+     * kategoriPengajarMap versi pertama), (3) begitu Kategori dipilih,
+     * panel "Jam Pengajar" tampil (pola tab per hari, sama seperti
+     * sebelumnya -- lihat komentar index.blade.php). Alasannya (kata
+     * user): admin sering perlu PINDAHKAN murid ke pengajar lain
+     * SEKALIGUS ke kelas/kategori lain dalam satu tindakan -- mulai
+     * dari "pengajar mana yang mau dipakai" itu alur yang lebih natural
+     * daripada mulai dari Kategori.
+     *
+     * Klik satu jam otomatis mengisi Tanggal/Waktu Mulai/Waktu Selesai
+     * (field itu TETAP bisa diisi manual, tidak dikunci -- popup ini
+     * MURNI kemudahan pengisian, bukan pembatasan baru). Pemecahan jam
+     * ketersediaan pengajar per durasi sesi default branch pakai
+     * splitJamIntoChunks() di bawah, SENGAJA duplikat murni dari
+     * JadwalStudentController::splitSlotIntoChunks() (bukan di-extract
+     * ke service bersama) supaya popup ini TIDAK menyentuh
+     * JadwalStudentController.php sama sekali, sesuai instruksi user
+     * berulang kali sesi ini: "jangan sampai kena fungsi lain".
+     *
+     * TIDAK menambah pengecekan bentrok di SERVER yang MENOLAK submit
+     * (beda dari App\Services\Jadwal\JadwalRutinConflictService yang
+     * dipakai alur JadwalRutin mingguan) -- App\Models\JadwalKelas di
+     * sini satu sesi bertanggal PASTI, bukan pola mingguan berulang,
+     * jadi butuh desain pengecekan bentrok server yang beda kalau mau
+     * ditolak (lawan JadwalKelas lain persis di tanggal itu, bukan
+     * lawan JadwalRutin) -- di luar permintaan user, sengaja tidak
+     * ditambah supaya tidak melebar. Yang DITAMBAHKAN (permintaan
+     * "tampilkan ... yang available atau yang kosong seperti di
+     * student", lalu ditegaskan lagi "harus nya yg terisi itu tidak
+     * bisa diklik") adalah info Kosong/Terisi tiap jam chip (badge,
+     * lihat $bookedSlots di bawah) DAN chip "Terisi" itu DI-DISABLE di
+     * SISI KLIEN (index.blade.php's renderJamPanel(), atribut HTML
+     * `disabled`) supaya admin tidak bisa klik jam yang sudah kepakai
+     * -- TETAP BUKAN validasi server (kalau admin isi jam bentrok itu
+     * manual lewat field Waktu Mulai/Selesai, atau lewat request
+     * langsung, tetap lolos -- proteksinya murni kemudahan di UI popup
+     * ini, bukan aturan bisnis baru). Dihitung lawan App\Models\
+     * JadwalKelas lain yang jam mulainya jatuh di TANGGAL yang lagi
+     * difilter admin di grid ($carbonDate, lihat $bookedSlotsDate) --
+     * data di-embed statis SEKALI (bukan AJAX) jadi cuma akurat untuk
+     * tanggal itu; index.blade.php's script menyembunyikan badge (jam
+     * jadi selalu bisa diklik lagi) kalau admin geser field Tanggal di
+     * popup ke tanggal lain (tidak ada dasar data utk tanggal lain).
+     *
+     * Data untuk SEMUA Pengajar+Kategori+jam ketersediaan company ini
+     * di-embed SEKALIGUS (lihat pemakaian di index.blade.php's
+     * <script>) supaya popup terasa instan begitu admin klik pensil --
+     * tidak perlu request baru ke server tiap kali ganti pilihan
+     * Pengajar/Bidang/Kategori di dalam popup.
+     *
+     * @return array{allPengajars: Collection, pengajarBidangMap: array, pengajarKategoriMap: array, pengajarSlotMap: array, bookedSlots: array, bookedSlotsDate: string}
+     */
+    private function editModalData($context, Carbon $carbonDate): array
+    {
+        $pengajarKategoris = JadwalPengajarKategori::with(['jadwals', 'pengajar:id,name', 'kategori.mataPelajaran'])
+            ->where('company_id', $context->company->id)
+            ->where('status', JadwalPengajarKategori::STATUS_ACTIVE)
+            ->get();
+
+        $branchSettings = JadwalBranchSetting::where('company_id', $context->company->id)->get()->keyBy('branch_office_id');
+
+        $allPengajars = [];
+        $pengajarBidangMap = [];
+        $pengajarKategoriMap = [];
+        $pengajarSlotMap = [];
+
+        foreach ($pengajarKategoris as $pk) {
+            if (! $pk->pengajar || ! $pk->kategori) {
+                continue;
+            }
+
+            // Dedupe by pengajar_id (satu pengajar wajar punya lebih
+            // dari satu penugasan Kategori aktif) -- array_values() di-
+            // rapikan jadi list sebelum dikembalikan di bawah.
+            $allPengajars[$pk->pengajar_id] = ['id' => $pk->pengajar_id, 'name' => $pk->pengajar->name];
+
+            $mataPelajaran = $pk->kategori->mataPelajaran;
+
+            if ($mataPelajaran) {
+                $pengajarBidangMap[$pk->pengajar_id][$mataPelajaran->id] = [
+                    'id' => $mataPelajaran->id,
+                    'name' => $mataPelajaran->name,
+                ];
+            }
+
+            $pengajarKategoriMap[$pk->pengajar_id][$pk->jadwal_kategori_id] = [
+                'id' => $pk->jadwal_kategori_id,
+                'name' => $pk->kategori->name,
+                'jadwal_mata_pelajaran_id' => $mataPelajaran?->id,
+            ];
+
+            $branchOfficeId = $mataPelajaran?->branch_office_id;
+            $branchSetting = $branchOfficeId ? $branchSettings->get($branchOfficeId) : null;
+            $durasi = $branchSetting?->durasi_sesi_default_menit ?: 30;
+
+            $slots = $pk->jadwals
+                ->flatMap(fn ($slot) => collect($this->splitJamIntoChunks(substr($slot->jam_mulai, 0, 5), substr($slot->jam_selesai, 0, 5), $durasi))
+                    ->map(fn ($chunk) => [
+                        'hari' => $slot->hari,
+                        'jam_mulai' => $chunk['jam_mulai'],
+                        'jam_selesai' => $chunk['jam_selesai'],
+                    ]))
+                // Sama seperti validator jam manual di bawah: dilewati
+                // (tidak menyaring) kalau branch Mata Pelajaran Kategori
+                // ini belum punya Jam Operasional diatur -- tidak ada
+                // dasar buat menyembunyikan jam yang pengajar itu
+                // sendiri daftarkan kalau memang belum ada aturannya.
+                ->when($branchSetting, fn ($c) => $c->filter(fn (array $chunk) => $branchSetting->isHariOperasional($chunk['hari'])
+                    && $branchSetting->isWithinOperationalHours($chunk['jam_mulai'], $chunk['jam_selesai'])))
+                ->values();
+
+            $pengajarSlotMap[$pk->pengajar_id][$pk->jadwal_kategori_id] = $slots;
+        }
+
+        // Update 7 September 2026 (lihat docblock di atas) -- jam yang
+        // sudah kepakai App\Models\JadwalKelas LAIN pada tanggal yang
+        // lagi difilter admin di grid, per pengajar. Nama murid ikut
+        // dibawa (kalau ada) MURNI supaya tooltip badge "Terisi" di
+        // popup lebih informatif ("bentrok dengan sesi murid X").
+        $bookedSlots = [];
+        JadwalKelas::where('company_id', $context->company->id)
+            ->whereNotNull('pengajar_id')
+            ->whereNotNull('start_time')
+            ->whereDate('start_time', $carbonDate)
+            ->with('student:id,name')
+            ->get(['id', 'pengajar_id', 'student_id', 'start_time', 'end_time'])
+            ->each(function (JadwalKelas $k) use (&$bookedSlots) {
+                $bookedSlots[$k->pengajar_id][] = [
+                    'kelas_id' => $k->id,
+                    'start' => $k->start_time->format('H:i'),
+                    'end' => $k->end_time ? $k->end_time->format('H:i') : $k->start_time->format('H:i'),
+                    'student_name' => $k->student?->name,
+                ];
+            });
+
+        return [
+            'allPengajars' => collect($allPengajars)->values()->sortBy('name')->values(),
+            'pengajarBidangMap' => collect($pengajarBidangMap)->map(fn ($byId) => collect($byId)->values()->sortBy('name')->values())->all(),
+            'pengajarKategoriMap' => collect($pengajarKategoriMap)->map(fn ($byId) => collect($byId)->values()->sortBy('name')->values())->all(),
+            'pengajarSlotMap' => $pengajarSlotMap,
+            'bookedSlots' => $bookedSlots,
+            'bookedSlotsDate' => $carbonDate->toDateString(),
+        ];
+    }
+
+    /**
+     * Pecah satu rentang jam ketersediaan Pengajar (App\Models\
+     * JadwalPengajarJadwal) jadi chunk-chunk per durasi sesi default
+     * branch -- lihat docblock editModalData(). Sama persis algoritmanya
+     * dengan JadwalStudentController::splitSlotIntoChunks(), sengaja
+     * DIDUPLIKASI (bukan di-extract ke satu service bersama) supaya
+     * popup Edit Jadwal Kelas ini tidak menyentuh file
+     * JadwalStudentController.php sama sekali.
+     *
+     * @return list<array{jam_mulai: string, jam_selesai: string}>
+     */
+    private function splitJamIntoChunks(string $jamMulai, string $jamSelesai, int $durasiMenit): array
+    {
+        if ($durasiMenit <= 0) {
+            return [];
+        }
+
+        $chunks = [];
+        $cursor = Carbon::createFromFormat('H:i', $jamMulai);
+        $end = Carbon::createFromFormat('H:i', $jamSelesai);
+
+        while ($cursor->copy()->addMinutes($durasiMenit)->lte($end)) {
+            $chunkEnd = $cursor->copy()->addMinutes($durasiMenit);
+            $chunks[] = ['jam_mulai' => $cursor->format('H:i'), 'jam_selesai' => $chunkEnd->format('H:i')];
+            $cursor = $chunkEnd;
+        }
+
+        return $chunks;
+    }
+
+    /**
+     * Pecah jam_buka..jam_tutup branch jadi list slot waktu tetap
+     * `durasi_sesi_default_menit` (pola sama dengan
+     * JadwalStudentController::splitSlotIntoChunks() -- sisa di ujung
+     * yang kurang dari satu durasi penuh SENGAJA dibuang), tiap slot
+     * ditandai `istirahat` kalau tumpang tindih jam_istirahat_mulai/
+     * selesai. Dipakai buildRuanganGrid() jadi baris grid tiap tab
+     * Ruangan.
+     *
+     * @return Collection<int, array{start: string, end: string, istirahat: bool}>
+     */
+    private function buildTimeSlots(JadwalBranchSetting $branchSetting): Collection
+    {
+        $durasi = $branchSetting->durasi_sesi_default_menit ?: 30;
+        $jamBuka = substr($branchSetting->jam_buka, 0, 5);
+        $jamTutup = substr($branchSetting->jam_tutup, 0, 5);
+        $istirahatMulai = $branchSetting->jam_istirahat_mulai ? substr($branchSetting->jam_istirahat_mulai, 0, 5) : null;
+        $istirahatSelesai = $branchSetting->jam_istirahat_selesai ? substr($branchSetting->jam_istirahat_selesai, 0, 5) : null;
+
+        $slots = collect();
+        $cursor = Carbon::createFromFormat('H:i', $jamBuka);
+        $end = Carbon::createFromFormat('H:i', $jamTutup);
+
+        while ($cursor->copy()->addMinutes($durasi)->lte($end)) {
+            $slotStart = $cursor->format('H:i');
+            $slotEnd = $cursor->copy()->addMinutes($durasi)->format('H:i');
+
+            $slots->push([
+                'start' => $slotStart,
+                'end' => $slotEnd,
+                'istirahat' => $istirahatMulai && $istirahatSelesai
+                    && $slotStart < $istirahatSelesai && $slotEnd > $istirahatMulai,
+            ]);
+
+            $cursor->addMinutes($durasi);
+        }
+
+        return $slots;
+    }
+
+    /**
+     * Bangun baris grid (satu per slot dari $timeSlots, tiap slot dapat
+     * property `sesi` -- Collection App\Models\JadwalKelas yang jam
+     * mulainya jatuh dalam slot itu, kosong kalau tidak ada) PLUS daftar
+     * `unmatched` -- sesi di $sesiList yang TIDAK ke-plot ke slot manapun
+     * (start_time null, atau di luar rentang $timeSlots sama sekali,
+     * termasuk kalau $timeSlots kosong karena branch belum punya Jam
+     * Operasional / hari ini bukan hari operasional) -- lihat docblock
+     * index() soal kenapa ini penting (supaya tidak ada sesi yang diam-
+     * diam hilang dari tampilan gara-gara redesign grid ini).
+     *
+     * @return array{rows: Collection, unmatched: Collection}
+     */
+    private function buildRuanganGrid(Collection $timeSlots, Collection $sesiList): array
+    {
+        $matchedIds = [];
+
+        $rows = $timeSlots->map(function (array $slot) use ($sesiList, &$matchedIds) {
+            if ($slot['istirahat']) {
+                return $slot + ['sesi' => collect()];
+            }
+
+            $inSlot = $sesiList->filter(function (JadwalKelas $kelas) use ($slot) {
+                if (! $kelas->start_time) {
+                    return false;
+                }
+
+                $t = $kelas->start_time->format('H:i');
+
+                return $t >= $slot['start'] && $t < $slot['end'];
+            })->values();
+
+            foreach ($inSlot as $kelas) {
+                $matchedIds[] = $kelas->id;
+            }
+
+            return $slot + ['sesi' => $inSlot];
+        });
+
+        $unmatched = $sesiList->reject(fn (JadwalKelas $kelas) => in_array($kelas->id, $matchedIds, true))->values();
+
+        return ['rows' => $rows, 'unmatched' => $unmatched];
     }
 
     public function create(Request $request): View
@@ -227,6 +704,15 @@ class JadwalKelasController extends Controller
                 'company_id' => $company->id,
                 'branch_office_id' => $validated['branch_office_id'] ?? null,
                 'jadwal_mata_pelajaran_id' => $validated['jadwal_mata_pelajaran_id'] ?? null,
+                // Update 4 September 2026 (popup Edit Jadwal Kelas, lihat
+                // docblock editModalData()): 'jadwal_kategori_id' baru
+                // sekarang bisa diisi dari validator() -- sebelumnya field
+                // ini TIDAK PERNAH diproses store()/update() sama sekali
+                // (kolomnya sudah lama ada di skema, cuma tidak pernah
+                // ke-set dari form manual). $snapshot di atas (alur sesi
+                // PENGGANTI) tetap menang lewat array_merge() di bawah
+                // kalau ini pengganti sesi -- perilaku situ TIDAK berubah.
+                'jadwal_kategori_id' => $validated['jadwal_kategori_id'] ?? null,
                 'jadwal_ruangan_id' => $validated['jadwal_ruangan_id'] ?? null,
                 'pengajar_id' => $validated['pengajar_id'],
                 'student_id' => $validated['student_id'],
@@ -275,6 +761,17 @@ class JadwalKelasController extends Controller
         ];
     }
 
+    /**
+     * Update 4 September 2026 (permintaan user: popup Edit modern, lihat
+     * docblock editModalData()): halaman penuh ini TIDAK LAGI jadi jalur
+     * utama admin edit Jadwal Kelas -- tombol pensil tiap baris di
+     * index() sekarang membuka popup langsung di halaman grid (lihat
+     * index.blade.php's #editKelasModal), tidak pindah ke sini lagi.
+     * Route/method/view ini SENGAJA DIBIARKAN APA ADANYA (bukan dihapus)
+     * jadi fallback kalau URL-nya diakses langsung -- lebih aman
+     * daripada menghapus jalur yang sudah teruji, sesuai instruksi user
+     * berulang kali sesi ini soal hati-hati scope komit.
+     */
     public function edit(Request $request, string $id): View
     {
         $context = $this->companyContext($request);
@@ -307,10 +804,22 @@ class JadwalKelasController extends Controller
         $validator = $this->validator($request, $company, $id);
 
         if ($validator->fails()) {
+            // Update 4 September 2026 (popup Edit modern, lihat docblock
+            // editModalData()): SEBELUMNYA redirect balik ke halaman
+            // penuh jadwal.kelas.edit -- sekarang popup-nya hidup di
+            // index() (grid), jadi validasi gagal balik ke SANA (dengan
+            // filter yang relevan dengan sesi ini, lihat
+            // filterRedirectParams()) supaya admin tetap di popup yang
+            // sama, bukan terlempar ke halaman lama yang sudah tidak
+            // dipakai lagi. `reopenEditKelasId` (flash session, BUKAN
+            // input) dibaca index.blade.php's <script> untuk tahu popup
+            // MANA yang harus dibuka ulang otomatis + diisi ulang dari
+            // old() supaya isian admin yang gagal disimpan TIDAK hilang.
             return redirect()
-                ->route('jadwal.kelas.edit', $id)
+                ->route('jadwal.kelas.index', $this->filterRedirectParams($kelas))
                 ->withErrors($validator)
-                ->withInput();
+                ->withInput()
+                ->with('reopenEditKelasId', $id);
         }
 
         $validated = $validator->validated();
@@ -326,6 +835,8 @@ class JadwalKelasController extends Controller
         $kelas->update([
             'branch_office_id' => $validated['branch_office_id'] ?? null,
             'jadwal_mata_pelajaran_id' => $validated['jadwal_mata_pelajaran_id'] ?? null,
+            // Update 4 September 2026: lihat catatan yang sama di store().
+            'jadwal_kategori_id' => $validated['jadwal_kategori_id'] ?? null,
             'jadwal_ruangan_id' => $validated['jadwal_ruangan_id'] ?? null,
             'pengajar_id' => $validated['pengajar_id'],
             'student_id' => $validated['student_id'],
@@ -546,6 +1057,13 @@ class JadwalKelasController extends Controller
         if ($request->has('jadwal_ruangan_id') && $request->input('jadwal_ruangan_id') === '') {
             $request->merge(['jadwal_ruangan_id' => null]);
         }
+        // Update 4 September 2026 (popup Edit modern, lihat docblock
+        // editModalData()): sama seperti jadwal_ruangan_id di atas --
+        // <select name="jadwal_kategori_id"> yang dikosongkan kirim
+        // string kosong, dinormalisasi ke null SEBELUM validasi.
+        if ($request->has('jadwal_kategori_id') && $request->input('jadwal_kategori_id') === '') {
+            $request->merge(['jadwal_kategori_id' => null]);
+        }
 
         $validator = Validator::make($request->all(), [
             'jadwal_mata_pelajaran_id' => [
@@ -605,6 +1123,22 @@ class JadwalKelasController extends Controller
                 function ($attribute, $value, $fail) use ($company) {
                     if ($value && ! JadwalRuangan::where('company_id', $company->id)->where('id', $value)->exists()) {
                         $fail('Ruangan tidak valid.');
+                    }
+                },
+            ],
+            // Update 4 September 2026 (popup Edit modern, lihat docblock
+            // editModalData()): field ini SUDAH LAMA ada di skema
+            // (App\Models\JadwalKelas::$fillable) tapi belum pernah
+            // divalidasi/diproses store()/update() -- popup Edit yang
+            // baru sekarang mengirimkannya (langkah "pilih dulu kelas
+            // dan category nya"). Nullable/opsional sama seperti
+            // jadwal_ruangan_id di atas -- Kategori bukan hal wajib utk
+            // sesi manual.
+            'jadwal_kategori_id' => [
+                'nullable', 'uuid', 'exists:jadwal_kategori,id',
+                function ($attribute, $value, $fail) use ($company) {
+                    if ($value && ! JadwalKategori::where('company_id', $company->id)->where('id', $value)->exists()) {
+                        $fail('Kategori tidak valid.');
                     }
                 },
             ],

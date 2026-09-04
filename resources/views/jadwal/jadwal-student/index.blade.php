@@ -87,6 +87,7 @@
                                 @unless($pengajar)
                                     <th>Pengajar</th>
                                 @endunless
+                                <th>Kategori</th>
                                 <th>Branch</th>
                                 <th>No. HP</th>
                                 <th>Status</th>
@@ -103,6 +104,17 @@
                                     @unless($pengajar)
                                         <td>{{ $student->pengajar->name ?? '-' }}</td>
                                     @endunless
+                                    <td>
+                                        {{-- Update 4 September 2026: "Kategori" DI-DERIVE dari Jadwal
+                                        Rutin aktif murid ini (lihat JadwalStudentController::index()),
+                                        BUKAN field tersimpan langsung -- kalau murid belum punya Jadwal
+                                        Rutin aktif sama sekali, belum ada Kategori yang bisa ditentukan. --}}
+                                        @forelse($student->kategori_names as $kategoriName)
+                                            <span class="badge bg-light text-dark border fw-normal">{{ $kategoriName }}</span>
+                                        @empty
+                                            <span class="text-muted">-</span>
+                                        @endforelse
+                                    </td>
                                     <td>{{ $student->branchOffice->name ?? '-' }}</td>
                                     <td class="text-nowrap">
                                         @if($student->parent_phone_number || $student->student_phone_number)
@@ -115,17 +127,15 @@
                                         <span class="badge {{ $student->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $student->status }}</span>
                                     </td>
                                     <td class="text-end text-nowrap">
-                                        <a href="{{ route('jadwal.rutin.index', ['student_id' => $student->id]) }}" class="btn btn-sm btn-light">
-                                            <i class="ri-repeat-line"></i> Jadwal Rutin
-                                        </a>
-                                        <a href="{{ route('jadwal.kelas.create', [
-                                            'branch_office_id' => $student->branch_office_id,
-                                            'jadwal_mata_pelajaran_id' => $student->jadwal_mata_pelajaran_id,
-                                            'pengajar_id' => $student->pengajar_id,
-                                            'student_id' => $student->id,
-                                        ]) }}" class="btn btn-sm btn-outline-primary">
-                                            <i class="ri-add-line"></i> Add Jadwal
-                                        </a>
+                                        {{-- Update 4 September 2026 (permintaan user): tombol "Jadwal
+                                        Rutin" & "Add Jadwal" DIHAPUS dari sini -- keduanya jadi jalan
+                                        pintas yang bisa dipakai bikin jadwal murid tanpa lewat checklist
+                                        ketersediaan Pengajar di halaman Edit (lihat
+                                        JadwalStudentController::pengajarSlotsPanel()). Admin yang mau
+                                        kelola Jadwal Rutin/Jadwal Kelas tetap bisa lewat menu
+                                        sidebar-nya sendiri -- cuma shortcut per-baris ini yang hilang,
+                                        Aksi di sini disederhanakan jadi Edit + Delete saja, sama
+                                        seperti pola baris Pengajar (lihat jadwal-pengajar/index.blade.php). --}}
                                         <a href="{{ route('jadwal.student.edit', $student->id) }}" class="btn btn-sm btn-light">
                                             <i class="ri-edit-line"></i>
                                         </a>
@@ -138,7 +148,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="{{ 5 + ($mataPelajaran ? 0 : 1) + ($pengajar ? 0 : 1) }}" class="text-center text-muted py-4">Belum ada Student. Klik "Tambah Student" untuk membuat yang pertama.</td>
+                                    <td colspan="{{ 6 + ($mataPelajaran ? 0 : 1) + ($pengajar ? 0 : 1) }}" class="text-center text-muted py-4">Belum ada Student. Klik "Tambah Student" untuk membuat yang pertama.</td>
                                 </tr>
                             @endforelse
                         </tbody>

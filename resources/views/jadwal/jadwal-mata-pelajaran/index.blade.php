@@ -115,8 +115,11 @@
                                                 class="btn btn-link p-0 border-0 text-decoration-none d-flex gap-1"
                                                 data-bs-toggle="modal" data-bs-target="#rosterModal{{ $mataPelajaran->id }}"
                                                 title="Lihat pengajar, murid & ruangan">
-                                                <span class="badge bg-light text-dark border fw-normal" title="Jumlah Kelas">
+                                                <span class="badge bg-light text-dark border fw-normal" title="Jumlah Kelas (sesi)">
                                                     <i class="ri-book-2-line align-middle"></i> {{ $mataPelajaran->kelas_count }}
+                                                </span>
+                                                <span class="badge bg-light text-dark border fw-normal" title="Jumlah Ruangan">
+                                                    <i class="ri-door-open-line align-middle"></i> {{ $mataPelajaran->ruangan_count }}
                                                 </span>
                                                 <span class="badge bg-light text-dark border fw-normal" title="Jumlah Pengajar">
                                                     <i class="ri-user-star-line align-middle"></i> {{ $mataPelajaran->pengajar_count }}

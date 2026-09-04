@@ -98,6 +98,35 @@ class JadwalRutinConflictService
     }
 
     /**
+     * Update 4 September 2026 (permintaan user: kolom Ruangan ditambah
+     * ke Tambah/Edit Student): wrapper publik ke findConflict() untuk
+     * SISI RUANGAN saja -- pasangan findPengajarConflict() di atas,
+     * dipakai App\Http\Controllers\Jadwal\JadwalStudentController untuk
+     * mencegah dua murid (beda Pengajar sekalipun) dipasang ke Ruangan
+     * fisik yang sama di jam yang bentrok, begitu Ruangan jadi bisa
+     * dipilih dari checklist Student (sebelumnya Ruangan SELALU null di
+     * jalur ini, jadi pengecekan ini belum pernah relevan). Prinsip yang
+     * sama dengan pengecekan Ruangan di App\Http\Controllers\Jadwal\
+     * JadwalRutinController (lihat check() di atas) -- cuma tanpa jalur
+     * pesan error lengkap.
+     */
+    public function findRuanganConflict(
+        string $companyId,
+        int $hari,
+        string $jamMulai,
+        string $jamSelesai,
+        string $efektifMulai,
+        ?string $efektifSelesai,
+        string $jadwalRuanganId,
+        ?string $ignoreId = null,
+    ): ?JadwalRutin {
+        return $this->findConflict(
+            $companyId, $hari, $jamMulai, $jamSelesai, $efektifMulai, $efektifSelesai, $ignoreId,
+            jadwalRuanganId: $jadwalRuanganId,
+        );
+    }
+
+    /**
      * Cari satu baris Jadwal Rutin aktif yang bentrok, untuk SATU sisi
      * saja (pengajar ATAU ruangan -- persis salah satu argumen ini yang
      * diisi tiap panggilan, lihat check() di atas).
