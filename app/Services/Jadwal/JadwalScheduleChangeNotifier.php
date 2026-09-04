@@ -60,9 +60,47 @@ use Throwable;
  * JadwalKelasController::notifyPengajarScheduleChanged() yang sudah ada
  * sebelumnya -- perubahan jadwal murid itu sendiri tidak boleh gagal
  * cuma karena WA gagal terkirim.
+ *
+ * Update 4 September 2026 (laporan user: "ketika ada perubahan jadwal
+ * wa nya terkirim 1x saja ya tidak tiap ada perubahan ya"): SEBELUMNYA
+ * rutinRemoved()/rutinAdded() SELALU langsung kirim WA begitu dipanggil
+ * -- kalau satu form Edit Student meng-uncheck 3 slot lama & mencentang
+ * 2 slot baru sekaligus, Pengajar yang sama bisa dapat SAMPAI 5 WA
+ * terpisah dalam satu kali submit (App\Http\Controllers\Jadwal\
+ * JadwalStudentController::update() memanggil kedua method ini di
+ * DALAM loop, satu kali per baris App\Models\JadwalRutin yang berubah;
+ * deactivate() juga sama, satu kali per baris rutin aktif murid itu).
+ * Kedua method sekarang terima parameter `$batch` (default false, BUKAN
+ * breaking change ke pemanggil lama) -- true berarti pesannya DITAMPUNG
+ * dulu (queueForPengajar()) alih-alih langsung dikirim, dikelompokkan
+ * per Pengajar (bukan per baris JadwalRutin). Caller WAJIB memanggil
+ * flushPengajarNotifications() SATU KALI setelah SEMUA rutinRemoved()/
+ * rutinAdded(batch: true) untuk request itu selesai dipanggil -- lihat
+ * docblock method itu untuk detail penting soal instance service ini
+ * HARUS sama (constructor-injected) sepanjang satu request, bukan
+ * di-resolve ulang lewat app() tiap panggilan (service ini BUKAN
+ * singleton, resolve ulang bikin antreannya "hilang"/tidak nyambung
+ * antara rutinRemoved()/rutinAdded() dengan flush-nya).
+ *
+ * JadwalKelasController::update() (popup Edit Jadwal Kelas) TIDAK
+ * terpengaruh perubahan ini -- jalur itu SUDAH SEJAK AWAL cuma kirim
+ * maksimal 1 WA per submit (satu App\Models\JadwalKelas diedit sekali
+ * jalan, bukan multi-baris JadwalRutin seperti form Student), lewat
+ * notifyPengajarScheduleChanged() di sana sendiri, tidak lewat
+ * rutinRemoved()/rutinAdded() di sini sama sekali.
  */
 class JadwalScheduleChangeNotifier
 {
+    /**
+     * Antrean pesan WA per Pengajar, dikumpulkan lewat queueForPengajar()
+     * waktu rutinRemoved()/rutinAdded() dipanggil dengan $batch=true --
+     * lihat docblock class & flushPengajarNotifications(). Key: gabungan
+     * "company_id|pengajar_id" (murni internal, tidak ada makna lain).
+     *
+     * @var array<string, array{company_id: string, pengajar_id: string, lines: list<string>}>
+     */
+    private array $pendingByPengajar = [];
+
     public function __construct(
         private readonly PackageLimitService $packageLimits,
         private readonly SystemJwtService $jwtService,
@@ -75,8 +113,15 @@ class JadwalScheduleChangeNotifier
      * pengajar_id/hari/jam dsb-nya) -- lihat docblock class untuk apa
      * yang dilakukan (nonaktifkan sesi masa depan yang belum diabsen,
      * tulis log, kirim WA ke pengajar LAMA).
+     *
+     * $batch=true (lihat docblock class) -- pesan DITAMPUNG lewat
+     * queueForPengajar(), TIDAK langsung dikirim, caller wajib panggil
+     * flushPengajarNotifications() sendiri belakangan. Log
+     * (App\Models\JadwalChangeLog) & nonaktifkan sesi masa depan TETAP
+     * jalan seperti biasa (per baris, TIDAK ikut di-batch) -- yang
+     * di-batch cuma pengiriman WA-nya.
      */
-    public function rutinRemoved(JadwalRutin $rutin, ?string $changedBy): void
+    public function rutinRemoved(JadwalRutin $rutin, ?string $changedBy, bool $batch = false): void
     {
         $this->deactivateFutureSessions($rutin);
 
@@ -104,6 +149,12 @@ class JadwalScheduleChangeNotifier
             $before['jam_selesai'],
         );
 
+        if ($batch) {
+            $this->queueForPengajar($rutin->company_id, $rutin->pengajar_id, $message);
+
+            return;
+        }
+
         $this->sendToPengajar($rutin->company_id, $rutin->pengajar_id, $message);
     }
 
@@ -111,8 +162,12 @@ class JadwalScheduleChangeNotifier
      * Panggil SETELAH $rutin baru dibuat (butuh id-nya untuk relasi,
      * meski tidak dipakai langsung di sini) -- kirim WA ke pengajar
      * BARU + tulis log 'after'-only. Lihat docblock class.
+     *
+     * $batch=true -- lihat docblock rutinRemoved() di atas, perilakunya
+     * sama persis di sini (cuma pengiriman WA yang ditampung, log tetap
+     * per baris seperti biasa).
      */
-    public function rutinAdded(JadwalRutin $rutin, ?string $changedBy): void
+    public function rutinAdded(JadwalRutin $rutin, ?string $changedBy, bool $batch = false): void
     {
         $after = $this->snapshotRutin($rutin);
 
@@ -138,7 +193,68 @@ class JadwalScheduleChangeNotifier
             $after['jam_selesai'],
         );
 
+        if ($batch) {
+            $this->queueForPengajar($rutin->company_id, $rutin->pengajar_id, $message);
+
+            return;
+        }
+
         $this->sendToPengajar($rutin->company_id, $rutin->pengajar_id, $message);
+    }
+
+    /**
+     * Kirim SEMUA notifikasi WA yang ditampung queueForPengajar() lewat
+     * rutinRemoved()/rutinAdded() dengan $batch=true -- DIGABUNG jadi
+     * SATU pesan per Pengajar (bukan satu pesan per baris JadwalRutin
+     * yang berubah), lihat docblock class untuk alasan lengkapnya.
+     * Kalau cuma ADA SATU baris perubahan untuk Pengajar itu, pesannya
+     * dikirim APA ADANYA (sama persis dengan pesan non-batch sebelumnya)
+     * -- header ringkasan ("Jadwal mengajar Anda diperbarui...") CUMA
+     * muncul kalau memang lebih dari satu perubahan ditampung untuk
+     * Pengajar yang sama.
+     *
+     * WAJIB dipanggil caller SATU KALI setelah SEMUA pemanggilan
+     * rutinRemoved()/rutinAdded(batch: true) untuk request itu selesai
+     * -- lihat pemakaiannya di App\Http\Controllers\Jadwal\
+     * JadwalStudentController::update()/deactivate(). Instance service
+     * ini HARUS SAMA (constructor-injected) sepanjang satu request --
+     * resolve ulang lewat app() di tengah jalan bikin antrean yang
+     * ditampung method-method di atas "hilang" (service ini bukan
+     * singleton). Antrean dikosongkan setelah dikirim -- aman dipanggil
+     * lebih dari sekali per request kalau perlu, panggilan berikutnya
+     * tidak mengirim apa pun kalau tidak ada antrean baru.
+     */
+    public function flushPengajarNotifications(): void
+    {
+        foreach ($this->pendingByPengajar as $entry) {
+            $message = count($entry['lines']) === 1
+                ? $entry['lines'][0]
+                : "Jadwal mengajar Anda diperbarui oleh admin:\n- ".implode("\n- ", $entry['lines']);
+
+            $this->sendToPengajar($entry['company_id'], $entry['pengajar_id'], $message);
+        }
+
+        $this->pendingByPengajar = [];
+    }
+
+    /**
+     * Tampung satu baris pesan untuk Pengajar tertentu -- lihat
+     * flushPengajarNotifications(). Diam-diam tidak menampung apa pun
+     * kalau companyId/pengajarId kosong (sama seperti guard awal
+     * sendToPengajar()) supaya tidak ada entri "sampah" di antrean yang
+     * dijamin gagal kirim nanti.
+     */
+    private function queueForPengajar(?string $companyId, ?string $pengajarId, string $line): void
+    {
+        if (! $companyId || ! $pengajarId) {
+            return;
+        }
+
+        $key = $companyId.'|'.$pengajarId;
+
+        $this->pendingByPengajar[$key]['company_id'] = $companyId;
+        $this->pendingByPengajar[$key]['pengajar_id'] = $pengajarId;
+        $this->pendingByPengajar[$key]['lines'][] = $line;
     }
 
     /**

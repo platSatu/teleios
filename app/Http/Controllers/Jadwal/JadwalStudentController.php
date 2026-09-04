@@ -63,6 +63,25 @@ class JadwalStudentController extends Controller
 {
     use ResolvesCompanyContext;
 
+    /**
+     * Update 4 September 2026 (laporan user: "ketika ada perubahan
+     * jadwal wa nya terkirim 1x saja ya tidak tiap ada perubahan ya"):
+     * App\Services\Jadwal\JadwalScheduleChangeNotifier di-constructor-
+     * inject BARU di sini (sebelumnya tiap pemanggilan di controller ini
+     * pakai `app(JadwalScheduleChangeNotifier::class)` langsung, resolve
+     * instance BARU tiap kali) -- WAJIB satu instance yang SAMA dipakai
+     * sepanjang satu request supaya antrean WA yang ditampung
+     * rutinRemoved()/rutinAdded(batch: true) di update()/deactivate()
+     * bisa di-flush jadi SATU pesan per Pengajar lewat
+     * flushPengajarNotifications() (service ini bukan singleton -- lihat
+     * docblock class-nya untuk detail penuh kenapa resolve ulang bikin
+     * antrean itu "hilang").
+     */
+    public function __construct(
+        protected JadwalScheduleChangeNotifier $scheduleChangeNotifier,
+    ) {
+    }
+
     public function index(Request $request): View
     {
         $context = $this->companyContext($request);
@@ -508,8 +527,17 @@ class JadwalStudentController extends Controller
             $generator->generateForRutin($rutin);
             $created++;
 
+            // Lihat docblock parameter $changedBy di atas -- null waktu
+            // dipanggil dari store() (murid baru), non-null waktu
+            // dipanggil dari reconciliation update() (jadwal murid yang
+            // sudah ada berubah). $batch=true (permintaan user: WA jangan
+            // terkirim tiap baris, lihat docblock __construct() di atas)
+            // aman selalu true di sini -- cabang ini CUMA pernah tereksekusi
+            // dari update(), yang SELALU memanggil flushPengajarNotifications()
+            // sendiri setelah semua createRutinFromSlots() untuk request
+            // itu selesai.
             if ($changedBy !== null) {
-                app(JadwalScheduleChangeNotifier::class)->rutinAdded($rutin, $changedBy);
+                $this->scheduleChangeNotifier->rutinAdded($rutin, $changedBy, batch: true);
             }
         }
 
@@ -881,6 +909,22 @@ class JadwalStudentController extends Controller
                     ->reject(fn (array $slot) => in_array($slot['id'], $submitted, true));
 
                 foreach ($toRemove as $slot) {
+                    // Update 4 September 2026 (laporan user: "jadwal
+                    // student bisa ke-add 2x/3x .. wa nya kadang
+                    // terkirim kadang tidak") -- SEBELUMNYA langsung
+                    // ->delete() TANPA mengambil barisnya dulu, jadi
+                    // sesi (JadwalKelas) yang sudah ter-generate dari
+                    // baris JadwalRutin ini dibiarkan begitu saja
+                    // (status tetap 'active' walau jamnya sudah tidak
+                    // berlaku -- itu "sesi hantu" yang tetap masuk
+                    // antrian jadwal:dispatch-due-reminders). Sekarang
+                    // diambil DULU (bisa lebih dari satu baris kalau ada
+                    // data ganda), tiap baris lewat
+                    // JadwalScheduleChangeNotifier::rutinRemoved() SEBELUM
+                    // dihapus -- lihat docblock class itu untuk detail
+                    // lengkap (nonaktifkan sesi masa depan yang belum
+                    // diabsen, tulis App\Models\JadwalChangeLog, WA ke
+                    // pengajar lama).
                     $rows = JadwalRutin::where('company_id', $company->id)
                         ->where('student_id', $student->id)
                         ->where('jadwal_kategori_id', $pk->jadwal_kategori_id)
@@ -891,7 +935,14 @@ class JadwalStudentController extends Controller
                         ->get();
 
                     foreach ($rows as $row) {
-                        app(JadwalScheduleChangeNotifier::class)->rutinRemoved($row, auth()->id());
+                        // $batch=true -- lihat docblock __construct() di
+                        // atas & flushPengajarNotifications() (permintaan
+                        // user: WA jangan terkirim tiap baris yang
+                        // berubah, digabung jadi satu per Pengajar).
+                        // Ditampung dulu, dikirim SEKALIGUS di akhir
+                        // closure transaksi ini (lihat pemanggilan
+                        // flushPengajarNotifications() di bawah).
+                        $this->scheduleChangeNotifier->rutinRemoved($row, auth()->id(), batch: true);
                         $row->delete();
                         $removed++;
                     }
@@ -976,6 +1027,15 @@ class JadwalStudentController extends Controller
                     ->update(['jadwal_ruangan_id' => $ruanganId]);
             }
 
+            // Kirim SEMUA WA yang ditampung rutinRemoved()/rutinAdded()
+            // (batch: true) di atas SEKALIGUS di sini -- SATU pesan per
+            // Pengajar untuk SELURUH perubahan submit ini (bukan satu
+            // pesan per baris JadwalRutin), permintaan user: "ketika ada
+            // perubahan jadwal wa nya terkirim 1x saja ya tidak tiap ada
+            // perubahan ya". Lihat docblock __construct() &
+            // JadwalScheduleChangeNotifier::flushPengajarNotifications().
+            $this->scheduleChangeNotifier->flushPengajarNotifications();
+
             return [$created, $skipped, $removed, $ruanganUpdatedCount, $ruanganSkippedMsgs, $sesiRuanganUpdatedCount];
         });
 
@@ -1055,9 +1115,16 @@ class JadwalStudentController extends Controller
                 ->get();
 
             foreach ($activeRutins as $rutin) {
-                app(JadwalScheduleChangeNotifier::class)->rutinRemoved($rutin, $request->user()?->id);
+                // $batch=true + flush sekali di akhir -- sama alasannya
+                // dengan update() (lihat docblock __construct()): murid
+                // yang punya beberapa Jadwal Rutin sekaligus (mis. lebih
+                // dari satu Kategori/hari) sebelumnya bikin Pengajar yang
+                // sama dapat WA terpisah per baris waktu dinonaktifkan.
+                $this->scheduleChangeNotifier->rutinRemoved($rutin, $request->user()?->id, batch: true);
                 $rutin->update(['status' => JadwalRutin::STATUS_INACTIVE]);
             }
+
+            $this->scheduleChangeNotifier->flushPengajarNotifications();
 
             $student->update(['status' => JadwalStudent::STATUS_INACTIVE]);
         });
