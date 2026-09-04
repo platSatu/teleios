@@ -139,10 +139,28 @@
                                         <a href="{{ route('jadwal.student.edit', $student->id) }}" class="btn btn-sm btn-light">
                                             <i class="ri-edit-line"></i>
                                         </a>
-                                        <form action="{{ route('jadwal.student.destroy', $student->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Hapus Student ini?');">
+                                        {{-- Update 4 September 2026 (permintaan user, laporan "fungsi
+                                        delete di table student tidak berfungsi"): tombol Hapus lama
+                                        SELALU gagal kalau murid sudah punya sesi Jadwal Kelas (FK
+                                        restrictOnDelete, lihat migration perbaikannya). Sekarang ada 2
+                                        aksi terpisah: "Nonaktifkan" (aman, status=inactive, riwayat
+                                        jadwal & fee tetap tersimpan tapi tidak lagi ikut dihitung di
+                                        laporan -- lihat JadwalStudentController::deactivate()) dan
+                                        "Hapus Total" (permanen, ikut menghapus SELURUH riwayat jadwal &
+                                        fee-nya, tidak bisa dibatalkan). Tombol Nonaktifkan hanya
+                                        muncul kalau murid masih aktif -- tidak ada gunanya nonaktifkan
+                                        murid yang sudah inactive. --}}
+                                        @if($student->status === 'active')
+                                            <form action="{{ route('jadwal.student.deactivate', $student->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Nonaktifkan Student ini? Riwayat jadwal & fee-nya tetap tersimpan, tapi tidak lagi ikut dihitung di laporan.');">
+                                                @csrf
+                                                @method('PATCH')
+                                                <button type="submit" class="btn btn-sm btn-light text-warning" title="Nonaktifkan"><i class="ri-pause-circle-line"></i></button>
+                                            </form>
+                                        @endif
+                                        <form action="{{ route('jadwal.student.destroy', $student->id) }}" method="POST" class="d-inline" onsubmit="return confirm('HAPUS TOTAL Student ini beserta SELURUH riwayat jadwal & fee-nya? Tindakan ini TIDAK BISA DIBATALKAN. Kalau cuma ingin murid ini tidak aktif lagi tapi datanya tetap tersimpan, gunakan tombol Nonaktifkan.');">
                                             @csrf
                                             @method('DELETE')
-                                            <button type="submit" class="btn btn-sm btn-light text-danger"><i class="ri-delete-bin-line"></i></button>
+                                            <button type="submit" class="btn btn-sm btn-light text-danger" title="Hapus Total"><i class="ri-delete-bin-line"></i></button>
                                         </form>
                                     </td>
                                 </tr>

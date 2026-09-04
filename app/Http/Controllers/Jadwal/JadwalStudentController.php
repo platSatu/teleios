@@ -1012,6 +1012,82 @@ class JadwalStudentController extends Controller
             ->with('success', $message);
     }
 
+    /**
+     * "Nonaktifkan" -- permintaan user (4 September 2026, sesudah
+     * ditemukan bug tombol Hapus lama selalu gagal, lihat docblock
+     * destroy()): alternatif AMAN dari Hapus Total, dipakai kalau murid
+     * ini masih ingin datanya disimpan (histori sesi & fee) tapi tidak
+     * lagi aktif. TIDAK menghapus apa pun -- hanya:
+     *
+     * 1. Set `status` = inactive di baris Student ini sendiri.
+     * 2. Semua App\Models\JadwalRutin AKTIF murid ini ikut di-set
+     *    inactive (BUKAN dihapus) -- supaya tidak lagi diambil
+     *    App\Console\Commands\GenerateJadwalRutinSesi bulan depan
+     *    (generator itu filter `status = active`).
+     * 3. Tiap baris JadwalRutin itu diproses lewat
+     *    App\Services\Jadwal\JadwalScheduleChangeNotifier::rutinRemoved()
+     *    SEBELUM di-set inactive -- method yang SAMA dipakai waktu
+     *    admin uncheck slot di form Edit Student (lihat update()) --
+     *    supaya sesi masa depan yang belum diabsen ikut dinonaktifkan
+     *    (tidak lagi masuk antrian pengingat WA), histori before/after
+     *    ikut tercatat di jadwal_change_logs, DAN pengajar dapat kabar
+     *    WA jadwalnya sudah tidak berlaku.
+     *
+     * Permintaan user juga: sesi LAMA murid ini (yang attendance-nya
+     * sudah tercatat) TIDAK ikut hilang dari database, TAPI tidak lagi
+     * ikut dihitung di laporan fee/komisi manapun begitu murid ini
+     * inactive -- lihat filter `whereHas('student', ...STATUS_ACTIVE)`
+     * di App\Services\Jadwal\JadwalLaporanService::rekap().
+     */
+    public function deactivate(Request $request, string $id): RedirectResponse
+    {
+        $context = $this->companyContext($request);
+
+        $student = $this->findOrFail($context, $id);
+
+        $mataPelajaranId = $student->jadwal_mata_pelajaran_id;
+        $pengajarId = $student->pengajar_id;
+
+        DB::transaction(function () use ($student, $request) {
+            $activeRutins = JadwalRutin::where('company_id', $student->company_id)
+                ->where('student_id', $student->id)
+                ->where('status', JadwalRutin::STATUS_ACTIVE)
+                ->get();
+
+            foreach ($activeRutins as $rutin) {
+                app(JadwalScheduleChangeNotifier::class)->rutinRemoved($rutin, $request->user()?->id);
+                $rutin->update(['status' => JadwalRutin::STATUS_INACTIVE]);
+            }
+
+            $student->update(['status' => JadwalStudent::STATUS_INACTIVE]);
+        });
+
+        return redirect()
+            ->route('jadwal.student.index', [
+                'jadwal_mata_pelajaran_id' => $mataPelajaranId,
+                'pengajar_id' => $pengajarId,
+            ])
+            ->with('success', 'Student berhasil dinonaktifkan. Riwayat jadwal & fee-nya tetap tersimpan, tapi tidak lagi ikut dihitung di laporan.');
+    }
+
+    /**
+     * "Hapus Total" -- permintaan user (4 September 2026, laporan
+     * "fungsi delete di table student tidak berfungsi"): SEBELUMNYA
+     * method ini SELALU gagal (error mentah, tidak ada try/catch) kalau
+     * murid sudah punya sesi (App\Models\JadwalKelas), karena FK
+     * `jadwal_kelas.student_id` masih `restrictOnDelete()` -- lihat
+     * migration 2026_09_14_090800_change_jadwal_kelas_student_id_to_
+     * cascade_on_delete_table.php yang mengubahnya jadi
+     * `cascadeOnDelete()`.
+     *
+     * User memutuskan aksi ini memang untuk hapus PERMANEN seluruh
+     * rangkaian data murid: JadwalStudent -> JadwalRutin (sudah
+     * cascadeOnDelete sejak awal) -> JadwalKelas (baru diubah) beserta
+     * histori fee/komisi yang nempel di tiap barisnya -- "biar ga
+     * bingung murid sudah dihapus tapi datanya tetap seperti itu".
+     * TIDAK BISA DIBATALKAN. Untuk murid yang datanya masih ingin
+     * disimpan, pakai deactivate() di atas.
+     */
     public function destroy(Request $request, string $id): RedirectResponse
     {
         $context = $this->companyContext($request);
@@ -1028,7 +1104,7 @@ class JadwalStudentController extends Controller
                 'jadwal_mata_pelajaran_id' => $mataPelajaranId,
                 'pengajar_id' => $pengajarId,
             ])
-            ->with('success', 'Student berhasil dihapus.');
+            ->with('success', 'Student beserta seluruh riwayat jadwal & fee-nya berhasil dihapus permanen.');
     }
 
     /**

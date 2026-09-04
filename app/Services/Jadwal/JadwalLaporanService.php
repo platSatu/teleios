@@ -27,6 +27,19 @@ use Illuminate\Support\Collection;
  * sendiri kalau attendance-nya sudah ditandai juga). Sesi yang belum
  * ditandai attendance sama sekali (mis. tanggal di masa depan) juga
  * belum dihitung -- baru "diakui" begitu admin menandai kehadirannya.
+ *
+ * Update 4 September 2026 (permintaan user, terkait fitur Nonaktifkan
+ * murid di App\Http\Controllers\Jadwal\JadwalStudentController::
+ * deactivate()): fee & jam mengajar di rekap() JUGA HANYA dihitung dari
+ * sesi milik murid yang statusnya MASIH AKTIF saat rekap dijalankan --
+ * "murid nonaktif tapi perhitungannya masih ada nnt bingung juga, jd
+ * itungan berdasarkan murid active saja". Sesi lama milik murid yang
+ * BELAKANGAN dinonaktifkan jadi otomatis tidak ikut terhitung lagi di
+ * laporan manapun sejak titik itu (meski attendance-nya dulu sudah
+ * ditandai 'hadir'/'tidak_hadir') -- SENGAJA begini sesuai permintaan
+ * eksplisit, bukan bug. Sesi tanpa murid sama sekali (`student_id`
+ * null, mis. slot kosong yang belum diisi) otomatis ikut tidak
+ * terhitung juga (whereHas butuh baris murid yang cocok).
  */
 class JadwalLaporanService
 {
@@ -81,6 +94,10 @@ class JadwalLaporanService
             ->when($branchOfficeId, fn ($q) => $q->where('branch_office_id', $branchOfficeId))
             ->whereBetween('start_time', [$from, $to])
             ->whereIn('attendance_status', JadwalKelas::ATTENDANCE_TETAP_DIBAYAR)
+            // Lihat docblock class di atas (update 4 September 2026) --
+            // murid yang sudah dinonaktifkan tidak lagi ikut dihitung
+            // fee/jam-nya di laporan manapun.
+            ->whereHas('student', fn ($q) => $q->where('status', JadwalStudent::STATUS_ACTIVE))
             ->with('pengajar:id,name')
             ->get();
 

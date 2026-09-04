@@ -382,6 +382,10 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::post('/', 'store')->name('jadwal.student.store');
                 Route::get('/{id}/edit', 'edit')->name('jadwal.student.edit');
                 Route::put('/{id}', 'update')->name('jadwal.student.update');
+                // Nonaktifkan (aman, tidak hapus data) vs Hapus Total
+                // (permanen, ikut hapus histori jadwal & fee) -- lihat
+                // docblock JadwalStudentController::deactivate()/destroy().
+                Route::patch('/{id}/deactivate', 'deactivate')->name('jadwal.student.deactivate');
                 Route::delete('/{id}', 'destroy')->name('jadwal.student.destroy');
             });
 
