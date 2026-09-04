@@ -17,6 +17,7 @@ use App\Models\JadwalRuangan;
 use App\Models\JadwalStudent;
 use App\Services\Chat\InboxService;
 use App\Services\Chat\SystemJwtService;
+use App\Services\Jadwal\JadwalScheduleChangeNotifier;
 use App\Services\PackageLimitService;
 use App\Support\PhoneNumber;
 use Carbon\Carbon;
@@ -78,6 +79,7 @@ class JadwalKelasController extends Controller
         protected PackageLimitService $packageLimits,
         protected SystemJwtService $jwtService,
         protected InboxService $inbox,
+        protected JadwalScheduleChangeNotifier $scheduleChangeNotifier,
     ) {
     }
 
@@ -862,6 +864,15 @@ class JadwalKelasController extends Controller
 
         if ($timeChanged || $pengajarChanged) {
             $this->notifyPengajarScheduleChanged($kelas, $oldStartTime, $oldEndTime, $oldPengajarId);
+
+            // Permintaan user (4 September 2026): histori "jadwal sebelum
+            // diganti"/"jadwal sesudah diganti" dipindah ke tabel
+            // tersendiri (App\Models\JadwalChangeLog) -- lihat
+            // App\Services\Jadwal\JadwalScheduleChangeNotifier's
+            // docblock. WA ke pengajar TETAP lewat
+            // notifyPengajarScheduleChanged() di atas (TIDAK diubah/
+            // diduplikasi) -- method service ini CUMA menulis log-nya.
+            $this->scheduleChangeNotifier->logKelasEdited($kelas, $oldStartTime, $oldEndTime, $oldPengajarId, $request->user()?->id);
         }
 
         return redirect()

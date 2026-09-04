@@ -16,6 +16,7 @@ use App\Models\JadwalRutin;
 use App\Models\JadwalStudent;
 use App\Services\Jadwal\JadwalRutinConflictService;
 use App\Services\Jadwal\JadwalRutinSesiGenerator;
+use App\Services\Jadwal\JadwalScheduleChangeNotifier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -366,9 +367,10 @@ class JadwalStudentController extends Controller
      *
      * @param  array<int, string>  $chunkIds  Format tiap elemen: "{jadwal_pengajar_kategori_jadwal_id}|{H:i jam mulai chunk}" (lihat slotsFor()).
      * @param  string|null  $ruanganId  Update 4 September 2026 (permintaan user, kolom Ruangan baru di form Student): Ruangan yang dipilih admin di dropdown Ruangan Tambah/Edit Student, diterapkan ke SEMUA baris Jadwal Rutin baru yang dibuat dari sini (null = "Tanpa Ruangan", perilaku lama). Dicek bentrok Ruangan juga (bukan cuma Pengajar) lewat JadwalRutinConflictService::findRuanganConflict() -- dua murid beda Pengajar sekalipun tidak boleh dipasang ke Ruangan fisik yang sama di jam yang bentrok, sama prinsip yang sudah dipakai App\Http\Controllers\Jadwal\JadwalRutinController untuk alur manual.
+     * @param  string|null  $changedBy  Update 4 September 2026 (laporan user: notifikasi WA ke Pengajar + histori before/after, lihat App\Services\Jadwal\JadwalScheduleChangeNotifier's docblock) -- SENGAJA dipakai dobel fungsi sebagai "siapa yang mengubah" SEKALIGUS "apakah perlu notifikasi/log sama sekali": non-null (dikirim update(), admin yang sedang login) = ya, kirim WA + tulis JadwalChangeLog; null (default, dipakai store() waktu bikin Student BARU) = tidak -- murid baru bukan "perubahan jadwal", jadi sengaja tidak ikut memicu notifikasi/log ini (tetap scoped ke laporan bug-nya: jadwal murid yang SUDAH ADA berubah).
      * @return array{0: int, 1: array<int, string>} [jumlah Jadwal Rutin dibuat, daftar alasan chunk yang dilewati]
      */
-    private function createRutinFromSlots(Company $company, JadwalStudent $student, string $kategoriId, string $pengajarId, array $chunkIds, ?string $ruanganId = null): array
+    private function createRutinFromSlots(Company $company, JadwalStudent $student, string $kategoriId, string $pengajarId, array $chunkIds, ?string $ruanganId = null, ?string $changedBy = null): array
     {
         $branchOfficeId = $student->branch_office_id;
         $branchSetting = $branchOfficeId
@@ -505,6 +507,10 @@ class JadwalStudentController extends Controller
 
             $generator->generateForRutin($rutin);
             $created++;
+
+            if ($changedBy !== null) {
+                app(JadwalScheduleChangeNotifier::class)->rutinAdded($rutin, $changedBy);
+            }
         }
 
         return [$created, $skipped];
@@ -875,14 +881,20 @@ class JadwalStudentController extends Controller
                     ->reject(fn (array $slot) => in_array($slot['id'], $submitted, true));
 
                 foreach ($toRemove as $slot) {
-                    $removed += JadwalRutin::where('company_id', $company->id)
+                    $rows = JadwalRutin::where('company_id', $company->id)
                         ->where('student_id', $student->id)
                         ->where('jadwal_kategori_id', $pk->jadwal_kategori_id)
                         ->where('pengajar_id', $validated['pengajar_id'])
                         ->where('status', JadwalRutin::STATUS_ACTIVE)
                         ->where('hari', $slot['hari'])
                         ->where('jam_mulai', $slot['jam_mulai'])
-                        ->delete();
+                        ->get();
+
+                    foreach ($rows as $row) {
+                        app(JadwalScheduleChangeNotifier::class)->rutinRemoved($row, auth()->id());
+                        $row->delete();
+                        $removed++;
+                    }
                 }
             }
 
@@ -893,7 +905,7 @@ class JadwalStudentController extends Controller
                     continue;
                 }
 
-                [$c, $s] = $this->createRutinFromSlots($company, $student, (string) $kategoriId, $validated['pengajar_id'], $chunkIds, $ruanganId);
+                [$c, $s] = $this->createRutinFromSlots($company, $student, (string) $kategoriId, $validated['pengajar_id'], $chunkIds, $ruanganId, auth()->id());
                 $created += $c;
                 $skipped = array_merge($skipped, $s);
             }
