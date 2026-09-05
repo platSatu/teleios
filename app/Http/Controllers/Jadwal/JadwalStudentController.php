@@ -939,10 +939,38 @@ class JadwalStudentController extends Controller
             // TIDAK disentuh (kebijakan sama seperti reconciliation
             // checklist di bawah) -- histori/fee yang sudah tercatat
             // tidak diam-diam berubah.
+            //
+            // Fix susulan 5 September 2026 (bukti user: murid "Vallery
+            // Jocelyn Nathania" -- Student menyimpan Mata Pelajaran/
+            // Bidang = "Piano" + Pengajar = "Stevany N", TAPI kolom
+            // Kategori di index (di-derive dari JadwalRutin AKTIF, lihat
+            // index() di atas) tetap menunjukkan "Jazz" -- yang secara
+            // relasi ada di BAWAH Bidang "Bass", bukan "Piano". Root
+            // cause: kondisi di atas cuma bereaksi kalau PENGAJAR
+            // berubah -- kalau admin ganti BIDANG/Mata Pelajaran murid
+            // (Bass -> Piano) sementara Pengajar-nya TETAP SAMA (Stevany
+            // N kebetulan mengajar keduanya), baris JadwalRutin lama di
+            // bawah Kategori Bass/Jazz tidak pernah ke-match kondisi
+            // pengajar_id di atas, jadi tidak pernah ikut dibersihkan --
+            // tetap aktif, terus di-generate GenerateJadwalRutinSesi
+            // setiap bulan, dan Kategori "Jazz" (milik Bidang Bass) terus
+            // nempel di index Student yang Bidang-nya sudah "Piano".
+            // Diperlebar di sini: baris JadwalRutin AKTIF murid ini juga
+            // dianggap basi (ikut dibersihkan) kalau Kategori-nya
+            // (lewat jadwal_kategori.jadwal_mata_pelajaran_id) sudah
+            // tidak cocok dengan Mata Pelajaran/Bidang yang BARU
+            // tersimpan di Student ini -- terlepas dari Pengajar-nya
+            // sama atau tidak. Kebijakan sisanya (rutinRemoved() dulu,
+            // sesi JadwalKelas historis tidak disentuh) tetap identik.
             $stalePengajarRutins = JadwalRutin::where('company_id', $company->id)
                 ->where('student_id', $student->id)
                 ->where('status', JadwalRutin::STATUS_ACTIVE)
-                ->where('pengajar_id', '!=', $validated['pengajar_id'])
+                ->where(function ($q) use ($validated) {
+                    $q->where('pengajar_id', '!=', $validated['pengajar_id'])
+                        ->orWhereHas('kategori', function ($k) use ($validated) {
+                            $k->where('jadwal_mata_pelajaran_id', '!=', $validated['jadwal_mata_pelajaran_id']);
+                        });
+                })
                 ->get();
 
             foreach ($stalePengajarRutins as $row) {
