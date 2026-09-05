@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\BranchOffice;
 use App\Models\Company;
 use App\Models\JadwalBranchSetting;
+use App\Models\JadwalKategori;
 use App\Models\JadwalKelas;
 use App\Models\JadwalMataPelajaran;
 use App\Models\JadwalPengajarJadwal;
@@ -166,6 +167,12 @@ class JadwalStudentController extends Controller
 
         $kategoriId = $request->query('jadwal_kategori_id');
         $pengajarId = $request->query('pengajar_id');
+        // Fix 5 September 2026 (lihat docblock pengajarSlotsPanel()) --
+        // dipindah lebih awal (sebelumnya dibaca di bawah, dekat
+        // `$lockedMataPelajaranForBranch`) supaya bisa dipakai untuk
+        // MEMFILTER checklist Kategori pengajar di bawah ke Bidang ini
+        // saja, bukan cuma untuk resolve branch.
+        $mataPelajaranId = $request->query('jadwal_mata_pelajaran_id');
 
         // Update 4 September 2026 (bug fix lanjutan, laporan user: "pada
         // form tambah student tidak keluar ya jadwal pengajar nya") --
@@ -205,6 +212,14 @@ class JadwalStudentController extends Controller
                 ->where('pengajar_id', $pengajarId)
                 ->where('status', 'active')
                 ->when($kategoriId, fn ($q) => $q->where('jadwal_kategori_id', $kategoriId))
+                // Fix 5 September 2026 (lihat docblock
+                // pengajarSlotsPanel()/kategoriBelongsToMataPelajaran()):
+                // kalau tidak datang dari drill-down penuh
+                // ($kategoriId kosong) TAPI Bidang sudah dipilih di
+                // dropdown bebas ($mataPelajaranId ada), tetap batasi
+                // ke Kategori yang anak Bidang itu -- jangan tampilkan
+                // Kategori Pengajar ini dari Bidang lain.
+                ->when(! $kategoriId && $mataPelajaranId, fn ($q) => $q->whereHas('kategori', fn ($qq) => $qq->where('jadwal_mata_pelajaran_id', $mataPelajaranId)))
                 ->get();
 
             foreach ($pengajarKategoris as $pk) {
@@ -242,8 +257,9 @@ class JadwalStudentController extends Controller
         // terikat branch manapun (branch_office_id null), tidak ada yang
         // dikunci -- tetap dropdown bebas seperti sebelumnya. Akses
         // langsung tanpa drill-down (lewat menu sidebar "Student") juga
-        // tidak terpengaruh, $mataPelajaranId bakal null.
-        $mataPelajaranId = $request->query('jadwal_mata_pelajaran_id');
+        // tidak terpengaruh, $mataPelajaranId bakal null. (Dibaca lebih
+        // awal sekarang, lihat komentar dekat $kategoriId/$pengajarId
+        // di atas.)
         $lockedMataPelajaranForBranch = $mataPelajaranId
             ? JadwalMataPelajaran::where('company_id', $context->company->id)->where('id', $mataPelajaranId)->first()
             : null;
@@ -336,6 +352,16 @@ class JadwalStudentController extends Controller
                 $chunkIds = array_values(array_filter((array) $chunkIds));
 
                 if (! $kid || ! $chunkIds) {
+                    continue;
+                }
+
+                // Fix 5 September 2026 -- lihat docblock
+                // kategoriBelongsToMataPelajaran(): jangan pernah bikin
+                // JadwalRutin dari Kategori yang bukan anak Bidang yang
+                // baru saja dipilih di Student ini.
+                if (! $this->kategoriBelongsToMataPelajaran($company->id, (string) $kid, $validated['jadwal_mata_pelajaran_id'])) {
+                    $skipped[] = 'Slot di bawah Kategori yang bukan bagian dari Mata Pelajaran / Bidang yang dipilih dilewati (tidak disimpan).';
+
                     continue;
                 }
 
@@ -543,6 +569,40 @@ class JadwalStudentController extends Controller
     }
 
     /**
+     * Fix 5 September 2026 (bukti user: Student "Vallery Jocelyn
+     * Nathania" -- Bidang tersimpan "Piano", TAPI checklist Edit
+     * Student (lihat pengajarSlotsPanel()) menampilkan tab SEMUA
+     * Kategori yang pengajar itu ajar LINTAS Bidang -- termasuk
+     * Kategori "Jazz" yang sebenarnya anak Bidang "Bass", bukan
+     * "Piano". Sebelum perbaikan ini, TIDAK ADA yang mencegah admin
+     * mencentang slot di bawah tab "Jazz (Bass)" itu sementara dropdown
+     * Bidang di atas form masih terisi "Piano" -- satu kali submit bisa
+     * langsung membuat App\Models\JadwalRutin baru yang mismatch
+     * (persis gejala yang berulang kali dilaporkan), dan cleanup basi
+     * di update() (`$stalePengajarRutins` di atas) TIDAK BISA menangkap
+     * ini karena baris itu baru saja dibuat di transaksi YANG SAMA,
+     * bukan sisa dari sebelumnya.
+     *
+     * pengajarSlotsPanel()/create() sekarang MEMFILTER tab checklist ke
+     * Bidang yang sedang dipilih (perbaikan #1, mencegah admin bahkan
+     * MELIHAT tab yang salah). Method ini adalah lapis kedua (defense
+     * in depth) di store()/update(): dipanggil SEBELUM createRutinFromSlots()
+     * untuk tiap grup `jadwal_rutin_slot_ids[<kategoriId>]` yang
+     * disubmit -- kalau Kategori itu ternyata bukan anak Bidang yang
+     * baru saja disimpan di Student ini (mis. request di-tempering,
+     * atau race condition user ganti Bidang tapi tab lama sempat
+     * ke-submit), grup itu DILEWATI SELURUHNYA (tidak ada JadwalRutin
+     * yang dibuat sama sekali untuknya) -- bukan cuma diperingatkan.
+     */
+    private function kategoriBelongsToMataPelajaran(string $companyId, string $kategoriId, string $mataPelajaranId): bool
+    {
+        return JadwalKategori::where('company_id', $companyId)
+            ->where('id', $kategoriId)
+            ->where('jadwal_mata_pelajaran_id', $mataPelajaranId)
+            ->exists();
+    }
+
+    /**
      * Parse ID checkbox chunk ("{slotId}|{H:i}") jadi ['slot_id' =>
      * ..., 'jam_mulai' => ...], atau null kalau formatnya tidak valid
      * sama sekali (request di-tempering) -- dipakai createRutinFromSlots().
@@ -705,6 +765,15 @@ class JadwalStudentController extends Controller
         // "Simpan Perubahan"), default ke Pengajar Student ini sekarang.
         $previewPengajarId = $request->query('pengajar_id', $student->pengajar_id);
 
+        // Fix 5 September 2026 (lihat docblock pengajarSlotsPanel()) --
+        // Bidang yang sedang di-preview di form (dropdown "Mata
+        // Pelajaran / Bidang" di _form.blade.php sekarang juga
+        // trigger reload lewat query string, pola sama seperti
+        // Pengajar di atas) dipakai untuk MEMFILTER checklist Kategori
+        // ke Bidang itu saja -- default ke Bidang tersimpan Student
+        // ini kalau belum pernah di-reload sama sekali.
+        $previewMataPelajaranId = $request->query('jadwal_mata_pelajaran_id', $student->jadwal_mata_pelajaran_id);
+
         // Update 4 September 2026 (permintaan user: "tambahkan kolom
         // ruangan pada edit student"): App\Models\JadwalStudent TIDAK
         // menyimpan Ruangan sendiri (persis seperti Kategori, lihat
@@ -727,6 +796,7 @@ class JadwalStudentController extends Controller
         return view('jadwal.jadwal-student.edit', [
             'student' => $student,
             'previewPengajarId' => $previewPengajarId,
+            'previewMataPelajaranId' => $previewMataPelajaranId,
             // edit() TIDAK PERNAH mengunci Pengajar (lihat class
             // docblock) -- eksplisit di-set false di sini (bukan cuma
             // mengandalkan default `?? false` di _form.blade.php) supaya
@@ -736,7 +806,7 @@ class JadwalStudentController extends Controller
             'selectedRuanganId' => $activeRuanganIds->count() === 1 ? $activeRuanganIds->first() : null,
             'ruanganMixed' => $activeRuanganIds->count() > 1,
         ] + $this->formData($context)
-          + $this->pengajarSlotsPanel($context, $previewPengajarId, $student));
+          + $this->pengajarSlotsPanel($context, $previewPengajarId, $student, $previewMataPelajaranId));
     }
 
     /**
@@ -756,11 +826,23 @@ class JadwalStudentController extends Controller
      * Pelajaran/branch), supaya satu sumber jam operasional yang
      * konsisten dipakai untuk semua Kategori di panel yang sama.
      *
+     * Fix 5 September 2026 (bukti user: "Vallery Jocelyn Nathania" --
+     * lihat docblock kategoriBelongsToMataPelajaran()): checklist ini
+     * SEBELUMNYA menggabungkan SEMUA Kategori yang Pengajar itu ajar,
+     * LINTAS Bidang -- kalau Pengajar mengajar 2 Bidang berbeda (mis.
+     * Piano dan Bass), admin yang sedang mengedit Student Bidang
+     * "Piano" tetap melihat (dan bisa tercentang) tab Kategori dari
+     * Bidang "Bass". Sekarang difilter ke $mataPelajaranId yang sedang
+     * dipilih (Bidang tersimpan Student, atau preview dari dropdown --
+     * lihat edit()/create() & onchange baru di _form.blade.php) --
+     * null berarti belum ada Bidang terpilih sama sekali, checklist
+     * kosong (sama seperti belum ada Pengajar terpilih).
+     *
      * @return array{pengajarKategoris: \Illuminate\Support\Collection, branchSettingMissing: bool}
      */
-    private function pengajarSlotsPanel($context, ?string $pengajarId, JadwalStudent $student): array
+    private function pengajarSlotsPanel($context, ?string $pengajarId, JadwalStudent $student, ?string $mataPelajaranId = null): array
     {
-        if (! $pengajarId) {
+        if (! $pengajarId || ! $mataPelajaranId) {
             return ['pengajarKategoris' => collect(), 'branchSettingMissing' => false];
         }
 
@@ -773,6 +855,7 @@ class JadwalStudentController extends Controller
             ->where('company_id', $context->company->id)
             ->where('pengajar_id', $pengajarId)
             ->where('status', 'active')
+            ->whereHas('kategori', fn ($q) => $q->where('jadwal_mata_pelajaran_id', $mataPelajaranId))
             ->get();
 
         foreach ($pengajarKategoris as $pk) {
@@ -1031,6 +1114,17 @@ class JadwalStudentController extends Controller
                 $chunkIds = array_values(array_filter((array) $chunkIds));
 
                 if (! $kategoriId || ! $chunkIds) {
+                    continue;
+                }
+
+                // Fix 5 September 2026 -- lihat docblock
+                // kategoriBelongsToMataPelajaran(): jangan pernah bikin
+                // JadwalRutin dari Kategori yang bukan anak Bidang yang
+                // baru saja dipilih di Student ini (mis. tab checklist
+                // Kategori dari Bidang lain sempat ke-submit).
+                if (! $this->kategoriBelongsToMataPelajaran($company->id, (string) $kategoriId, $validated['jadwal_mata_pelajaran_id'])) {
+                    $skipped[] = 'Slot di bawah Kategori yang bukan bagian dari Mata Pelajaran / Bidang yang dipilih dilewati (tidak disimpan).';
+
                     continue;
                 }
 

@@ -77,15 +77,44 @@
             <a href="{{ route('jadwal.student.create') }}">Ganti Mata Pelajaran / Bidang</a>
         </div>
     @else
-        <select name="jadwal_mata_pelajaran_id" class="form-select @error('jadwal_mata_pelajaran_id') is-invalid @enderror" required>
+        {{--
+            Fix 5 September 2026 (bukti user: Student "Vallery Jocelyn
+            Nathania" -- Bidang tersimpan "Piano" tapi Jadwal Rutin
+            aktifnya ternyata di bawah Kategori "Jazz" milik Bidang
+            "Bass", karena checklist Kategori di panel bawah TIDAK
+            PERNAH difilter ke Bidang yang dipilih di sini -- lihat
+            JadwalStudentController::pengajarSlotsPanel()). Dropdown
+            ini sekarang IKUT jadi pemicu reload (pola sama seperti
+            dropdown Pengajar di bawah), supaya panel checklist selalu
+            konsisten dengan Bidang yang lagi dipilih -- bukan cuma
+            gabungan SEMUA Kategori Pengajar itu lintas Bidang.
+            `previewMataPelajaranId` (dari query string, default ke
+            Bidang tersimpan Student) HANYA ada di Edit Student --
+            fallback ke `$selectedMataPelajaranId` (drill-down/reload
+            Create Student) lalu ke Bidang tersimpan Student kalau
+            keduanya kosong.
+        --}}
+        @php
+            $mataPelajaranReloadUrl = ($student ?? null)
+                ? route('jadwal.student.edit', $student->id)
+                : route('jadwal.student.create', array_filter([
+                    'jadwal_kategori_id' => $selectedKategoriId ?? null,
+                ]));
+            $mataPelajaranReloadSeparator = str_contains($mataPelajaranReloadUrl, '?') ? '&' : '?';
+            $currentPengajarIdForReload = old('pengajar_id', $previewPengajarId ?? ($student->pengajar_id ?? null));
+            $currentMataPelajaranIdSelected = old('jadwal_mata_pelajaran_id', $previewMataPelajaranId ?? $selectedMataPelajaranId ?? ($student->jadwal_mata_pelajaran_id ?? ''));
+        @endphp
+        <select name="jadwal_mata_pelajaran_id" class="form-select @error('jadwal_mata_pelajaran_id') is-invalid @enderror" required
+            onchange="var u = '{{ $mataPelajaranReloadUrl }}' + '{{ $mataPelajaranReloadSeparator }}jadwal_mata_pelajaran_id=' + encodeURIComponent(this.value); @if($currentPengajarIdForReload) u += '&pengajar_id={{ $currentPengajarIdForReload }}'; @endif window.location.href = u;">
             <option value="">- Pilih Mata Pelajaran / Bidang -</option>
             @foreach ($mataPelajarans as $mp)
-                <option value="{{ $mp->id }}" @selected(old('jadwal_mata_pelajaran_id', $student->jadwal_mata_pelajaran_id ?? '') == $mp->id)>{{ $mp->name }}</option>
+                <option value="{{ $mp->id }}" @selected($currentMataPelajaranIdSelected == $mp->id)>{{ $mp->name }}</option>
             @endforeach
         </select>
         @error('jadwal_mata_pelajaran_id')
             <div class="invalid-feedback">{{ $message }}</div>
         @enderror
+        <div class="form-text">Ganti Bidang akan memuat ulang daftar Kategori/jadwal Pengajar di bawah supaya sesuai Bidang ini.</div>
     @endif
 </div>
 
