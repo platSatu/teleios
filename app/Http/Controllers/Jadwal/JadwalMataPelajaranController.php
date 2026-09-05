@@ -9,6 +9,9 @@ use App\Models\BranchOffice;
 use App\Models\Company;
 use App\Models\JadwalKelas;
 use App\Models\JadwalMataPelajaran;
+use App\Models\JadwalPengajarKategori;
+use App\Models\JadwalRutin;
+use App\Models\JadwalStudent;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -46,33 +49,63 @@ class JadwalMataPelajaranController extends Controller
             // badge + modal "Kategori" di index.blade.php.
             ->withCount('kategoris')
             ->with(['kategoris' => fn ($q) => $q->orderBy('name')])
-            // Jumlah PENGAJAR UNIK (bukan jumlah baris Jadwal Kelas --
-            // itu sudah 'kelas_count' di atas) -- tidak ada tabel
-            // assignment pengajar tersendiri, "pengajar dari Mata
-            // Pelajaran ini" hanya bisa diturunkan dari pengajar_id
-            // pada baris-baris JadwalKelas di bawahnya (lihat docblock
-            // App\Http\Controllers\Jadwal\JadwalPengajarController).
-            // withCount() Eloquent tidak bisa COUNT(DISTINCT ...)
-            // langsung, jadi dipakai correlated subquery lewat
-            // addSelect().
-            ->addSelect(['pengajar_count' => JadwalKelas::selectRaw('count(distinct pengajar_id)')
-                ->whereColumn('jadwal_kelas.jadwal_mata_pelajaran_id', 'jadwal_mata_pelajaran.id'),
+            // Fix 4 September 2026 (laporan user: "di mata pelajaran ,
+            // pada icon icon tersebut msh ada jumlahnya padahal sudah di
+            // hapus") -- SEBELUMNYA pengajar_count/student_count/
+            // ruangan_count DIHITUNG DARI BARIS JadwalKelas historis
+            // (semua status, tidak pernah difilter aktif/tidak) --
+            // komentar lama beralasan "tidak ada tabel assignment
+            // pengajar tersendiri", TAPI itu sudah TIDAK BENAR sejak
+            // App\Models\JadwalPengajarKategori ada (penugasan Pengajar
+            // ke Kategori). Akibatnya: admin hapus penugasan Pengajar
+            // (JadwalPengajarController::destroy()) ATAU nonaktifkan/
+            // hapus Student -- baris JadwalKelas LAMA yang sudah pernah
+            // dibuat TETAP ADA (sengaja tidak ikut dihapus, lihat
+            // docblock destroy() itu & JadwalRutinController::destroy())
+            // jadi badge di sini TIDAK PERNAH turun, padahal assignment/
+            // murid-nya sudah tidak aktif lagi.
+            //
+            // SEKARANG dihitung dari sumber yang benar-benar "aktif saat
+            // ini" per jenisnya (masing-masing correlated subquery,
+            // whereColumn ke jadwal_mata_pelajaran.id -- pola sama
+            // dengan withCount()/addSelect() yang sudah ada):
+            // - pengajar_count: distinct pengajar_id dari
+            //   JadwalPengajarKategori status=active yang Kategori-nya
+            //   (join ke jadwal_kategori) milik Mata Pelajaran ini --
+            //   inilah tabel assignment yang sebenarnya, turun begitu
+            //   admin hapus/nonaktifkan penugasan Pengajar.
+            // - student_count: JadwalStudent status=active langsung
+            //   yang jadwal_mata_pelajaran_id-nya Mata Pelajaran ini --
+            //   turun begitu murid di-Nonaktifkan/Hapus Total (lihat
+            //   App\Http\Controllers\Jadwal\JadwalStudentController::
+            //   deactivate()/destroy()).
+            // - ruangan_count: distinct jadwal_ruangan_id dari
+            //   JadwalRutin status=active (jadwal MINGGUAN yang
+            //   sungguhan masih jalan) yang Kategori-nya milik Mata
+            //   Pelajaran ini -- "Ruangan yang SEDANG dipakai", bukan
+            //   riwayat Ruangan yang PERNAH dipakai sesi manapun.
+            //
+            // Badge "Kelas" (kelas_count di atas, withCount('kelas'))
+            // SENGAJA TIDAK diubah -- itu tetap TOTAL riwayat sesi
+            // sepanjang masa (angka historis, wajar tidak pernah turun),
+            // beda konsepnya dari 3 badge "siapa yang aktif SEKARANG" di
+            // bawah ini.
+            ->addSelect(['pengajar_count' => JadwalPengajarKategori::query()
+                ->selectRaw('count(distinct jadwal_pengajar_kategori.pengajar_id)')
+                ->join('jadwal_kategori', 'jadwal_kategori.id', '=', 'jadwal_pengajar_kategori.jadwal_kategori_id')
+                ->whereColumn('jadwal_kategori.jadwal_mata_pelajaran_id', 'jadwal_mata_pelajaran.id')
+                ->where('jadwal_pengajar_kategori.status', JadwalPengajarKategori::STATUS_ACTIVE),
             ])
-            // Jumlah MURID UNIK, logika sama persis dengan pengajar_count
-            // di atas tapi dari student_id.
-            ->addSelect(['student_count' => JadwalKelas::selectRaw('count(distinct student_id)')
-                ->whereColumn('jadwal_kelas.jadwal_mata_pelajaran_id', 'jadwal_mata_pelajaran.id'),
+            ->addSelect(['student_count' => JadwalStudent::selectRaw('count(*)')
+                ->whereColumn('jadwal_student.jadwal_mata_pelajaran_id', 'jadwal_mata_pelajaran.id')
+                ->where('jadwal_student.status', JadwalStudent::STATUS_ACTIVE),
             ])
-            // Update 4 September 2026 (permintaan user): badge "Kelas"
-            // di atas itu jumlah BARIS Jadwal Kelas (sesi), BUKAN jumlah
-            // Ruangan unik yang dipakai -- dua hal beda yang sebelumnya
-            // ketuker/tercampur di kepala user cuma dari satu badge itu.
-            // Ditambah badge terpisah di sini, logika sama dengan
-            // pengajar_count/student_count (COUNT(DISTINCT ...) otomatis
-            // skip NULL, jadi sesi yang belum punya Ruangan tidak ikut
-            // kehitung).
-            ->addSelect(['ruangan_count' => JadwalKelas::selectRaw('count(distinct jadwal_ruangan_id)')
-                ->whereColumn('jadwal_kelas.jadwal_mata_pelajaran_id', 'jadwal_mata_pelajaran.id'),
+            ->addSelect(['ruangan_count' => JadwalRutin::query()
+                ->selectRaw('count(distinct jadwal_rutin.jadwal_ruangan_id)')
+                ->join('jadwal_kategori', 'jadwal_kategori.id', '=', 'jadwal_rutin.jadwal_kategori_id')
+                ->whereColumn('jadwal_kategori.jadwal_mata_pelajaran_id', 'jadwal_mata_pelajaran.id')
+                ->where('jadwal_rutin.status', JadwalRutin::STATUS_ACTIVE)
+                ->whereNotNull('jadwal_rutin.jadwal_ruangan_id'),
             ])
             ->with('branchOffice:id,name');
 

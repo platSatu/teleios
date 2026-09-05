@@ -899,6 +899,58 @@ class JadwalStudentController extends Controller
             $skipped = [];
             $removed = 0;
 
+            // Fix 4 September 2026 (laporan user: "di menu pengajar,
+            // tidak ada muridnya tapi ketika saya buka di menu student
+            // pengajarnya sudah keluar ... di jadwal kelas itu bidangnya
+            // bass, category nya jazz tapi di student itu piano") --
+            // BUG ditemukan: reconciliation checklist di bawah ($panel,
+            // loop $toRemove) HANYA pernah melihat baris App\Models\
+            // JadwalRutin yang pengajar_id-nya SAMA dengan pengajar yang
+            // BARU dipilih ($validated['pengajar_id']) -- kalau admin
+            // GANTI Pengajar murid ini (dropdown Pengajar paling atas di
+            // form ini, bukan checklist-nya), baris JadwalRutin AKTIF
+            // yang masih menunjuk ke pengajar LAMA sama sekali tidak
+            // pernah ke-query, jadi tidak pernah dinonaktifkan -- tetap
+            // `status = active` selamanya, dan App\Console\Commands\
+            // GenerateJadwalRutinSesi (jalan tiap bulan) TERUS membuat
+            // App\Models\JadwalKelas baru dari baris itu, membawa
+            // snapshot Pengajar/Bidang/Kategori LAMA (mis. "Bass/Jazz")
+            // walau App\Models\JadwalStudent murid ini sendiri sudah
+            // bilang Pengajar/Mata Pelajaran BARU (mis. "Piano") -- akar
+            // dari SEMUA gejala yang dilaporkan (menu Pengajar menghitung
+            // dari kombinasi pengajar+mapel yang valid jadi kosong, menu
+            // Student baca field mentah jadi tetap muncul, Jadwal Kelas
+            // terus ke-generate dari data basi).
+            //
+            // Satu baris App\Models\JadwalStudent didesain represent SATU
+            // hubungan murid-Pengajar (drill-down Branch -> Mata
+            // Pelajaran -> PENGAJAR -> Student, field pengajar_id di
+            // level Student sendiri) -- jadi TIDAK ADA skenario sah baris
+            // JadwalRutin AKTIF murid ini menunjuk ke Pengajar LAIN dari
+            // pengajar_id yang sekarang tersimpan di Student-nya sendiri.
+            // Baris begini SELALU sisa dari pergantian Pengajar
+            // sebelumnya yang tidak ke-reconcile -- aman dibersihkan di
+            // sini, pola PERSIS sama dengan loop $toRemove di bawah
+            // (rutinRemoved() dulu sebelum dihapus: nonaktifkan sesi masa
+            // depan yang belum diabsen, tulis JadwalChangeLog, WA
+            // konsolidasi ke pengajar lama -- lihat docblock
+            // JadwalScheduleChangeNotifier::rutinRemoved()). Sesi
+            // (JadwalKelas) yang SUDAH ter-generate dari baris ini tetap
+            // TIDAK disentuh (kebijakan sama seperti reconciliation
+            // checklist di bawah) -- histori/fee yang sudah tercatat
+            // tidak diam-diam berubah.
+            $stalePengajarRutins = JadwalRutin::where('company_id', $company->id)
+                ->where('student_id', $student->id)
+                ->where('status', JadwalRutin::STATUS_ACTIVE)
+                ->where('pengajar_id', '!=', $validated['pengajar_id'])
+                ->get();
+
+            foreach ($stalePengajarRutins as $row) {
+                $this->scheduleChangeNotifier->rutinRemoved($row, auth()->id(), batch: true);
+                $row->delete();
+                $removed++;
+            }
+
             $panel = $this->pengajarSlotsPanel($context, $validated['pengajar_id'], $student);
 
             foreach ($panel['pengajarKategoris'] as $pk) {
@@ -1234,7 +1286,7 @@ class JadwalStudentController extends Controller
 
     private function validator(Request $request, Company $company, ?string $ignoreId = null)
     {
-        return Validator::make($request->all(), [
+        $validator = Validator::make($request->all(), [
             'jadwal_mata_pelajaran_id' => [
                 'required', 'uuid', 'exists:jadwal_mata_pelajaran,id',
                 function ($attribute, $value, $fail) use ($company) {
@@ -1277,5 +1329,49 @@ class JadwalStudentController extends Controller
                 },
             ],
         ]);
+
+        // Fix 4 September 2026 (laporan user: "di menu pengajar, tidak
+        // ada muridnya tapi ketika saya buka di menu student pengajarnya
+        // sudah keluar") -- SEBELUMNYA pengajar_id di atas cuma dicek
+        // "user beneran ada" (exists:users,id), TIDAK PERNAH dicek
+        // pengajar itu SUNGGUHAN ditugaskan mengajar Mata Pelajaran /
+        // Bidang yang dipilih (App\Models\JadwalPengajarKategori, status
+        // aktif) -- dropdown Pengajar di form ini bebas (companyPengajar
+        // Members(), semua anggota tim, TIDAK difilter per Mata
+        // Pelajaran), jadi admin bisa (tanpa sengaja) menyimpan
+        // kombinasi Pengajar+Mata-Pelajaran yang tidak nyata. Akibatnya:
+        // App\Http\Controllers\Jadwal\JadwalPengajarController::index()
+        // menghitung murid dari kombinasi pengajar+mapel yang VALID
+        // (lihat attachMuridCounts()) jadi murid itu tidak ke-hitung di
+        // sana (tampil 0), padahal App\Http\Controllers\Jadwal\
+        // JadwalStudentController::index() (menu Student) baca langsung
+        // dari field mentah JadwalStudent tanpa validasi serupa, jadi
+        // tetap muncul -- dua menu "benar" menurut query masing-masing,
+        // tapi datanya sendiri sudah tidak valid sejak disimpan.
+        //
+        // $validator->after() dipakai (bukan rule per-field) karena
+        // butuh 2 field sekaligus (pengajar_id + jadwal_mata_pelajaran_id).
+        // Dilewati (tidak divalidasi) kalau salah satu masih kosong --
+        // rule 'required' masing-masing di atas yang menangani itu.
+        $validator->after(function ($v) use ($request, $company) {
+            $pengajarId = $request->input('pengajar_id');
+            $mataPelajaranId = $request->input('jadwal_mata_pelajaran_id');
+
+            if (! $pengajarId || ! $mataPelajaranId) {
+                return;
+            }
+
+            $valid = JadwalPengajarKategori::where('company_id', $company->id)
+                ->where('pengajar_id', $pengajarId)
+                ->where('status', JadwalPengajarKategori::STATUS_ACTIVE)
+                ->whereHas('kategori', fn ($q) => $q->where('jadwal_mata_pelajaran_id', $mataPelajaranId))
+                ->exists();
+
+            if (! $valid) {
+                $v->errors()->add('pengajar_id', 'Pengajar ini belum ditugaskan mengajar Mata Pelajaran / Bidang yang dipilih -- tugaskan dulu lewat menu Pengajar, atau pilih Pengajar/Mata Pelajaran lain.');
+            }
+        });
+
+        return $validator;
     }
 }
