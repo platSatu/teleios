@@ -7,7 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\JadwalKategori;
 use App\Models\JadwalPengajarKategori;
-use App\Models\JadwalStudent;
+use App\Services\Jadwal\JadwalCountsService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -52,6 +52,11 @@ use Illuminate\View\View;
 class JadwalPengajarController extends Controller
 {
     use ResolvesCompanyContext;
+
+    public function __construct(
+        protected JadwalCountsService $countsService,
+    ) {
+    }
 
     public function index(Request $request): View|RedirectResponse
     {
@@ -112,6 +117,15 @@ class JadwalPengajarController extends Controller
      *
      * Satu query dikelompokkan (bukan query per baris di dalam loop)
      * supaya tidak N+1 walau paginate menampilkan 15 baris sekaligus.
+     *
+     * Refactor 5 September 2026 (permintaan user: "kode makin gemuk,
+     * tolong dirapikan") -- query hitungnya sendiri dipindah ke
+     * App\Services\Jadwal\JadwalCountsService::activeMuridCountsForPairs()
+     * (SATU sumber dipakai bersama menu Mata Pelajaran/Student, lihat
+     * docblock class itu). Yang tetap di sini cuma bagian yang memang
+     * spesifik ke bentuk data halaman ini: membangun pasangan
+     * (pengajar_id, jadwal_mata_pelajaran_id) dari $pengajarKategoris,
+     * lalu menempelkan hasilnya balik ke tiap baris.
      */
     private function attachMuridCounts(LengthAwarePaginator $pengajarKategoris, Company $company): void
     {
@@ -123,27 +137,7 @@ class JadwalPengajarController extends Controller
             ->filter(fn (array $p) => $p['jadwal_mata_pelajaran_id'])
             ->unique(fn (array $p) => $p['pengajar_id'].'|'.$p['jadwal_mata_pelajaran_id']);
 
-        if ($pairs->isEmpty()) {
-            foreach ($pengajarKategoris as $pk) {
-                $pk->murid_count = 0;
-            }
-
-            return;
-        }
-
-        $counts = JadwalStudent::where('company_id', $company->id)
-            ->where(function ($q) use ($pairs) {
-                foreach ($pairs as $p) {
-                    $q->orWhere(function ($qq) use ($p) {
-                        $qq->where('pengajar_id', $p['pengajar_id'])
-                            ->where('jadwal_mata_pelajaran_id', $p['jadwal_mata_pelajaran_id']);
-                    });
-                }
-            })
-            ->selectRaw('pengajar_id, jadwal_mata_pelajaran_id, count(*) as total')
-            ->groupBy('pengajar_id', 'jadwal_mata_pelajaran_id')
-            ->get()
-            ->keyBy(fn ($row) => $row->pengajar_id.'|'.$row->jadwal_mata_pelajaran_id);
+        $counts = $this->countsService->activeMuridCountsForPairs($company->id, $pairs);
 
         foreach ($pengajarKategoris as $pk) {
             $mpId = $pk->kategori->jadwal_mata_pelajaran_id ?? null;

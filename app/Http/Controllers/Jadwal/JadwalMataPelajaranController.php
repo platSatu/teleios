@@ -9,9 +9,7 @@ use App\Models\BranchOffice;
 use App\Models\Company;
 use App\Models\JadwalKelas;
 use App\Models\JadwalMataPelajaran;
-use App\Models\JadwalPengajarKategori;
-use App\Models\JadwalRutin;
-use App\Models\JadwalStudent;
+use App\Services\Jadwal\JadwalCountsService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -31,6 +29,11 @@ class JadwalMataPelajaranController extends Controller
     use ResolvesCompanyContext;
 
     private const IMAGE_SUBDIRECTORY = 'mata-pelajaran';
+
+    public function __construct(
+        protected JadwalCountsService $countsService,
+    ) {
+    }
 
     public function index(Request $request): View
     {
@@ -90,23 +93,16 @@ class JadwalMataPelajaranController extends Controller
             // sepanjang masa (angka historis, wajar tidak pernah turun),
             // beda konsepnya dari 3 badge "siapa yang aktif SEKARANG" di
             // bawah ini.
-            ->addSelect(['pengajar_count' => JadwalPengajarKategori::query()
-                ->selectRaw('count(distinct jadwal_pengajar_kategori.pengajar_id)')
-                ->join('jadwal_kategori', 'jadwal_kategori.id', '=', 'jadwal_pengajar_kategori.jadwal_kategori_id')
-                ->whereColumn('jadwal_kategori.jadwal_mata_pelajaran_id', 'jadwal_mata_pelajaran.id')
-                ->where('jadwal_pengajar_kategori.status', JadwalPengajarKategori::STATUS_ACTIVE),
-            ])
-            ->addSelect(['student_count' => JadwalStudent::selectRaw('count(*)')
-                ->whereColumn('jadwal_student.jadwal_mata_pelajaran_id', 'jadwal_mata_pelajaran.id')
-                ->where('jadwal_student.status', JadwalStudent::STATUS_ACTIVE),
-            ])
-            ->addSelect(['ruangan_count' => JadwalRutin::query()
-                ->selectRaw('count(distinct jadwal_rutin.jadwal_ruangan_id)')
-                ->join('jadwal_kategori', 'jadwal_kategori.id', '=', 'jadwal_rutin.jadwal_kategori_id')
-                ->whereColumn('jadwal_kategori.jadwal_mata_pelajaran_id', 'jadwal_mata_pelajaran.id')
-                ->where('jadwal_rutin.status', JadwalRutin::STATUS_ACTIVE)
-                ->whereNotNull('jadwal_rutin.jadwal_ruangan_id'),
-            ])
+            //
+            // Refactor 5 September 2026 (permintaan user: "kode makin
+            // gemuk, tolong dirapikan") -- 3 subquery di bawah ini
+            // dipindah ke App\Services\Jadwal\JadwalCountsService
+            // (SATU sumber dipakai bersama menu Pengajar/Mata Pelajaran/
+            // Student, lihat docblock class itu), murni relokasi, tidak
+            // ada perubahan logic/SQL di sini.
+            ->addSelect(['pengajar_count' => $this->countsService->pengajarCountSubquery()])
+            ->addSelect(['student_count' => $this->countsService->studentCountSubquery()])
+            ->addSelect(['ruangan_count' => $this->countsService->ruanganCountSubquery()])
             ->with('branchOffice:id,name');
 
         if ($context->isLockedToBranch()) {

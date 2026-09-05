@@ -14,6 +14,7 @@ use App\Models\JadwalPengajarKategori;
 use App\Models\JadwalRuangan;
 use App\Models\JadwalRutin;
 use App\Models\JadwalStudent;
+use App\Services\Jadwal\JadwalCountsService;
 use App\Services\Jadwal\JadwalRutinConflictService;
 use App\Services\Jadwal\JadwalRutinSesiGenerator;
 use App\Services\Jadwal\JadwalScheduleChangeNotifier;
@@ -79,6 +80,7 @@ class JadwalStudentController extends Controller
      */
     public function __construct(
         protected JadwalScheduleChangeNotifier $scheduleChangeNotifier,
+        protected JadwalCountsService $countsService,
     ) {
     }
 
@@ -132,18 +134,14 @@ class JadwalStudentController extends Controller
         // AKTIF milik Student itu (bisa lebih dari satu Kategori kalau
         // Student punya beberapa Jadwal Rutin di Kategori berbeda,
         // ditampilkan sebagai badge terpisah -- lihat index.blade.php).
-        // SATU query dikelompokkan per student_id (bukan query di dalam
-        // loop) supaya tidak N+1 walau paginate 15 baris.
+        //
+        // Refactor 5 September 2026 (permintaan user: "kode makin
+        // gemuk, tolong dirapikan") -- query ini dipindah apa adanya ke
+        // App\Services\Jadwal\JadwalCountsService::activeKategoriNamesByStudent()
+        // (SATU sumber dipakai bersama menu Pengajar/Mata Pelajaran,
+        // lihat docblock class itu).
         $studentIds = collect($students->items())->pluck('id');
-        $kategoriNamesByStudent = $studentIds->isEmpty()
-            ? collect()
-            : JadwalRutin::where('company_id', $company->id)
-                ->whereIn('student_id', $studentIds)
-                ->where('status', JadwalRutin::STATUS_ACTIVE)
-                ->with('kategori:id,name')
-                ->get()
-                ->groupBy('student_id')
-                ->map(fn ($rows) => $rows->pluck('kategori.name')->filter()->unique()->values());
+        $kategoriNamesByStudent = $this->countsService->activeKategoriNamesByStudent($company->id, $studentIds);
 
         foreach ($students as $student) {
             $student->setAttribute('kategori_names', $kategoriNamesByStudent->get($student->id, collect()));
