@@ -4,13 +4,17 @@ namespace App\Http\Controllers\Jadwal;
 
 use App\Http\Controllers\Concerns\ResolvesCompanyContext;
 use App\Http\Controllers\Controller;
+use App\Models\JadwalBranchSetting;
 use App\Models\JadwalKelas;
 use App\Models\JadwalKelasRescheduleRequest;
 use App\Models\JadwalReminderSetting;
+use App\Models\JadwalRutin;
 use App\Services\Chat\InboxService;
 use App\Services\Chat\SystemJwtService;
+use App\Services\Jadwal\JadwalRutinConflictService;
 use App\Services\PackageLimitService;
 use App\Support\PhoneNumber;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -25,6 +29,23 @@ use Throwable;
  * TIDAK PERNAH mengubah App\Models\JadwalKelas dengan sendirinya --
  * staff yang memilih (approve()) apakah & bagaimana jadwal benar-benar
  * diubah, sesuai hasil diskusi ("wajib approve staff").
+ *
+ * Fix 14 September 2026 (laporan user via screenshot: murid Vallery
+ * Jocelyn Nathania reschedule-nya di-approve, tapi minggu berikutnya
+ * Jadwal Kelas & checklist "Jadwal Rutin Murid Ini" tetap menampilkan
+ * jam LAMA -- karena approve() sebelum fix ini HANYA memindahkan SATU
+ * baris App\Models\JadwalKelas yang diminta, TIDAK PERNAH menyentuh
+ * App\Models\JadwalRutin "cetakan" mingguannya, jadi pola lama
+ * tetap aktif dan terus generate sesi baru di jam lama setiap minggu).
+ * Atas konfirmasi user (pertanyaan pilihan): approve() SEKARANG, kalau
+ * sesi yang dipindah berasal dari satu JadwalRutin (`jadwal_rutin_id`
+ * tidak null -- sesi manual/pengganti yang tidak berasal dari rutin
+ * TIDAK disentuh, tidak ada pola mingguan yang perlu diikutkan),
+ * JUGA mengikutkan update permanen ke hari/jam/durasi JadwalRutin itu
+ * -- lihat syncJadwalRutinToNewSchedule() di bawah untuk detail &
+ * batasannya (tidak retroaktif ke sesi yang SUDAH ter-generate untuk
+ * minggu-minggu depan sebelum approve ini, itu perlu dibereskan
+ * manual oleh staff kalau ada).
  */
 class JadwalRescheduleRequestController extends Controller
 {
@@ -34,6 +55,7 @@ class JadwalRescheduleRequestController extends Controller
         protected PackageLimitService $packageLimits,
         protected SystemJwtService $jwtService,
         protected InboxService $inbox,
+        protected JadwalRutinConflictService $rutinConflicts,
     ) {
     }
 
@@ -110,13 +132,33 @@ class JadwalRescheduleRequestController extends Controller
         // baris + mengisi waktu barunya di sini -- approve() tanpa itu
         // cuma menandai permintaan selesai diproses (mis. sudah diatur
         // manual di halaman Jadwal Kelas terpisah).
+        $rutinSyncWarning = null;
+
         if (! empty($validated['jadwal_kelas_id']) && ! empty($validated['new_start_time'])) {
-            JadwalKelas::where('company_id', $company->id)
+            $jadwalKelas = JadwalKelas::where('company_id', $company->id)
                 ->where('id', $validated['jadwal_kelas_id'])
-                ->update(array_filter([
+                ->first();
+
+            if ($jadwalKelas) {
+                $jadwalKelas->update(array_filter([
                     'start_time' => $validated['new_start_time'],
                     'end_time' => $validated['new_end_time'] ?? null,
                 ], fn ($v) => $v !== null));
+
+                // Fix 14 September 2026 -- lihat docblock class & method
+                // syncJadwalRutinToNewSchedule() di bawah: sesi yang
+                // dipindah di atas cuma SATU baris JadwalKelas, kalau
+                // sesi itu berasal dari JadwalRutin (pola mingguan),
+                // pola itu JUGA diikutkan pindah permanen supaya
+                // minggu-minggu berikutnya generate di jam yang baru,
+                // bukan jam lama.
+                $rutinSyncWarning = $this->syncJadwalRutinToNewSchedule(
+                    $jadwalKelas,
+                    $validated['new_start_time'],
+                    $validated['new_end_time'] ?? null,
+                    $company->id,
+                );
+            }
         }
 
         $reschedule->update([
@@ -129,7 +171,113 @@ class JadwalRescheduleRequestController extends Controller
 
         $this->sendRescheduleNotifications($reschedule, JadwalKelasRescheduleRequest::STATUS_APPROVED);
 
-        return redirect()->route('jadwal.reschedule-requests.index')->with('success', 'Permintaan reschedule disetujui.');
+        $successMessage = 'Permintaan reschedule disetujui.';
+
+        if ($rutinSyncWarning) {
+            $successMessage .= ' Catatan: '.$rutinSyncWarning;
+        }
+
+        return redirect()->route('jadwal.reschedule-requests.index')->with('success', $successMessage);
+    }
+
+    /**
+     * Update 14 September 2026 (lihat docblock class untuk laporan &
+     * kronologi lengkap): approve() di atas cuma memindahkan SATU sesi
+     * (`$jadwalKelas`) -- method ini yang mengurus "ikut pindahkan pola
+     * mingguannya juga" kalau sesi itu memang berasal dari satu
+     * App\Models\JadwalRutin (`jadwal_kelas.jadwal_rutin_id`).
+     *
+     * SENGAJA tidak melakukan apa-apa (return null, tidak dianggap
+     * gagal) kalau:
+     * - `jadwal_rutin_id` null (sesi manual/pengganti yang dibuat
+     *   langsung di App\Models\JadwalKelas, bukan dari pola mingguan
+     *   -- tidak ada apa-apa yang perlu diikutkan pindah).
+     * - Rutin-nya sudah tidak ada/sudah dihapus (kondisi langka, staff
+     *   mungkin sudah bereskan manual lewat menu Jadwal Rutin).
+     *
+     * Validasi PERSIS sama seperti App\Http\Controllers\Jadwal\
+     * JadwalRutinController::validator() (jam operasional branch +
+     * App\Services\Jadwal\JadwalRutinConflictService) -- supaya
+     * Jadwal Rutin yang dihasilkan dari jalur approve reschedule ini
+     * tetap konsisten dengan yang dibuat/diedit lewat menu Jadwal
+     * Rutin biasa, tidak ada jalur pintas yang lolos validasi. Kalau
+     * validasi gagal (jam di luar operasional, atau bentrok pengajar/
+     * ruangan lain), pola mingguan SENGAJA TIDAK diubah (sesi yang
+     * sudah dipindah di approve() tetap dipindah, tidak di-rollback)
+     * -- pesan alasannya dikembalikan supaya staff tahu perlu
+     * membereskan Jadwal Rutin-nya manual.
+     *
+     * KETERBATASAN (disebutkan eksplisit ke user): ini TIDAK retroaktif
+     * -- sesi minggu-minggu depan yang SUDAH ter-generate dari pola
+     * lama SEBELUM approve ini (mis. sudah jalan `jadwal:generate-sesi`
+     * beberapa minggu ke depan) TETAP di jam lama, tidak ikut
+     * dipindahkan/dihapus di sini. Itu perlu dibereskan manual oleh
+     * staff (edit/hapus baris JadwalKelas yang bersangkutan) kalau
+     * memang sudah kadung ter-generate.
+     */
+    private function syncJadwalRutinToNewSchedule(JadwalKelas $jadwalKelas, string $newStartTime, ?string $newEndTime, string $companyId): ?string
+    {
+        if (! $jadwalKelas->jadwal_rutin_id) {
+            return null;
+        }
+
+        $rutin = JadwalRutin::where('company_id', $companyId)
+            ->where('id', $jadwalKelas->jadwal_rutin_id)
+            ->first();
+
+        if (! $rutin) {
+            return null;
+        }
+
+        $newStart = Carbon::parse($newStartTime);
+        $hari = $newStart->dayOfWeek;
+        $jamMulai = $newStart->format('H:i');
+
+        $durasi = $newEndTime
+            ? $newStart->diffInMinutes(Carbon::parse($newEndTime))
+            : $rutin->durasi_menit;
+
+        $jamSelesai = Carbon::createFromFormat('H:i', $jamMulai)->addMinutes($durasi)->format('H:i');
+
+        $branchSetting = $rutin->branch_office_id
+            ? JadwalBranchSetting::where('branch_office_id', $rutin->branch_office_id)->first()
+            : null;
+
+        if (! $branchSetting) {
+            return 'Jadwal Rutin mingguan murid ini TIDAK ikut dipindahkan (branch belum punya Jam Operasional diatur) -- hanya sesi ini saja yang pindah, minggu depan akan tetap generate di jam lama sampai dibereskan manual lewat menu Jadwal Rutin.';
+        }
+
+        if (! $branchSetting->isHariOperasional($hari)) {
+            return 'Jadwal Rutin mingguan murid ini TIDAK ikut dipindahkan (branch tidak buka di hari '.(JadwalRutin::HARI_LABELS[$hari] ?? $hari).') -- hanya sesi ini saja yang pindah, minggu depan akan tetap generate di jam lama sampai dibereskan manual lewat menu Jadwal Rutin.';
+        }
+
+        if (! $branchSetting->isWithinOperationalHours($jamMulai, $jamSelesai)) {
+            return 'Jadwal Rutin mingguan murid ini TIDAK ikut dipindahkan (jam '.$jamMulai.'-'.$jamSelesai.' di luar jam operasional branch) -- hanya sesi ini saja yang pindah, minggu depan akan tetap generate di jam lama sampai dibereskan manual lewat menu Jadwal Rutin.';
+        }
+
+        $conflicts = $this->rutinConflicts->check(
+            companyId: $companyId,
+            hari: $hari,
+            jamMulai: $jamMulai,
+            jamSelesai: $jamSelesai,
+            efektifMulai: $rutin->efektif_mulai?->format('Y-m-d') ?? $newStart->format('Y-m-d'),
+            efektifSelesai: $rutin->efektif_selesai?->format('Y-m-d'),
+            pengajarId: $rutin->pengajar_id,
+            jadwalRuanganId: $rutin->jadwal_ruangan_id,
+            ignoreId: $rutin->id,
+        );
+
+        if (! empty($conflicts)) {
+            return 'Jadwal Rutin mingguan murid ini TIDAK ikut dipindahkan ('.implode(' ', $conflicts).') -- hanya sesi ini saja yang pindah, minggu depan akan tetap generate di jam lama sampai dibereskan manual lewat menu Jadwal Rutin.';
+        }
+
+        $rutin->update([
+            'hari' => $hari,
+            'jam_mulai' => $jamMulai,
+            'durasi_menit' => $durasi,
+        ]);
+
+        return null;
     }
 
     public function reject(Request $request, string $id): RedirectResponse
