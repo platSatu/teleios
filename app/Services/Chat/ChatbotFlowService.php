@@ -656,9 +656,29 @@ class ChatbotFlowService
      * (lagi) punya jadwal_kategori_id, atau memang tidak ada slot
      * kosong dalam $searchDays ke depan.
      *
+     * Update 7 September 2026 (permintaan user, laporan "kenapa
+     * langsung dikasih pilihan hari besoknya saja, tidak ditanya mau
+     * hari apa atau ditampilkan semua sesuai jam ketersediaan
+     * pengajar" -- lalu dipertegas "idealnya tampilkan SELURUH jam
+     * ketersediaan pengajar"): method ini SEBELUMNYA cuma jalan
+     * hari-demi-hari dari $daysAhead=1 dan BERHENTI TOTAL begitu
+     * $limit (5) kandidat terkumpul -- kalau hari pertama saja sudah
+     * punya blok panjang, 5 slot itu semua kepakai di hari itu dan
+     * hari-hari lain tidak pernah dicek. Sekarang $searchDays
+     * defaultnya SEPEKAN (7 hari) -- cukup untuk mencakup SETIAP hari
+     * dalam pola ketersediaan mingguan pengajar (`hari` di
+     * jadwal_pengajar_kategori_jadwal cuma 0-6) -- dan tiap hari
+     * dijatah $maxPerDay (default 1) slot representatif SENDIRI,
+     * tidak lagi berbagi satu kuota global. Jadi murid melihat SATU
+     * pilihan jam per hari yang pengajarnya buka & kosong, mencakup
+     * seluruh hari dalam sepekan itu, bukan cuma hari yang paling
+     * "kaya" jamnya. $maxPerDay > 1 tetap didukung (dipanggil dengan
+     * argumen eksplisit) kalau nanti mau menampilkan lebih dari satu
+     * jam per hari.
+     *
      * @return \Illuminate\Support\Collection<int, array{start: Carbon, end: Carbon}>
      */
-    private function findOpenSlots(JadwalKelas $original, int $limit = 5, int $searchDays = 30): \Illuminate\Support\Collection
+    private function findOpenSlots(JadwalKelas $original, int $maxPerDay = 1, int $searchDays = 7): \Illuminate\Support\Collection
     {
         $durationMinutes = $original->start_time->diffInMinutes($original->end_time);
 
@@ -688,12 +708,22 @@ class ChatbotFlowService
 
         $candidates = collect();
 
-        for ($daysAhead = 1; $daysAhead <= $searchDays && $candidates->count() < $limit; $daysAhead++) {
+        for ($daysAhead = 1; $daysAhead <= $searchDays; $daysAhead++) {
             $date = $original->start_time->copy()->startOfDay()->addDays($daysAhead);
             $blocksForDay = $blocksByHari->get($date->dayOfWeek, collect());
 
+            if ($blocksForDay->isEmpty()) {
+                continue;
+            }
+
+            // Kuota per HARI ini sendiri -- tidak lagi berbagi kuota
+            // global dengan hari lain, supaya satu hari yang blok
+            // ketersediaannya panjang tidak menghabiskan semua slot
+            // sebelum hari-hari lain pernah dicek.
+            $takenToday = 0;
+
             foreach ($blocksForDay as $block) {
-                if ($candidates->count() >= $limit) {
+                if ($takenToday >= $maxPerDay) {
                     break;
                 }
 
@@ -702,7 +732,7 @@ class ChatbotFlowService
 
                 for (
                     $slotStart = $blockStart->copy();
-                    $candidates->count() < $limit && $slotStart->copy()->addMinutes($durationMinutes)->lte($blockEnd);
+                    $takenToday < $maxPerDay && $slotStart->copy()->addMinutes($durationMinutes)->lte($blockEnd);
                     $slotStart->addMinutes($durationMinutes)
                 ) {
                     $slotEnd = $slotStart->copy()->addMinutes($durationMinutes);
@@ -734,6 +764,7 @@ class ChatbotFlowService
                     }
 
                     $candidates->push(['start' => $slotStart->copy(), 'end' => $slotEnd]);
+                    $takenToday++;
                 }
             }
         }
