@@ -107,41 +107,54 @@ class JadwalPengajarController extends Controller
     /**
      * Update 4 September 2026 (permintaan user): jumlah MURID per baris
      * Pengajar -- diklik pindah ke jadwal.student.index (badge, sama
-     * pola link "Add Student" di index.blade.php). App\Models\
-     * JadwalStudent TIDAK menyimpan jadwal_kategori_id (cuma
-     * jadwal_mata_pelajaran_id + pengajar_id), jadi "murid dari
-     * Kategori ini" didekati dengan pasangan (pengajar_id, Mata
-     * Pelajaran milik Kategori itu) -- sama scoping yang sudah dipakai
-     * link "Add Student"/"Jadwal Rutin" di tempat lain, bukan filter
-     * baru.
+     * pola link "Add Student" di index.blade.php).
      *
      * Satu query dikelompokkan (bukan query per baris di dalam loop)
      * supaya tidak N+1 walau paginate menampilkan 15 baris sekaligus.
      *
      * Refactor 5 September 2026 (permintaan user: "kode makin gemuk,
      * tolong dirapikan") -- query hitungnya sendiri dipindah ke
-     * App\Services\Jadwal\JadwalCountsService::activeMuridCountsForPairs()
-     * (SATU sumber dipakai bersama menu Mata Pelajaran/Student, lihat
-     * docblock class itu). Yang tetap di sini cuma bagian yang memang
-     * spesifik ke bentuk data halaman ini: membangun pasangan
-     * (pengajar_id, jadwal_mata_pelajaran_id) dari $pengajarKategoris,
-     * lalu menempelkan hasilnya balik ke tiap baris.
+     * App\Services\Jadwal\JadwalCountsService (SATU sumber dipakai
+     * bersama menu Mata Pelajaran/Student, lihat docblock class itu).
+     *
+     * Fix 14 September 2026 (laporan user via screenshot -- lihat
+     * docblock App\Services\Jadwal\JadwalCountsService::
+     * activeMuridCountsForKategoris() untuk kronologi lengkap): pasangan
+     * yang dibangun di sini SEKARANG (pengajar_id, jadwal_kategori_id)
+     * -- diambil LANGSUNG dari kolom jadwal_kategori_id milik baris
+     * JadwalPengajarKategori ini sendiri. SEBELUMNYA pasangan ini
+     * (pengajar_id, jadwal_mata_pelajaran_id -- diturunkan dari
+     * $pk->kategori->jadwal_mata_pelajaran_id) dicocokkan ke field
+     * mentah App\Models\JadwalStudent.jadwal_mata_pelajaran_id, yang
+     * ternyata bisa basi/tidak sinkron dengan Jadwal Rutin aktual murid
+     * itu (lihat docblock activeMuridCountsForKategoris() untuk kenapa)
+     * -- itu akar kenapa badge ini bisa menampilkan 0 padahal murid Nya
+     * aktual sudah ada & kelihatan di index Student maupun grid Jadwal
+     * Kelas.
      */
     private function attachMuridCounts(LengthAwarePaginator $pengajarKategoris, Company $company): void
     {
+        // Fix 14 September 2026 (laporan user via screenshot: "Murid: 0"
+        // di sini padahal index Student & grid Jadwal Kelas sama-sama
+        // menunjukkan murid aktif) -- pasangan sekarang (pengajar_id,
+        // jadwal_kategori_id), BUKAN lagi (pengajar_id,
+        // jadwal_mata_pelajaran_id) yang dicocokkan ke field mentah
+        // App\Models\JadwalStudent (bisa basi, lihat docblock
+        // App\Services\Jadwal\JadwalCountsService::activeMuridCountsForKategoris()
+        // untuk penjelasan lengkap kenapa itu tidak akurat).
+        // jadwal_kategori_id ada LANGSUNG di baris JadwalPengajarKategori
+        // ini sendiri, tidak perlu diturunkan dari relasi kategori lagi.
         $pairs = collect($pengajarKategoris->items())
             ->map(fn (JadwalPengajarKategori $pk) => [
                 'pengajar_id' => $pk->pengajar_id,
-                'jadwal_mata_pelajaran_id' => $pk->kategori->jadwal_mata_pelajaran_id ?? null,
+                'jadwal_kategori_id' => $pk->jadwal_kategori_id,
             ])
-            ->filter(fn (array $p) => $p['jadwal_mata_pelajaran_id'])
-            ->unique(fn (array $p) => $p['pengajar_id'].'|'.$p['jadwal_mata_pelajaran_id']);
+            ->unique(fn (array $p) => $p['pengajar_id'].'|'.$p['jadwal_kategori_id']);
 
-        $counts = $this->countsService->activeMuridCountsForPairs($company->id, $pairs);
+        $counts = $this->countsService->activeMuridCountsForKategoris($company->id, $pairs);
 
         foreach ($pengajarKategoris as $pk) {
-            $mpId = $pk->kategori->jadwal_mata_pelajaran_id ?? null;
-            $pk->murid_count = $mpId ? (int) ($counts->get($pk->pengajar_id.'|'.$mpId)?->total ?? 0) : 0;
+            $pk->murid_count = $counts->get($pk->pengajar_id.'|'.$pk->jadwal_kategori_id, 0);
         }
     }
 

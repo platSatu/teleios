@@ -36,38 +36,61 @@ use Illuminate\Support\Collection;
 class JadwalCountsService
 {
     /**
-     * Jumlah murid AKTIF per pasangan (pengajar_id, jadwal_mata_pelajaran_id).
-     * Dipindah dari JadwalPengajarController::attachMuridCounts() apa
-     * adanya, PLUS satu perbaikan konsistensi: sekarang ikut filter
-     * `status = active` (sebelumnya TIDAK difilter sama sekali --
-     * murid nonaktif ikut kehitung di sini padahal badge sejenis di
-     * Mata Pelajaran sudah lebih dulu difilter aktif, lihat commit
-     * sebelumnya "Perbaiki relasi data Pengajar-Student..." — sekarang
-     * disamakan supaya definisi "murid aktif" konsisten di semua menu).
+     * Jumlah murid AKTIF (distinct) per pasangan (pengajar_id,
+     * jadwal_kategori_id), dihitung dari App\Models\JadwalRutin AKTIF.
      *
-     * @param  Collection<int, array{pengajar_id: string, jadwal_mata_pelajaran_id: string}>  $pairs  unik, tidak boleh berisi null
-     * @return Collection<string, object{pengajar_id: string, jadwal_mata_pelajaran_id: string, total: int}> keyed "{pengajar_id}|{jadwal_mata_pelajaran_id}"
+     * Update 14 September 2026 (laporan user via screenshot: index
+     * Pengajar menampilkan "Murid: 0" untuk Stevany N/Kategori Jazz,
+     * padahal index Student DAN grid Jadwal Kelas sama-sama menunjukkan
+     * murid "Vallery Jocelyn Nathania" aktif di kombinasi itu) --
+     * method ini MENGGANTIKAN activeMuridCountsForPairs() versi lama
+     * (dihapus, satu-satunya pemanggilnya cuma
+     * JadwalPengajarController::attachMuridCounts()) yang menghitung
+     * lewat pasangan (pengajar_id, jadwal_mata_pelajaran_id) dicocokkan
+     * ke App\Models\JadwalStudent.jadwal_mata_pelajaran_id/pengajar_id
+     * -- BUKAN akar masalahnya, cuma gejalanya: Jadwal Rutin/Jadwal
+     * Kelas seorang murid BISA dipindah ke Pengajar/Kategori lain lewat
+     * menu Jadwal Rutin atau popup Edit Jadwal Kelas TANPA menyentuh
+     * baris JadwalStudent-nya sama sekali (reconciliation basi di
+     * JadwalStudentController::update() cuma jalan kalau admin
+     * mengedit Student ITU SENDIRI) -- field
+     * jadwal_mata_pelajaran_id/pengajar_id di baris Student jadi bisa
+     * "basi" dibanding jadwal aktualnya. activeKategoriNamesByStudent()
+     * di bawah (dipakai badge Kategori index Student) dan grid Jadwal
+     * Kelas SAMA-SAMA sudah baca langsung dari JadwalRutin/JadwalKelas
+     * -- badge "Murid" index Pengajar WAJIB pakai sumber yang sama
+     * (jadwal_kategori_id, bukan jadwal_mata_pelajaran_id) supaya
+     * ketiga menu selalu match, tidak peduli data Student-nya sendiri
+     * basi atau tidak. Ini TIDAK memperbaiki akar drift-nya (baris
+     * Student yang basi tetap basi) -- kalau itu juga mau
+     * direkonsiliasi otomatis tiap Jadwal Rutin/Jadwal Kelas diedit di
+     * luar form Student, itu perubahan terpisah yang lebih besar.
+     *
+     * @param  Collection<int, array{pengajar_id: string, jadwal_kategori_id: string}>  $pairs  unik, tidak boleh berisi null
+     * @return Collection<string, int> keyed "{pengajar_id}|{jadwal_kategori_id}"
      */
-    public function activeMuridCountsForPairs(string $companyId, Collection $pairs): Collection
+    public function activeMuridCountsForKategoris(string $companyId, Collection $pairs): Collection
     {
         if ($pairs->isEmpty()) {
             return collect();
         }
 
-        return JadwalStudent::where('company_id', $companyId)
-            ->where('status', JadwalStudent::STATUS_ACTIVE)
+        return JadwalRutin::where('company_id', $companyId)
+            ->where('status', JadwalRutin::STATUS_ACTIVE)
+            ->whereHas('student', fn ($q) => $q->where('status', JadwalStudent::STATUS_ACTIVE))
             ->where(function ($q) use ($pairs) {
                 foreach ($pairs as $p) {
                     $q->orWhere(function ($qq) use ($p) {
                         $qq->where('pengajar_id', $p['pengajar_id'])
-                            ->where('jadwal_mata_pelajaran_id', $p['jadwal_mata_pelajaran_id']);
+                            ->where('jadwal_kategori_id', $p['jadwal_kategori_id']);
                     });
                 }
             })
-            ->selectRaw('pengajar_id, jadwal_mata_pelajaran_id, count(*) as total')
-            ->groupBy('pengajar_id', 'jadwal_mata_pelajaran_id')
+            ->selectRaw('pengajar_id, jadwal_kategori_id, count(distinct student_id) as total')
+            ->groupBy('pengajar_id', 'jadwal_kategori_id')
             ->get()
-            ->keyBy(fn ($row) => $row->pengajar_id.'|'.$row->jadwal_mata_pelajaran_id);
+            ->keyBy(fn ($row) => $row->pengajar_id.'|'.$row->jadwal_kategori_id)
+            ->map(fn ($row) => (int) $row->total);
     }
 
     /**
