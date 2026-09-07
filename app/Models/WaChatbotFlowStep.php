@@ -61,6 +61,23 @@ class WaChatbotFlowStep extends Model
      */
     public const ACTION_CREATE_JADWAL_RESCHEDULE_REQUEST = 'create_jadwal_reschedule_request';
 
+    /**
+     * Menyimpan jawaban sesi konfirmasi kehadiran otomatis balik ke
+     * `attendance_status`/`attendance_notes` milik App\Models\
+     * JadwalKelas yang direferensikan lewat
+     * $state->variables['jadwal_kelas_id'] -- lihat App\Services\Chat\
+     * ChatbotFlowService::saveJadwalAttendance() untuk detailnya, dan
+     * App\Services\Jadwal\AttendanceConfirmationFlowProvisioner untuk
+     * flow tetap yang memakai action ini. action_value tidak dipakai
+     * (dikosongkan saja), sama seperti create_jadwal_reschedule_request
+     * di atas. Berbeda dari action lain di atas, action ini TIDAK
+     * memerlukan baris App\Models\WaConversation lebih dulu (lihat
+     * ChatbotFlowService::executeAction()'s pengecualian) karena flow
+     * ini dimulai PROAKTIF oleh sistem, bukan oleh customer yang
+     * mengetik sesuatu duluan.
+     */
+    public const ACTION_SAVE_JADWAL_ATTENDANCE = 'save_jadwal_attendance';
+
     public const ACTIONS = [
         self::ACTION_ASSIGN_CONVERSATION,
         self::ACTION_SET_STATUS_PENDING,
@@ -68,6 +85,7 @@ class WaChatbotFlowStep extends Model
         self::ACTION_ADD_LABEL,
         self::ACTION_HANDOFF_HUMAN,
         self::ACTION_CREATE_JADWAL_RESCHEDULE_REQUEST,
+        self::ACTION_SAVE_JADWAL_ATTENDANCE,
     ];
 
     /**

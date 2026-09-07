@@ -193,9 +193,32 @@ class ChatbotFlowService
     }
 
     /**
+     * $variables optionally seeds the new session's `variables` column
+     * (mis. ['jadwal_kelas_id' => '...']) -- dipakai caller yang
+     * memulai flow SECARA PROAKTIF (sistem yang chat duluan, bukan
+     * customer mengetik trigger keyword) supaya step 'action'
+     * belakangan bisa tahu baris data mana yang sedang diproses sesi
+     * ini. Setiap start() lewat jalur inbound biasa (handleIncoming())
+     * tetap [] persis seperti sebelum parameter ini ada.
+     *
+     * $firstMessageOverride, kalau diisi, mengganti teks `message`
+     * bawaan step awal HANYA untuk pesan keluar PERTAMA sesi ini (lihat
+     * walk()'s param dengan nama sama) -- supaya caller proaktif bisa
+     * menyusun pembuka yang spesifik sesi (mis. sebut nama murid & jam
+     * sesi) sementara step-nya sendiri tetap punya teks fallback generik
+     * yang admin bisa lihat/ubah di flow builder. Null (default) tidak
+     * mengubah apa pun, sama seperti sebelum parameter ini ada.
+     *
      * @return array{messages: array<int, string>, ended: bool}
      */
-    public function start(WaChatbotFlow $flow, string $deviceId, string $chatJid, ?string $senderPhone = null): array
+    public function start(
+        WaChatbotFlow $flow,
+        string $deviceId,
+        string $chatJid,
+        ?string $senderPhone = null,
+        array $variables = [],
+        ?string $firstMessageOverride = null,
+    ): array
     {
         $startStep = $flow->steps()->where('is_start', true)->first();
 
@@ -215,15 +238,15 @@ class ChatbotFlowService
         $lockKey = "chatbot-flow:start-lock:{$deviceId}:{$chatJid}";
         $normalizedPhone = $senderPhone ? PhoneNumber::normalize($senderPhone) : null;
 
-        return Cache::lock($lockKey, 10)->block(5, function () use ($flow, $deviceId, $chatJid, $startStep, $normalizedPhone) {
-            return DB::transaction(function () use ($flow, $deviceId, $chatJid, $startStep, $normalizedPhone) {
+        return Cache::lock($lockKey, 10)->block(5, function () use ($flow, $deviceId, $chatJid, $startStep, $normalizedPhone, $variables, $firstMessageOverride) {
+            return DB::transaction(function () use ($flow, $deviceId, $chatJid, $startStep, $normalizedPhone, $variables, $firstMessageOverride) {
                 $state = WaChatbotState::updateOrCreate(
                     ['device_id' => $deviceId, 'chat_jid' => $chatJid],
                     [
                         'sender_phone' => $normalizedPhone ?: null,
                         'wa_chatbot_flow_id' => $flow->id,
                         'current_step_id' => $startStep->id,
-                        'variables' => [],
+                        'variables' => $variables,
                         'started_at' => now(),
                         'last_interaction_at' => now(),
                     ]
@@ -232,7 +255,7 @@ class ChatbotFlowService
 
                 Log::info('chatbot-flow: session started', ['flow_id' => $flow->id, 'device_id' => $deviceId, 'chat_jid' => $chatJid]);
 
-                return $this->walk($state, $startStep);
+                return $this->walk($state, $startStep, $firstMessageOverride);
             });
         });
     }
@@ -336,9 +359,17 @@ class ChatbotFlowService
      * collected along the way — a chain of several action steps in a row
      * can therefore produce several messages to send, in order.
      *
+     * $firstMessageOverride, kalau diisi, mengganti teks `message`
+     * step PALING PERTAMA saja (dicek lewat $hops === 1 di bawah) --
+     * lihat docblock start() untuk siapa yang mengisi & kenapa. Step
+     * mana pun sesudahnya di rantai yang sama tetap merender message-
+     * nya sendiri seperti biasa, dan setiap caller yang sudah ada
+     * (continueFlow(), atau start() tanpa override) tidak terpengaruh
+     * karena defaultnya null.
+     *
      * @return array{messages: array<int, string>, ended: bool}
      */
-    private function walk(WaChatbotState $state, ?WaChatbotFlowStep $step): array
+    private function walk(WaChatbotState $state, ?WaChatbotFlowStep $step, ?string $firstMessageOverride = null): array
     {
         $flow = $step?->flow ?? $state->flow;
         $company = $flow?->company;
@@ -380,10 +411,11 @@ class ChatbotFlowService
                     return ['messages' => $messages, 'ended' => true];
                 }
 
-                $combined = trim(
-                    $this->renderStepMessage($step, $company)
-                    ."\n".$this->renderChoiceOptions($options)
-                );
+                $stepMessage = ($hops === 1 && $firstMessageOverride !== null)
+                    ? $firstMessageOverride
+                    : $this->renderStepMessage($step, $company);
+
+                $combined = trim($stepMessage."\n".$this->renderChoiceOptions($options));
 
                 if ($combined !== '') {
                     $messages[] = $combined;
@@ -396,7 +428,9 @@ class ChatbotFlowService
                 return ['messages' => $messages, 'ended' => false];
             }
 
-            $rendered = $this->renderStepMessage($step, $company);
+            $rendered = ($hops === 1 && $firstMessageOverride !== null)
+                ? $firstMessageOverride
+                : $this->renderStepMessage($step, $company);
             if ($rendered !== '') {
                 $messages[] = $rendered;
             }
@@ -876,6 +910,20 @@ class ChatbotFlowService
      */
     private function executeAction(WaChatbotState $state, WaChatbotFlowStep $step): ?string
     {
+        // save_jadwal_attendance menulis ke App\Models\JadwalKelas lewat
+        // $state->variables['jadwal_kelas_id'] -- TIDAK PERNAH menyentuh
+        // App\Models\WaConversation, jadi sengaja dicek & dieksekusi
+        // SEBELUM gate "harus ada baris WaConversation" di bawah, yang
+        // cuma relevan untuk action lain (assign/label/status) yang
+        // memang memanipulasi WaConversation itu sendiri. Tanpa
+        // pengecualian ini, sesi konfirmasi kehadiran proaktif (lihat
+        // App\Console\Commands\DispatchJadwalAttendanceConfirmations)
+        // bisa diam-diam gagal menyimpan absensinya kalau baris
+        // WaConversation untuk chat itu belum/tidak pernah tercatat.
+        if ($step->action === WaChatbotFlowStep::ACTION_SAVE_JADWAL_ATTENDANCE) {
+            return $this->saveJadwalAttendance($state, $step);
+        }
+
         $conversation = WaConversation::where('device_id', $state->device_id)
             ->where('chat_jid', $state->chat_jid)
             ->first();
@@ -900,6 +948,89 @@ class ChatbotFlowService
             WaChatbotFlowStep::ACTION_CREATE_JADWAL_RESCHEDULE_REQUEST => $this->createJadwalRescheduleRequest($state, $step),
             default => null,
         };
+    }
+
+    /**
+     * Aksi WaChatbotFlowStep::ACTION_SAVE_JADWAL_ATTENDANCE -- fitur
+     * konfirmasi kehadiran otomatis H+5menit (permintaan user: "5 menit
+     * setelah selesai jam pelajaran, sistem kirim WA ke pengajar
+     * apakah murid hadir, kalau hadir tanya materi apa yang diajarkan").
+     * Lihat App\Console\Commands\DispatchJadwalAttendanceConfirmations
+     * (yang memulai sesi ini secara proaktif, mengisi
+     * $state->variables['jadwal_kelas_id']) dan App\Services\Jadwal\
+     * AttendanceConfirmationFlowProvisioner (yang membangun flow tetap
+     * berisi PERSIS satu step 'choice' + paling banyak satu step
+     * 'message' + step action ini).
+     *
+     * Menyimpan balik ke kolom `attendance_status`/`attendance_notes`
+     * milik App\Models\JadwalKelas -- KOLOM YANG SAMA dipakai menu
+     * absensi manual (Jadwal Kelas), jadi jawaban WA ini muncul sebagai
+     * absensi sesi itu apa adanya, tidak ada tabel/history terpisah.
+     *
+     * Step 'choice' & 'message' dicari lewat step_type (bukan id
+     * hardcode) supaya tetap benar kalau provisioner di atas membangun
+     * ulang flow-nya dengan id step baru. Materi HANYA terisi kalau
+     * jalur "Hadir" yang diambil (satu-satunya opsi yang next_step_id-
+     * nya menuju step 'message' itu) -- jalur "Tidak Hadir"/"Izin"
+     * langsung ke step action ini, jadi variable step 'message'-nya
+     * tidak akan pernah ada di $variables, dan attendance_notes
+     * dibiarkan seperti semula (tidak ditimpa kosong).
+     *
+     * Diam-diam tidak melakukan apa pun (return null, sesi tetap
+     * lanjut/berakhir seperti biasa) kalau jadwal_kelas_id hilang dari
+     * variables, sesinya sudah terhapus, atau jawaban choice-nya tidak
+     * cocok satu pun App\Models\JadwalKelas::ATTENDANCE_STATUSES --
+     * seharusnya tidak pernah terjadi untuk flow yang dibangun
+     * provisioner di atas, jadi kalau sampai terjadi dicatat sebagai
+     * warning supaya kelihatan alih-alih gagal diam-diam tanpa jejak.
+     */
+    private function saveJadwalAttendance(WaChatbotState $state, WaChatbotFlowStep $step): ?string
+    {
+        $variables = $state->variables ?? [];
+        $jadwalKelasId = $variables['jadwal_kelas_id'] ?? null;
+
+        if (! $jadwalKelasId) {
+            Log::warning('chatbot-flow: save_jadwal_attendance tanpa jadwal_kelas_id di variables', [
+                'state_id' => $state->id,
+                'step_id' => $step->id,
+            ]);
+
+            return null;
+        }
+
+        $jadwalKelas = JadwalKelas::find($jadwalKelasId);
+
+        if (! $jadwalKelas) {
+            Log::warning('chatbot-flow: save_jadwal_attendance, JadwalKelas sudah tidak ada', [
+                'jadwal_kelas_id' => $jadwalKelasId,
+                'state_id' => $state->id,
+            ]);
+
+            return null;
+        }
+
+        $flow = $step->flow ?? $state->flow;
+        $choiceStep = $flow?->steps()->where('step_type', WaChatbotFlowStep::TYPE_CHOICE)->first();
+        $attendanceStatus = $choiceStep ? ($variables[$choiceStep->id.'_value'] ?? null) : null;
+
+        if (! in_array($attendanceStatus, JadwalKelas::ATTENDANCE_STATUSES, true)) {
+            Log::warning('chatbot-flow: save_jadwal_attendance, status kehadiran tidak valid/hilang', [
+                'jadwal_kelas_id' => $jadwalKelasId,
+                'state_id' => $state->id,
+            ]);
+
+            return null;
+        }
+
+        $materiStep = $flow?->steps()->where('step_type', WaChatbotFlowStep::TYPE_MESSAGE)->first();
+        $materi = $materiStep ? ($variables[$materiStep->id] ?? null) : null;
+
+        $jadwalKelas->forceFill([
+            'attendance_status' => $attendanceStatus,
+            'attendance_notes' => ($materi !== null && $materi !== '') ? $materi : $jadwalKelas->attendance_notes,
+        ])->save();
+
+        return null;
     }
 
     /**

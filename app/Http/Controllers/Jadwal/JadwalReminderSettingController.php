@@ -108,6 +108,7 @@ class JadwalReminderSettingController extends Controller
             'reschedule_notify_pengajar' => ['nullable', 'boolean'],
             'reschedule_notify_requester' => ['nullable', 'boolean'],
             'reschedule_notify_admin' => ['nullable', 'boolean'],
+            'attendance_confirmation_enabled' => ['nullable', 'boolean'],
             'wa_message_template_id_reschedule_approved' => [
                 'nullable', 'uuid', 'exists:wa_message_templates,id',
                 $this->templateBelongsToCompanyRule($company),
@@ -162,6 +163,7 @@ class JadwalReminderSettingController extends Controller
                 'reschedule_notify_admin' => $request->boolean('reschedule_notify_admin'),
                 'wa_message_template_id_reschedule_approved' => $validated['wa_message_template_id_reschedule_approved'] ?? null,
                 'wa_message_template_id_reschedule_rejected' => $validated['wa_message_template_id_reschedule_rejected'] ?? null,
+                'attendance_confirmation_enabled' => $request->boolean('attendance_confirmation_enabled'),
             ]
         );
 

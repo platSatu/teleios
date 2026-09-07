@@ -47,6 +47,19 @@ return Application::configure(basePath: dirname(__DIR__))
             ->everyFiveMinutes()
             ->withoutOverlapping();
 
+        // Konfirmasi kehadiran otomatis (permintaan user: "5 menit
+        // setelah selesai jam pelajaran, sistem kirim WA ke pengajar
+        // apakah murid hadir, kalau hadir tanya materi apa yang
+        // diajarkan") -- lihat App\Console\Commands\
+        // DispatchJadwalAttendanceConfirmations. Terpisah dari
+        // jadwal:dispatch-due-reminders di atas (beda tabel log, beda
+        // job, beda gating -- attendance_confirmation_enabled per
+        // company) walau sama-sama tiap 5 menit, supaya masalah di
+        // salah satu tidak ikut menyeret yang lain.
+        $schedule->command('jadwal:dispatch-attendance-confirmations')
+            ->everyFiveMinutes()
+            ->withoutOverlapping();
+
         // Auto-generate sesi bulanan dari Jadwal Rutin (Jadwal v2,
         // CLAUDE.md item #15 spec poin 6) -- lihat App\Console\Commands\
         // GenerateJadwalRutinSesi. Jalan tanggal 1 tiap bulan jam 01:00

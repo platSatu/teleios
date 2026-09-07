@@ -172,6 +172,20 @@ class JadwalKelas extends Model
         return $this->hasMany(JadwalKelasReminderLog::class);
     }
 
+    /**
+     * Jejak klaim/kirim sesi konfirmasi kehadiran WA ke pengajar untuk
+     * baris ini -- lihat App\Models\JadwalAttendanceConfirmationLog &
+     * App\Console\Commands\DispatchJadwalAttendanceConfirmations.
+     * `hasOne` (bukan `hasMany` seperti reminderLogs() di atas) karena
+     * kolom jadwal_kelas_id-nya UNIQUE -- satu sesi cuma pernah
+     * dikonfirmasi sekali seumur hidup, beda dari pengingat H-sekian
+     * yang bisa berkali-kali per rule.
+     */
+    public function attendanceConfirmationLog()
+    {
+        return $this->hasOne(JadwalAttendanceConfirmationLog::class);
+    }
+
     /** Nominal fee bagian company untuk sesi ini, dari snapshot harga_sesi/persentase_company. */
     public function feeCompany(): float
     {

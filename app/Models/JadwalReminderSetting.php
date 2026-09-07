@@ -100,6 +100,8 @@ class JadwalReminderSetting extends Model
         'reschedule_notify_admin',
         'wa_message_template_id_reschedule_approved',
         'wa_message_template_id_reschedule_rejected',
+        'attendance_confirmation_enabled',
+        'attendance_confirmation_flow_id',
     ];
 
     protected $casts = [
@@ -109,6 +111,7 @@ class JadwalReminderSetting extends Model
         'reschedule_notify_pengajar' => 'boolean',
         'reschedule_notify_requester' => 'boolean',
         'reschedule_notify_admin' => 'boolean',
+        'attendance_confirmation_enabled' => 'boolean',
     ];
 
     public function company(): BelongsTo
@@ -135,6 +138,16 @@ class JadwalReminderSetting extends Model
     public function waMessageTemplateRescheduleRejected(): BelongsTo
     {
         return $this->belongsTo(WaMessageTemplate::class, 'wa_message_template_id_reschedule_rejected');
+    }
+
+    /**
+     * App\Models\WaChatbotFlow yang dipakai sesi konfirmasi kehadiran
+     * otomatis -- lihat migration add_attendance_confirmation_to_....php
+     * & App\Services\Jadwal\AttendanceConfirmationFlowProvisioner.
+     */
+    public function attendanceConfirmationFlow(): BelongsTo
+    {
+        return $this->belongsTo(WaChatbotFlow::class, 'attendance_confirmation_flow_id');
     }
 
     /**

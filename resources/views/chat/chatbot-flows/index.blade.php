@@ -170,6 +170,7 @@
                             <option value="add_label">Tambah Label</option>
                             <option value="handoff_human">Alihkan ke Agent (akhiri bot)</option>
                             <option value="create_jadwal_reschedule_request">Buat Permintaan Reschedule Jadwal</option>
+                            <option value="save_jadwal_attendance">Simpan Absensi Jadwal (Sistem)</option>
                         </select>
                     </div>
                     <div class="col-6">

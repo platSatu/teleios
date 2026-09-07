@@ -221,6 +221,25 @@
                         <hr class="my-4">
 
                         <div class="mb-3">
+                            <h5 class="mb-1">Konfirmasi Kehadiran Otomatis</h5>
+                            <p class="text-muted mb-0">
+                                5 menit setelah jam sebuah sesi selesai, sistem otomatis kirim WA ke pengajar menanyakan apakah
+                                muridnya hadir (Hadir/Tidak Hadir/Izin), lalu kalau dijawab Hadir ditanya lanjut materi yang
+                                diajarkan. Jawabannya tersimpan langsung ke absensi sesi itu (menu Jadwal Kelas) -- kalau
+                                dimatikan, absensi tetap diisi manual seperti sekarang. Pakai device pengirim yang sama dengan
+                                pengaturan di atas.
+                            </p>
+                        </div>
+
+                        <div class="form-check form-switch mb-3">
+                            <input type="checkbox" name="attendance_confirmation_enabled" value="1" id="attendanceConfirmationEnabled" class="form-check-input"
+                                @checked(old('attendance_confirmation_enabled', $setting->attendance_confirmation_enabled ?? false))>
+                            <label class="form-check-label" for="attendanceConfirmationEnabled">Aktifkan konfirmasi kehadiran otomatis ke pengajar</label>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <div class="mb-3">
                             <h5 class="mb-1">Notifikasi Perubahan Jadwal</h5>
                             <p class="text-muted mb-0">
                                 Saat staff menyetujui/menolak permintaan ubah jadwal (menu Reschedule Requests), ATAU saat admin
