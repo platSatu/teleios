@@ -172,6 +172,7 @@ class JadwalKelasController extends Controller
             'filterPengajarId' => $f['pengajarId'],
             'filterMataPelajaranId' => $f['mataPelajaranId'],
             'branchOfficeId' => $f['branchOfficeId'],
+            'requiresBranchSelection' => $f['requiresBranchSelection'],
             // Update 4 September 2026 (permintaan user: "tambahkan
             // fungsi export to excel sesuai dengan filter" & "fungsi
             // print sesuai dengan filter") -- label filter yang lagi
@@ -258,7 +259,7 @@ class JadwalKelasController extends Controller
      * menjamin ketiganya TIDAK PERNAH menampilkan/meng-export data yang
      * beda dari filter yang sedang aktif.
      *
-     * @return array{context: mixed, company: Company, branchOffices: Collection, branchOfficeId: ?string, date: string, pengajarId: ?string, mataPelajaranId: ?string, branchSetting: ?JadwalBranchSetting, carbonDate: Carbon, isHariOperasional: bool, ruangans: Collection, sesiByRuangan: Collection, pengajarName: ?string, mataPelajaranName: ?string, branchName: ?string}
+     * @return array{context: mixed, company: Company, branchOffices: Collection, branchOfficeId: ?string, date: string, pengajarId: ?string, mataPelajaranId: ?string, branchSetting: ?JadwalBranchSetting, carbonDate: Carbon, isHariOperasional: bool, ruangans: Collection, sesiByRuangan: Collection, pengajarName: ?string, mataPelajaranName: ?string, branchName: ?string, requiresBranchSelection: bool}
      */
     private function resolveFilteredSesi(Request $request): array
     {
@@ -269,9 +270,31 @@ class JadwalKelasController extends Controller
             ? collect()
             : BranchOffice::where('company_id', $company->id)->orderBy('name')->get(['id', 'name']);
 
+        // Update 7 September 2026 (permintaan user: "ketika pertama kali
+        // buka jadwal kelas itu langsung keluar Bekasi, bisa ga default
+        // dulu atau pada select options itu Pilih Branch") -- SEBELUMNYA
+        // company dengan banyak Branch & admin yang tidak locked ke satu
+        // Branch otomatis jatuh ke Branch PERTAMA (urutan nama, lihat
+        // $branchOffices di atas) begitu halaman dibuka tanpa query
+        // string sama sekali -- bisa salah Branch tanpa admin sadar.
+        // SEKARANG tidak ada default sama sekali: null sampai admin
+        // benar-benar memilih lewat dropdown (lihat
+        // $requiresBranchSelection & index.blade.php's placeholder
+        // "-- Pilih Branch --"). Admin yang locked ke satu Branch
+        // (isLockedToBranch()) TIDAK terpengaruh -- tetap otomatis
+        // Branch-nya sendiri seperti sebelumnya, karena memang tidak
+        // ada pilihan lain untuknya.
         $branchOfficeId = $context->isLockedToBranch()
             ? $context->branchOffice?->id
-            : ($request->query('branch_office_id') ?: $branchOffices->first()?->id);
+            : $request->query('branch_office_id');
+
+        // True kalau admin BISA memilih Branch (lebih dari satu Branch
+        // tersedia & tidak locked) TAPI belum memilih satu pun --
+        // dipakai di bawah untuk melewati query sesi sama sekali
+        // (lintas-Branch tanpa filter cuma membingungkan) dan di
+        // index.blade.php untuk menampilkan placeholder alih-alih grid
+        // kosong/pesan yang seolah-olah satu Branch sudah aktif.
+        $requiresBranchSelection = $branchOffices->isNotEmpty() && ! $branchOfficeId;
 
         // `date` SELALU ke-isi (grid butuh satu sumbu waktu) -- beda
         // dari versi tabel flat sebelumnya yang bisa dikosongkan untuk
@@ -317,7 +340,12 @@ class JadwalKelasController extends Controller
             $sesiQuery->where('jadwal_mata_pelajaran_id', $mataPelajaranId);
         }
 
-        $sesiByRuangan = $sesiQuery->get()->groupBy('jadwal_ruangan_id');
+        // $requiresBranchSelection: jangan jalankan query sesi sama
+        // sekali -- lihat catatan di atas soal kenapa lintas-Branch
+        // tanpa filter tidak ditampilkan.
+        $sesiByRuangan = $requiresBranchSelection
+            ? collect()
+            : $sesiQuery->get()->groupBy('jadwal_ruangan_id');
 
         // Label nama filter yang aktif -- dipakai header halaman cetak
         // (index.blade.php) & baris info tiap sheet Excel (JadwalKelasExport),
@@ -336,7 +364,7 @@ class JadwalKelasController extends Controller
         return compact(
             'context', 'company', 'branchOffices', 'branchOfficeId', 'date', 'pengajarId', 'mataPelajaranId',
             'branchSetting', 'carbonDate', 'isHariOperasional', 'ruangans', 'sesiByRuangan',
-            'pengajarName', 'mataPelajaranName', 'branchName'
+            'pengajarName', 'mataPelajaranName', 'branchName', 'requiresBranchSelection'
         );
     }
 

@@ -136,7 +136,16 @@
                 <form method="GET" class="d-flex flex-wrap align-items-center gap-2 mb-3 d-print-none">
                     <input type="date" name="date" value="{{ $filterDate }}" class="form-control form-control-sm" style="width: 160px;" onchange="this.form.submit()">
                     @if($branchOffices->isNotEmpty())
+                        {{-- Update 7 September 2026 (permintaan user: "ketika
+                            pertama kali buka jadwal kelas itu langsung keluar
+                            Bekasi, bisa ga default dulu atau pada select
+                            options itu Pilih Branch") -- placeholder ini
+                            SELALU jadi opsi pertama & terpilih selama
+                            $branchOfficeId masih kosong (belum pernah ada
+                            query string branch_office_id sama sekali, lihat
+                            JadwalKelasController::resolveFilteredSesi()). --}}
                         <select name="branch_office_id" class="form-select form-select-sm" style="width: 200px;" onchange="this.form.submit()">
+                            <option value="" @selected(! $branchOfficeId)>-- Pilih Branch --</option>
                             @foreach($branchOffices as $bo)
                                 <option value="{{ $bo->id }}" @selected($branchOfficeId === $bo->id)>{{ $bo->name }}</option>
                             @endforeach
@@ -171,21 +180,33 @@
                     TIDAK hilang -- tetap muncul di daftar "Sesi Tanpa Jam"
                     tiap tab (lihat buildRuanganGrid()).
                 --}}
-                @if(! $branchSetting)
-                    <div class="alert alert-warning d-print-none">
-                        <i class="ri-error-warning-line"></i> Branch ini belum punya Jam Operasional diatur, jadi grid jam tidak bisa ditampilkan. Sesi yang ada pada tanggal ini tetap ditampilkan di daftar "Sesi Tanpa Jam" tiap tab Ruangan di bawah.
-                    </div>
-                @elseif(! $isHariOperasional)
-                    <div class="alert alert-warning d-print-none">
-                        <i class="ri-error-warning-line"></i> {{ $carbonDate->translatedFormat('l, d F Y') }} bukan hari operasional untuk Branch ini, jadi grid jam kosong. Sesi yang ada pada tanggal ini (kalau ada) tetap ditampilkan di daftar "Sesi Tanpa Jam" tiap tab Ruangan di bawah.
-                    </div>
-                @endif
-
-                @if($ruanganTabs->isEmpty())
-                    <div class="alert alert-secondary mb-0">
-                        Belum ada Ruangan aktif untuk Branch ini, dan tidak ada Jadwal Kelas pada tanggal ini yang perlu ditampilkan.
+                {{-- Update 7 September 2026: belum pilih Branch sama sekali
+                    (lihat $requiresBranchSelection di JadwalKelasController::
+                    resolveFilteredSesi()) -- tampilkan ajakan pilih Branch,
+                    BUKAN pesan "Belum ada Ruangan aktif"/"Jam Operasional
+                    belum diatur" di bawah, yang seharusnya cuma muncul
+                    kalau satu Branch SUDAH dipilih tapi memang belum
+                    lengkap datanya. --}}
+                @if($requiresBranchSelection)
+                    <div class="alert alert-info mb-0">
+                        <i class="ri-information-line"></i> Silakan pilih Branch dari dropdown di atas untuk menampilkan jadwal kelasnya.
                     </div>
                 @else
+                    @if(! $branchSetting)
+                        <div class="alert alert-warning d-print-none">
+                            <i class="ri-error-warning-line"></i> Branch ini belum punya Jam Operasional diatur, jadi grid jam tidak bisa ditampilkan. Sesi yang ada pada tanggal ini tetap ditampilkan di daftar "Sesi Tanpa Jam" tiap tab Ruangan di bawah.
+                        </div>
+                    @elseif(! $isHariOperasional)
+                        <div class="alert alert-warning d-print-none">
+                            <i class="ri-error-warning-line"></i> {{ $carbonDate->translatedFormat('l, d F Y') }} bukan hari operasional untuk Branch ini, jadi grid jam kosong. Sesi yang ada pada tanggal ini (kalau ada) tetap ditampilkan di daftar "Sesi Tanpa Jam" tiap tab Ruangan di bawah.
+                        </div>
+                    @endif
+
+                    @if($ruanganTabs->isEmpty())
+                        <div class="alert alert-secondary mb-0">
+                            Belum ada Ruangan aktif untuk Branch ini, dan tidak ada Jadwal Kelas pada tanggal ini yang perlu ditampilkan.
+                        </div>
+                    @else
                     <ul class="nav nav-tabs d-print-none" id="ruangan_tabs" role="tablist">
                         @foreach($ruanganTabs as $tab)
                             <li class="nav-item" role="presentation">
@@ -314,6 +335,7 @@
                             </div>
                         @endforeach
                     </div>
+                @endif
                 @endif
             </div>
         </div>
