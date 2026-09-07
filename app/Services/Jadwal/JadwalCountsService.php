@@ -162,6 +162,68 @@ class JadwalCountsService
     }
 
     /**
+     * Nama Mata Pelajaran/Bidang AKTIF milik tiap Student, dikelompokkan
+     * per `student_id` -- SAMA POLA dengan activeKategoriNamesByStudent()
+     * di atas, dibuat 14 September 2026 (laporan user via screenshot:
+     * index Student kolom "Mata Pelajaran / Bidang" menunjukkan "Piano"
+     * padahal Jadwal Kelas & index Pengajar sama-sama menunjukkan
+     * "Bass" untuk murid yang sama).
+     *
+     * Kolom "Mata Pelajaran / Bidang" & "Pengajar" di index Student
+     * SEBELUMNYA baca field mentah JadwalStudent.jadwal_mata_pelajaran_id
+     * / pengajar_id (lihat docblock JadwalStudent -- field ini cuma
+     * ke-update kalau baris Student itu SENDIRI diedit lewat form
+     * Student, TIDAK ikut ter-update kalau jadwal aktual murid
+     * dipindah lewat menu Jadwal Rutin/popup edit Jadwal Kelas) --
+     * PERSIS akar masalah yang sama dengan kolom "Kategori" sebelum
+     * diperbaiki 4 September 2026 di atas. Sekarang kolom Bidang &
+     * Pengajar ikut pola yang sama: di-derive dari JadwalRutin AKTIF,
+     * ditampilkan sebagai badge terpisah kalau Student punya lebih
+     * dari satu Bidang/Pengajar aktif sekaligus (permintaan user).
+     *
+     * @param  Collection<int, string>  $studentIds
+     * @return Collection<string, Collection<int, string>> keyed by student_id
+     */
+    public function activeMataPelajaranNamesByStudent(string $companyId, Collection $studentIds): Collection
+    {
+        if ($studentIds->isEmpty()) {
+            return collect();
+        }
+
+        return JadwalRutin::where('company_id', $companyId)
+            ->whereIn('student_id', $studentIds)
+            ->where('status', JadwalRutin::STATUS_ACTIVE)
+            ->with('kategori.mataPelajaran:id,name')
+            ->get()
+            ->groupBy('student_id')
+            ->map(fn ($rows) => $rows->pluck('kategori.mataPelajaran.name')->filter()->unique()->values());
+    }
+
+    /**
+     * Nama Pengajar AKTIF milik tiap Student, dikelompokkan per
+     * `student_id` -- SAMA POLA dengan activeMataPelajaranNamesByStudent()
+     * tepat di atas, alasan & kronologi lengkap sama, lihat docblock
+     * itu.
+     *
+     * @param  Collection<int, string>  $studentIds
+     * @return Collection<string, Collection<int, string>> keyed by student_id
+     */
+    public function activePengajarNamesByStudent(string $companyId, Collection $studentIds): Collection
+    {
+        if ($studentIds->isEmpty()) {
+            return collect();
+        }
+
+        return JadwalRutin::where('company_id', $companyId)
+            ->whereIn('student_id', $studentIds)
+            ->where('status', JadwalRutin::STATUS_ACTIVE)
+            ->with('pengajar:id,name')
+            ->get()
+            ->groupBy('student_id')
+            ->map(fn ($rows) => $rows->pluck('pengajar.name')->filter()->unique()->values());
+    }
+
+    /**
      * Correlated subquery Builder: jumlah Pengajar AKTIF (distinct)
      * yang ditugaskan ke Kategori manapun di bawah SATU Mata Pelajaran
      * -- dipakai lewat `addSelect()` di query utama (butuh `Builder`

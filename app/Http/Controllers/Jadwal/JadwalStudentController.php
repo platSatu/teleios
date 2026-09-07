@@ -166,8 +166,25 @@ class JadwalStudentController extends Controller
         $studentIds = collect($students->items())->pluck('id');
         $kategoriNamesByStudent = $this->countsService->activeKategoriNamesByStudent($company->id, $studentIds);
 
+        // Fix 14 September 2026 (laporan user via screenshot: kolom
+        // "Mata Pelajaran / Bidang" & "Pengajar" di index ini masih
+        // baca field mentah Student -- basi dibanding Jadwal Rutin
+        // aktualnya, lihat docblock JadwalCountsService::
+        // activeMataPelajaranNamesByStudent()) -- SEKARANG ikut pola
+        // "Kategori" tepat di atas: di-derive dari JadwalRutin AKTIF,
+        // ditampilkan badge terpisah kalau lebih dari satu (permintaan
+        // user). Hanya dihitung/dipakai kalau kolomnya memang tampil
+        // (lihat @unless($mataPelajaran)/@unless($pengajar) di
+        // index.blade.php) -- tapi query tetap dijalankan apa adanya
+        // di sini (murah, sudah dibatasi ke $studentIds 15 baris
+        // sehalaman) supaya tidak nambah percabangan kondisi di sini.
+        $mataPelajaranNamesByStudent = $this->countsService->activeMataPelajaranNamesByStudent($company->id, $studentIds);
+        $pengajarNamesByStudent = $this->countsService->activePengajarNamesByStudent($company->id, $studentIds);
+
         foreach ($students as $student) {
             $student->setAttribute('kategori_names', $kategoriNamesByStudent->get($student->id, collect()));
+            $student->setAttribute('mata_pelajaran_names', $mataPelajaranNamesByStudent->get($student->id, collect()));
+            $student->setAttribute('pengajar_names', $pengajarNamesByStudent->get($student->id, collect()));
         }
 
         // Konteks (kalau index ini dibuka scoped dari index Pengajar) —

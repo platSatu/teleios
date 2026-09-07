@@ -99,10 +99,31 @@
                                 <tr>
                                     <td class="fw-semibold">{{ $student->name }}</td>
                                     @unless($mataPelajaran)
-                                        <td>{{ $student->mataPelajaran->name ?? '-' }}</td>
+                                        <td>
+                                            {{-- Fix 14 September 2026 (laporan user via screenshot: kolom
+                                            ini bisa beda dengan Jadwal Kelas/index Pengajar) -- SAMA POLA
+                                            dengan "Kategori" di bawah, DI-DERIVE dari Jadwal Rutin aktif
+                                            murid ini, BUKAN field jadwal_mata_pelajaran_id tersimpan
+                                            langsung di baris Student (bisa basi, lihat docblock
+                                            JadwalCountsService::activeMataPelajaranNamesByStudent()). --}}
+                                            @forelse($student->mata_pelajaran_names as $mataPelajaranName)
+                                                <span class="badge bg-light text-dark border fw-normal">{{ $mataPelajaranName }}</span>
+                                            @empty
+                                                <span class="text-muted">-</span>
+                                            @endforelse
+                                        </td>
                                     @endunless
                                     @unless($pengajar)
-                                        <td>{{ $student->pengajar->name ?? '-' }}</td>
+                                        <td>
+                                            {{-- Fix 14 September 2026 -- sama seperti kolom Mata
+                                            Pelajaran/Bidang tepat di atas, lihat docblock
+                                            JadwalCountsService::activePengajarNamesByStudent(). --}}
+                                            @forelse($student->pengajar_names as $pengajarName)
+                                                <span class="badge bg-light text-dark border fw-normal">{{ $pengajarName }}</span>
+                                            @empty
+                                                <span class="text-muted">-</span>
+                                            @endforelse
+                                        </td>
                                     @endunless
                                     <td>
                                         {{-- Update 4 September 2026: "Kategori" DI-DERIVE dari Jadwal
