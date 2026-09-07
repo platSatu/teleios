@@ -94,6 +94,47 @@ class JadwalCountsService
     }
 
     /**
+     * ID Student AKTIF (distinct) untuk SATU pasangan (pengajar_id,
+     * jadwal_kategori_id) -- versi "daftar ID" dari
+     * activeMuridCountsForKategoris() di atas (yang cuma menghitung,
+     * tidak mengembalikan ID satu-satu), sumber yang sama (JadwalRutin
+     * AKTIF), supaya tetap konsisten.
+     *
+     * Fix 14 September 2026 (laporan user, susulan dari fix badge
+     * "Murid" index Pengajar di atas): begitu badge-nya sudah benar
+     * menampilkan 1, user klik badge itu -> pindah ke
+     * JadwalStudentController::index() (lewat jadwal_mata_pelajaran_id
+     * + pengajar_id + jadwal_kategori_id di query string) -- tapi
+     * index Student masih memfilter pakai field mentah
+     * JadwalStudent.jadwal_mata_pelajaran_id/pengajar_id (SENGAJA tidak
+     * pernah pakai jadwal_kategori_id, lihat komentar lama di
+     * JadwalStudentController::index()), jadi tetap "Belum ada
+     * Student" walau badge-nya sudah bilang 1 -- akar masalahnya SAMA
+     * persis dengan yang dijelaskan di docblock
+     * activeMuridCountsForKategoris() (field Student bisa basi
+     * dibanding JadwalRutin aktualnya). Dipakai
+     * JadwalStudentController::index() KHUSUS waktu pengajar_id DAN
+     * jadwal_kategori_id dua-duanya ada di query string (datang dari
+     * badge/tombol "Add Student" di index Pengajar) -- supaya daftar
+     * Student yang tampil SELALU sinkron dengan angka badge yang
+     * diklik. Kalau salah satu/kedua parameter itu tidak ada (mis.
+     * dibuka dari menu lain), index Student TETAP pakai filter lama
+     * (field mentah), tidak diubah -- lihat pemanggilnya.
+     *
+     * @return Collection<int, string>
+     */
+    public function activeStudentIdsForPengajarKategori(string $companyId, string $pengajarId, string $kategoriId): Collection
+    {
+        return JadwalRutin::where('company_id', $companyId)
+            ->where('status', JadwalRutin::STATUS_ACTIVE)
+            ->where('pengajar_id', $pengajarId)
+            ->where('jadwal_kategori_id', $kategoriId)
+            ->whereHas('student', fn ($q) => $q->where('status', JadwalStudent::STATUS_ACTIVE))
+            ->distinct()
+            ->pluck('student_id');
+    }
+
+    /**
      * Nama Kategori AKTIF milik tiap Student, dikelompokkan per
      * `student_id` -- dipindah apa adanya dari
      * JadwalStudentController::index() (query sudah benar sejak awal,

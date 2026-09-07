@@ -92,12 +92,6 @@ class JadwalStudentController extends Controller
 
         $mataPelajaranId = $request->query('jadwal_mata_pelajaran_id');
         $pengajarId = $request->query('pengajar_id');
-        // Murni dibawa balik-balik lewat query string untuk breadcrumb +
-        // tombol "Kembali ke Pengajar" (Pengajar sekarang scoped ke
-        // Kategori, bukan Mata Pelajaran langsung, lihat
-        // JadwalPengajarController) -- TIDAK dipakai memfilter Student
-        // (Student tetap keyed ke jadwal_mata_pelajaran_id + pengajar_id
-        // seperti sebelumnya, tidak berubah).
         $kategoriId = $request->query('jadwal_kategori_id');
 
         $query = JadwalStudent::where('company_id', $company->id)
@@ -110,12 +104,40 @@ class JadwalStudentController extends Controller
             });
         }
 
-        if ($mataPelajaranId) {
-            $query->where('jadwal_mata_pelajaran_id', $mataPelajaranId);
-        }
+        // Fix 14 September 2026 (laporan user, susulan dari fix badge
+        // "Murid" index Pengajar): waktu index ini dibuka lewat
+        // badge/tombol "Add Student" di index Pengajar, pengajar_id DAN
+        // jadwal_kategori_id DUA-DUANYA selalu ikut dikirim (lihat
+        // resources/views/jadwal/jadwal-pengajar/index.blade.php) --
+        // dalam kondisi itu filter WAJIB pakai sumber yang SAMA dengan
+        // badge-nya (JadwalRutin AKTIF, lewat
+        // JadwalCountsService::activeStudentIdsForPengajarKategori(),
+        // lihat docblock method itu untuk kronologi lengkap), BUKAN
+        // field mentah jadwal_mata_pelajaran_id/pengajar_id milik baris
+        // JadwalStudent -- field itu bisa basi dibanding Jadwal
+        // Rutin/Jadwal Kelas aktualnya kalau dipindah lewat menu lain
+        // tanpa menyentuh form Student, jadi sebelumnya index ini bisa
+        // menampilkan "Belum ada Student" walau badge-nya sudah bilang
+        // 1 (persis laporan user via screenshot). Kalau salah satu/dua
+        // parameter itu tidak ada (dibuka dari menu lain, mis. form
+        // Student sendiri lewat tombol "Kembali"), TETAP pakai filter
+        // lama (field mentah) supaya tidak mengubah alur yang sudah
+        // benar di tempat lain.
+        if ($pengajarId && $kategoriId) {
+            $activeStudentIds = $this->countsService->activeStudentIdsForPengajarKategori(
+                $company->id,
+                $pengajarId,
+                $kategoriId,
+            );
+            $query->whereIn('id', $activeStudentIds);
+        } else {
+            if ($mataPelajaranId) {
+                $query->where('jadwal_mata_pelajaran_id', $mataPelajaranId);
+            }
 
-        if ($pengajarId) {
-            $query->where('pengajar_id', $pengajarId);
+            if ($pengajarId) {
+                $query->where('pengajar_id', $pengajarId);
+            }
         }
 
         if ($request->filled('search')) {
