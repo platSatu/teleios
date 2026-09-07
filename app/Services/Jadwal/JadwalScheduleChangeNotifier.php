@@ -141,8 +141,9 @@ class JadwalScheduleChangeNotifier
         $studentName = $rutin->student?->name ?? '-';
 
         $message = sprintf(
-            "Jadwal mengajar Anda dengan %s (%s) pada %s %s-%s sudah TIDAK BERLAKU LAGI (diubah oleh admin).",
+            "Jadwal mengajar Anda dengan %s (%s - %s) pada %s %s-%s sudah TIDAK BERLAKU LAGI (diubah oleh admin).",
             $studentName,
+            $before['mata_pelajaran_name'] ?? '-',
             $before['kategori_name'] ?? '-',
             $before['hari_label'],
             $before['jam_mulai'],
@@ -185,8 +186,9 @@ class JadwalScheduleChangeNotifier
         $studentName = $rutin->student?->name ?? '-';
 
         $message = sprintf(
-            "Anda mendapat jadwal mengajar BARU dengan %s (%s) pada %s %s-%s.",
+            "Anda mendapat jadwal mengajar BARU dengan %s (%s - %s) pada %s %s-%s.",
             $studentName,
+            $after['mata_pelajaran_name'] ?? '-',
             $after['kategori_name'] ?? '-',
             $after['hari_label'],
             $after['jam_mulai'],
@@ -313,7 +315,7 @@ class JadwalScheduleChangeNotifier
     }
 
     /**
-     * @return array{pengajar_id: ?string, pengajar_name: ?string, jadwal_kategori_id: ?string, kategori_name: ?string, jadwal_ruangan_id: ?string, ruangan_name: ?string, hari: int, hari_label: string, jam_mulai: string, jam_selesai: string, durasi_menit: ?int}
+     * @return array{pengajar_id: ?string, pengajar_name: ?string, jadwal_kategori_id: ?string, kategori_name: ?string, mata_pelajaran_name: ?string, jadwal_ruangan_id: ?string, ruangan_name: ?string, hari: int, hari_label: string, jam_mulai: string, jam_selesai: string, durasi_menit: ?int}
      */
     private function snapshotRutin(JadwalRutin $rutin): array
     {
@@ -322,6 +324,12 @@ class JadwalScheduleChangeNotifier
             'pengajar_name' => $rutin->pengajar?->name,
             'jadwal_kategori_id' => $rutin->jadwal_kategori_id,
             'kategori_name' => $rutin->kategori?->name,
+            // Fix 14 September 2026 (permintaan user: notifikasi WA ke
+            // Pengajar cuma menampilkan Kategori, mis. "Vallery Jocelyn
+            // (Pop)" -- tidak jelas Bidang/Mata Pelajaran-nya apa kalau
+            // Pengajar itu mengajar lebih dari satu Bidang) -- dipakai
+            // rutinAdded()/rutinRemoved() di bawah, bareng kategori_name.
+            'mata_pelajaran_name' => $rutin->kategori?->mataPelajaran?->name,
             'jadwal_ruangan_id' => $rutin->jadwal_ruangan_id,
             'ruangan_name' => $rutin->ruangan?->name,
             'hari' => $rutin->hari,
