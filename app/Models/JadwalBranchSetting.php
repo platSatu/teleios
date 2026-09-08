@@ -67,13 +67,35 @@ class JadwalBranchSetting extends Model
      */
     public function isWithinOperationalHours(string $start, string $end): bool
     {
-        if ($start < $this->jam_buka || $end > $this->jam_tutup) {
+        // Normalisasi ke "H:i" (5 karakter) dulu sebelum dibandingkan --
+        // kolom jam_buka/jam_tutup/jam_istirahat_* tersimpan sebagai string
+        // "H:i:s" (8 karakter) dari DB, TIDAK di-cast Carbon di $casts di atas.
+        // Membandingkan string "H:i" vs "H:i:s" langsung pakai operator </>
+        // itu perbandingan lexicographic PHP biasa, bukan perbandingan waktu --
+        // "10:00" (5 char) dianggap < "10:00:00" (8 char) karena "10:00" adalah
+        // prefix dari string yang lebih panjang itu. Akibatnya sesi yang mulai
+        // TEPAT di jam buka/istirahat selalu salah dianggap "di luar jam
+        // operasional" (bug ditemukan 8 September 2026, dari laporan reschedule
+        // murid Vallery yang gagal ikut sinkron ke Jadwal Rutin karena guard ini
+        // salah menolak 10:00-10:30 padahal jam buka branch itu persis 10:00).
+        // Menyamakan panjang kedua sisi ke 5 karakter membuat perbandingan
+        // string ini kembali valid sebagai perbandingan waktu (format H:i
+        // zero-padded selalu berurutan benar secara lexicographic).
+        $start = substr($start, 0, 5);
+        $end = substr($end, 0, 5);
+        $jamBuka = substr($this->jam_buka, 0, 5);
+        $jamTutup = substr($this->jam_tutup, 0, 5);
+
+        if ($start < $jamBuka || $end > $jamTutup) {
             return false;
         }
 
         if ($this->jam_istirahat_mulai && $this->jam_istirahat_selesai) {
+            $istirahatMulai = substr($this->jam_istirahat_mulai, 0, 5);
+            $istirahatSelesai = substr($this->jam_istirahat_selesai, 0, 5);
+
             // Tumpang tindih kalau start < istirahat_selesai DAN end > istirahat_mulai.
-            if ($start < $this->jam_istirahat_selesai && $end > $this->jam_istirahat_mulai) {
+            if ($start < $istirahatSelesai && $end > $istirahatMulai) {
                 return false;
             }
         }
