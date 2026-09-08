@@ -70,10 +70,27 @@ class JadwalKategori extends Model
      * (restrukturisasi drill-down Jadwal 14 September 2026, lihat
      * App\Models\JadwalPengajarKategori's docblock). Level baru di
      * antara Kategori dan Student.
+     *
+     * LEGACY sejak fitur Grade (8 September 2026) -- relasi ini
+     * dibiarkan apa adanya untuk data historis, kode BARU tidak lagi
+     * membuat baris baru lewat sini. Lihat grades() di bawah.
      */
     public function pengajarKategoris(): HasMany
     {
         return $this->hasMany(JadwalPengajarKategori::class, 'jadwal_kategori_id');
+    }
+
+    /**
+     * Grade di bawah Kategori ini (mis. "Grade A", "Grade B") --
+     * pemilik BARU harga bulanan, persentase split, & penugasan
+     * Pengajar (lihat App\Models\JadwalGrade's docblock). Kolom
+     * harga_bulanan/persentase_company/persentase_pengajar di Kategori
+     * ini sendiri SENGAJA dibiarkan (bukan lagi dipakai kode baru,
+     * murni riwayat sebelum fitur Grade ada).
+     */
+    public function grades(): HasMany
+    {
+        return $this->hasMany(JadwalGrade::class, 'jadwal_kategori_id');
     }
 
     /**

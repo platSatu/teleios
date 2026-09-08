@@ -142,6 +142,7 @@ use App\Http\Controllers\Jadwal\JadwalRescheduleRequestController;
 use App\Http\Controllers\Jadwal\JadwalBranchSettingController;
 use App\Http\Controllers\Jadwal\JadwalRuanganController;
 use App\Http\Controllers\Jadwal\JadwalKategoriController;
+use App\Http\Controllers\Jadwal\JadwalGradeController;
 use App\Http\Controllers\Jadwal\JadwalRutinController;
 use App\Http\Controllers\Jadwal\JadwalLaporanController;
 use App\Http\Controllers\Chat\CategoryPhoneBookController;
@@ -357,6 +358,21 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::get('/{id}/edit', 'edit')->name('jadwal.kategori.edit');
                 Route::put('/{id}', 'update')->name('jadwal.kategori.update');
                 Route::delete('/{id}', 'destroy')->name('jadwal.kategori.destroy');
+            });
+
+        // Grade di bawah Kategori (permintaan user 8 September 2026) --
+        // level baru pemilik harga/persentase/penugasan-Pengajar,
+        // lihat JadwalGradeController's & App\Models\JadwalGrade's
+        // docblock.
+        Route::prefix('grade')
+            ->controller(JadwalGradeController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('jadwal.grade.index');
+                Route::get('/create', 'create')->name('jadwal.grade.create');
+                Route::post('/', 'store')->name('jadwal.grade.store');
+                Route::get('/{id}/edit', 'edit')->name('jadwal.grade.edit');
+                Route::put('/{id}', 'update')->name('jadwal.grade.update');
+                Route::delete('/{id}', 'destroy')->name('jadwal.grade.destroy');
             });
 
         // Pengajar di bawah Kategori (Jadwal v2 restrukturisasi 14

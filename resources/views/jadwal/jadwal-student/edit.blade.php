@@ -46,12 +46,12 @@
                             Student -- yang di-uncheck (slot hijau "jadwal aktif murid ini")
                             dihapus dari jadwal murid ini.
                         --}}
-                        @if($pengajarKategoris->isNotEmpty())
+                        @if($pengajarGrades->isNotEmpty())
                             <div class="mb-3">
                                 {{-- Update 4 September 2026 (permintaan user): "(opsional)" dihapus dari label ini. --}}
                                 <label class="form-label d-block">Jadwal Rutin Murid Ini</label>
                                 <div class="form-text mb-2">
-                                    Ketersediaan Pengajar yang dipilih di atas, per Kategori yang dia ajar (satu tab per Kategori).
+                                    Ketersediaan Pengajar yang dipilih di atas, per Grade yang dia ajar (satu tab per Grade).
                                     Slot bertanda hijau "jadwal aktif murid ini" adalah jadwal murid ini sekarang -- centang slot
                                     lain untuk menambah, atau hilangkan centang slot hijau untuk mengganti/menghapus jadwal itu.
                                     Slot yang dicoret/disabled berarti sudah dipakai murid lain. Begitu Simpan Perubahan diklik:
@@ -64,7 +64,7 @@
                                     <div class="alert alert-secondary mb-0">Branch murid ini belum punya Jam Operasional diatur, jadi slot tidak bisa ditampilkan.</div>
                                 @else
                                     @include('jadwal.jadwal-student._kategori-tabs', [
-                                        'pengajarKategoris' => $pengajarKategoris,
+                                        'pengajarGrades' => $pengajarGrades,
                                         'tabIdPrefix' => 'edit',
                                     ])
                                 @endif

@@ -1,26 +1,28 @@
 <input type="hidden" name="student_id" value="{{ $student->id }}">
 
 <div class="mb-3">
-    <label class="form-label">Kategori (Kelas)</label>
-    <select name="jadwal_kategori_id" class="form-select @error('jadwal_kategori_id') is-invalid @enderror" required>
-        <option value="">- Pilih Kategori -</option>
+    <label class="form-label">Kategori &amp; Grade</label>
+    <select name="jadwal_grade_id" class="form-select @error('jadwal_grade_id') is-invalid @enderror" required>
+        <option value="">- Pilih Grade -</option>
         @foreach($mataPelajarans as $mp)
-            @if($mp->kategoris->isNotEmpty())
-                <optgroup label="{{ $mp->name }}">
-                    @foreach($mp->kategoris as $kat)
-                        <option value="{{ $kat->id }}" @selected(old('jadwal_kategori_id', $rutin->jadwal_kategori_id ?? '') == $kat->id)>
-                            {{ $kat->name }} — Rp {{ number_format($kat->hargaPerSesi($branchSetting->sesi_per_bulan_default ?? null), 0, ',', '.') }} / sesi
-                        </option>
-                    @endforeach
-                </optgroup>
-            @endif
+            @foreach($mp->kategoris as $kat)
+                @if($kat->grades->isNotEmpty())
+                    <optgroup label="{{ $mp->name }} — {{ $kat->name }}">
+                        @foreach($kat->grades as $grade)
+                            <option value="{{ $grade->id }}" @selected(old('jadwal_grade_id', $rutin->jadwal_grade_id ?? '') == $grade->id)>
+                                {{ $grade->name }} — Rp {{ number_format($grade->hargaPerSesi($branchSetting->sesi_per_bulan_default ?? null), 0, ',', '.') }} / sesi
+                            </option>
+                        @endforeach
+                    </optgroup>
+                @endif
+            @endforeach
         @endforeach
     </select>
-    @error('jadwal_kategori_id')
+    @error('jadwal_grade_id')
         <div class="invalid-feedback">{{ $message }}</div>
     @enderror
-    @if($mataPelajarans->every(fn($mp) => $mp->kategoris->isEmpty()))
-        <div class="form-text text-warning">Belum ada Kategori aktif. Tambahkan lewat menu Jadwal &gt; Kelas &gt; Kategori terlebih dahulu.</div>
+    @if($mataPelajarans->every(fn($mp) => $mp->kategoris->every(fn($kat) => $kat->grades->isEmpty())))
+        <div class="form-text text-warning">Belum ada Grade aktif. Tambahkan lewat menu Jadwal &gt; Kelas &gt; Kategori &gt; Grade terlebih dahulu.</div>
     @endif
 </div>
 

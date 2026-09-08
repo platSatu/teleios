@@ -10,8 +10,13 @@
     sama, satu fitur). Partial ini SATU sumber dipakai create.blade.php
     DAN edit.blade.php (sama seperti _slot-checklist.blade.php).
 
+    Update 8 September 2026 (fitur Grade): tab sekarang per GRADE
+    (App\Models\JadwalPengajarGrade), bukan lagi per Kategori --
+    grouping key `jadwal_rutin_slot_ids[<jadwal_grade_id>][]`, label tab
+    "Kategori — Grade" supaya konteks Kategori tetap kelihatan.
+
     Variabel yang diharapkan:
-    - $pengajarKategoris: Collection App\Models\JadwalPengajarKategori,
+    - $pengajarGrades: Collection App\Models\JadwalPengajarGrade,
       tiap baris sudah dapat properti tambahan `slots` (hasil slotsFor())
       & `branchSettingMissing` (bool) -- lihat pemanggil.
     - $tabIdPrefix: string unik per halaman (mis. "create"/"edit")
@@ -35,19 +40,19 @@
     Selain itu, tab pertama yang aktif.
 --}}
 @php
-    $tabItems = $pengajarKategoris->values();
+    $tabItems = $pengajarGrades->values();
 @endphp
 
 @if($tabItems->count() <= 1)
-    @foreach($tabItems as $pk)
-        @if($pk->branchSettingMissing)
+    @foreach($tabItems as $pg)
+        @if($pg->branchSettingMissing)
             <div class="alert alert-secondary mb-0 py-2">Branch Kategori ini belum punya Jam Operasional diatur, jadi slot tidak bisa ditampilkan -- atur dulu lewat menu Jadwal &gt; Branch &gt; Jam Operasional.</div>
         @else
             @include('jadwal.jadwal-student._slot-checklist', [
-                'slots' => $pk->slots,
-                'fieldName' => 'jadwal_rutin_slot_ids['.$pk->jadwal_kategori_id.'][]',
-                'oldKey' => 'jadwal_rutin_slot_ids.'.$pk->jadwal_kategori_id,
-                'idPrefix' => $tabIdPrefix.'_slot_'.$pk->id,
+                'slots' => $pg->slots,
+                'fieldName' => 'jadwal_rutin_slot_ids['.$pg->jadwal_grade_id.'][]',
+                'oldKey' => 'jadwal_rutin_slot_ids.'.$pg->jadwal_grade_id,
+                'idPrefix' => $tabIdPrefix.'_slot_'.$pg->id,
             ])
         @endif
     @endforeach
@@ -55,8 +60,8 @@
     @php
         $activeIndex = 0;
         if ($errors->any()) {
-            foreach ($tabItems as $idx => $pk) {
-                if (! empty(old('jadwal_rutin_slot_ids.'.$pk->jadwal_kategori_id, []))) {
+            foreach ($tabItems as $idx => $pg) {
+                if (! empty(old('jadwal_rutin_slot_ids.'.$pg->jadwal_grade_id, []))) {
                     $activeIndex = $idx;
                     break;
                 }
@@ -64,16 +69,16 @@
         }
     @endphp
     <ul class="nav nav-tabs" id="{{ $tabIdPrefix }}_kategori_tabs" role="tablist">
-        @foreach($tabItems as $i => $pk)
+        @foreach($tabItems as $i => $pg)
             @php
-                $mineCount = $pk->slots->where('mine', true)->count();
-                $tabButtonId = $tabIdPrefix.'_kattab_btn_'.$pk->id;
-                $tabPaneId = $tabIdPrefix.'_kattab_pane_'.$pk->id;
+                $mineCount = $pg->slots->where('mine', true)->count();
+                $tabButtonId = $tabIdPrefix.'_kattab_btn_'.$pg->id;
+                $tabPaneId = $tabIdPrefix.'_kattab_pane_'.$pg->id;
             @endphp
             <li class="nav-item" role="presentation">
                 <button class="nav-link {{ $i === $activeIndex ? 'active' : '' }}" id="{{ $tabButtonId }}"
                     data-bs-toggle="tab" data-bs-target="#{{ $tabPaneId }}" type="button" role="tab">
-                    {{ $pk->kategori->name ?? '-' }}
+                    {{ $pg->grade->kategori->name ?? '-' }} — {{ $pg->grade->name ?? '-' }}
                     @if($mineCount > 0)
                         <span class="badge rounded-pill bg-success-subtle text-success ms-1">{{ $mineCount }}</span>
                     @endif
@@ -82,17 +87,17 @@
         @endforeach
     </ul>
     <div class="tab-content border border-top-0 rounded-bottom-3 p-3">
-        @foreach($tabItems as $i => $pk)
-            @php $tabPaneId = $tabIdPrefix.'_kattab_pane_'.$pk->id; @endphp
+        @foreach($tabItems as $i => $pg)
+            @php $tabPaneId = $tabIdPrefix.'_kattab_pane_'.$pg->id; @endphp
             <div class="tab-pane fade {{ $i === $activeIndex ? 'show active' : '' }}" id="{{ $tabPaneId }}" role="tabpanel">
-                @if($pk->branchSettingMissing)
+                @if($pg->branchSettingMissing)
                     <div class="alert alert-secondary mb-0 py-2">Branch Kategori ini belum punya Jam Operasional diatur, jadi slot tidak bisa ditampilkan -- atur dulu lewat menu Jadwal &gt; Branch &gt; Jam Operasional.</div>
                 @else
                     @include('jadwal.jadwal-student._slot-checklist', [
-                        'slots' => $pk->slots,
-                        'fieldName' => 'jadwal_rutin_slot_ids['.$pk->jadwal_kategori_id.'][]',
-                        'oldKey' => 'jadwal_rutin_slot_ids.'.$pk->jadwal_kategori_id,
-                        'idPrefix' => $tabIdPrefix.'_slot_'.$pk->id,
+                        'slots' => $pg->slots,
+                        'fieldName' => 'jadwal_rutin_slot_ids['.$pg->jadwal_grade_id.'][]',
+                        'oldKey' => 'jadwal_rutin_slot_ids.'.$pg->jadwal_grade_id,
+                        'idPrefix' => $tabIdPrefix.'_slot_'.$pg->id,
                     ])
                 @endif
             </div>

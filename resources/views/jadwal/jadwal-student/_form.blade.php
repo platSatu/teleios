@@ -98,7 +98,7 @@
             $mataPelajaranReloadUrl = ($student ?? null)
                 ? route('jadwal.student.edit', $student->id)
                 : route('jadwal.student.create', array_filter([
-                    'jadwal_kategori_id' => $selectedKategoriId ?? null,
+                    'jadwal_grade_id' => $selectedGradeId ?? null,
                 ]));
             $mataPelajaranReloadSeparator = str_contains($mataPelajaranReloadUrl, '?') ? '&' : '?';
             $currentPengajarIdForReload = old('pengajar_id', $previewPengajarId ?? ($student->pengajar_id ?? null));
@@ -154,7 +154,7 @@
                 ? route('jadwal.student.edit', $student->id)
                 : route('jadwal.student.create', array_filter([
                     'jadwal_mata_pelajaran_id' => $selectedMataPelajaranId ?? null,
-                    'jadwal_kategori_id' => $selectedKategoriId ?? null,
+                    'jadwal_grade_id' => $selectedGradeId ?? null,
                 ]));
             // create() bisa menghasilkan URL yang SUDAH punya query
             // string sendiri (jadwal_mata_pelajaran_id/jadwal_kategori_id)

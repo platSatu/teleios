@@ -1,0 +1,102 @@
+<input type="hidden" name="jadwal_kategori_id" value="{{ $kategori->id }}">
+
+<div class="mb-3">
+    <label class="form-label">Nama Grade</label>
+    <input type="text" name="name" class="form-control @error('name') is-invalid @enderror"
+        value="{{ old('name', $grade->name ?? '') }}" placeholder="Misal: Grade A, Grade B, Level 1" required>
+    @error('name')
+        <div class="invalid-feedback">{{ $message }}</div>
+    @enderror
+</div>
+
+<div class="mb-3">
+    <label class="form-label">Harga Bulanan (Rp)</label>
+    <input type="number" step="0.01" min="0" name="harga_bulanan" id="harga_bulanan" class="form-control @error('harga_bulanan') is-invalid @enderror"
+        value="{{ old('harga_bulanan', $grade->harga_bulanan ?? '') }}" placeholder="1600000" required>
+    @error('harga_bulanan')
+        <div class="invalid-feedback">{{ $message }}</div>
+    @enderror
+    {{-- Preview saja (kenyamanan admin) -- perhitungan sebenarnya saat
+    sesi dibuat tetap pakai sesi_per_bulan_default branch murid yang
+    bersangkutan, lihat App\Models\JadwalGrade::hargaPerSesi(). --}}
+    <div class="form-text" id="harga_per_sesi_preview"></div>
+</div>
+
+<div class="row">
+    <div class="col-6 mb-3">
+        <label class="form-label">Persentase Company (%)</label>
+        <input type="number" step="0.01" min="0" max="100" name="persentase_company" id="persentase_company"
+            class="form-control @error('persentase_company') is-invalid @enderror"
+            value="{{ old('persentase_company', $grade->persentase_company ?? '') }}" placeholder="40" required>
+        @error('persentase_company')
+            <div class="invalid-feedback">{{ $message }}</div>
+        @enderror
+    </div>
+    <div class="col-6 mb-3">
+        <label class="form-label">Persentase Pengajar (%)</label>
+        <input type="number" step="0.01" min="0" max="100" name="persentase_pengajar" id="persentase_pengajar"
+            class="form-control @error('persentase_pengajar') is-invalid @enderror"
+            value="{{ old('persentase_pengajar', $grade->persentase_pengajar ?? '') }}" placeholder="60" required>
+        @error('persentase_pengajar')
+            <div class="invalid-feedback">{{ $message }}</div>
+        @enderror
+    </div>
+</div>
+<div class="form-text mb-3">Persentase Company + Pengajar harus berjumlah 100.</div>
+
+<div class="mb-3">
+    <label class="form-label">Status</label>
+    <select name="status" class="form-select @error('status') is-invalid @enderror">
+        <option value="active" @selected(old('status', $grade->status ?? 'active') === 'active')>Active</option>
+        <option value="inactive" @selected(old('status', $grade->status ?? 'active') === 'inactive')>Inactive</option>
+    </select>
+    @error('status')
+        <div class="invalid-feedback">{{ $message }}</div>
+    @enderror
+</div>
+
+<script>
+// Kenyamanan saja (bukan validasi utama -- itu tetap di server): isi
+// otomatis sisi lain saat salah satu persentase diketik, supaya admin
+// tidak perlu menghitung manual supaya jumlahnya 100.
+(function () {
+    var company = document.getElementById('persentase_company');
+    var pengajar = document.getElementById('persentase_pengajar');
+    if (!company || !pengajar) return;
+
+    company.addEventListener('input', function () {
+        if (company.value !== '') {
+            var v = parseFloat(company.value);
+            if (!isNaN(v) && v >= 0 && v <= 100) pengajar.value = (100 - v).toString();
+        }
+    });
+    pengajar.addEventListener('input', function () {
+        if (pengajar.value !== '') {
+            var v = parseFloat(pengajar.value);
+            if (!isNaN(v) && v >= 0 && v <= 100) company.value = (100 - v).toString();
+        }
+    });
+})();
+
+// Preview "≈ Rp X / sesi" -- kenyamanan saja, dibagi 4 (default umum,
+// branch tertentu bisa beda lewat Jam Operasional-nya sendiri, lihat
+// App\Models\JadwalGrade::hargaPerSesi()).
+(function () {
+    var bulanan = document.getElementById('harga_bulanan');
+    var preview = document.getElementById('harga_per_sesi_preview');
+    if (!bulanan || !preview) return;
+
+    function update() {
+        var v = parseFloat(bulanan.value);
+        if (isNaN(v) || v < 0) {
+            preview.textContent = '';
+            return;
+        }
+        var perSesi = Math.round((v / 4) * 100) / 100;
+        preview.textContent = '≈ Rp ' + perSesi.toLocaleString('id-ID', {maximumFractionDigits: 0}) + ' / sesi (dibagi 4 sesi/bulan default).';
+    }
+
+    bulanan.addEventListener('input', update);
+    update();
+})();
+</script>

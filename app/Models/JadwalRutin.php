@@ -42,6 +42,7 @@ class JadwalRutin extends Model
         'branch_office_id',
         'student_id',
         'jadwal_kategori_id',
+        'jadwal_grade_id',
         'pengajar_id',
         'jadwal_ruangan_id',
         'hari',
@@ -74,9 +75,22 @@ class JadwalRutin extends Model
         return $this->belongsTo(JadwalStudent::class, 'student_id');
     }
 
+    /**
+     * LEGACY (fitur Grade, 8 September 2026) -- jadwal_kategori_id
+     * TETAP diisi (auto-derive dari grade->kategori) untuk kompatibilitas
+     * badge/filter lama (lihat App\Services\Jadwal\JadwalCountsService),
+     * tapi sumber harga & penugasan Pengajar yang BENAR sekarang ada di
+     * grade() di bawah, bukan di sini.
+     */
     public function kategori(): BelongsTo
     {
         return $this->belongsTo(JadwalKategori::class, 'jadwal_kategori_id');
+    }
+
+    /** Grade (App\Models\JadwalGrade) tempat harga & penugasan Pengajar baris Jadwal Rutin ini berasal. */
+    public function grade(): BelongsTo
+    {
+        return $this->belongsTo(JadwalGrade::class, 'jadwal_grade_id');
     }
 
     public function pengajar(): BelongsTo

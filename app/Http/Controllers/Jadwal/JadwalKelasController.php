@@ -11,7 +11,7 @@ use App\Models\JadwalBranchSetting;
 use App\Models\JadwalKategori;
 use App\Models\JadwalKelas;
 use App\Models\JadwalMataPelajaran;
-use App\Models\JadwalPengajarKategori;
+use App\Models\JadwalPengajarGrade;
 use App\Models\JadwalReminderSetting;
 use App\Models\JadwalRuangan;
 use App\Models\JadwalStudent;
@@ -441,13 +441,26 @@ class JadwalKelasController extends Controller
      * tidak perlu request baru ke server tiap kali ganti pilihan
      * Pengajar/Bidang/Kategori di dalam popup.
      *
+     * Update 8 September 2026 (fitur Grade): sumber data penugasan
+     * Pengajar+jam ketersediaan SEKARANG App\Models\JadwalPengajarGrade
+     * (Pengajar diassign ke Grade, bukan Kategori langsung lagi sejak
+     * fitur Grade -- lihat App\Http\Controllers\Jadwal\
+     * JadwalPengajarController). Field yang SUNGGUHAN disimpan ke baris
+     * JadwalKelas TETAP `jadwal_kategori_id` (TIDAK berubah -- lihat
+     * validator()/store()/update() di bawah, popup ini murni bantuan
+     * prefill tanggal/jam, bukan penentu harga), jadi map di sini TETAP
+     * dikelompokkan per Kategori seperti sebelumnya -- kalau satu
+     * Pengajar diassign ke LEBIH DARI SATU Grade di bawah Kategori yang
+     * SAMA, jam ketersediaan dari semua Grade itu DIGABUNG (bukan
+     * ditimpa) untuk Kategori itu.
+     *
      * @return array{allPengajars: Collection, pengajarBidangMap: array, pengajarKategoriMap: array, pengajarSlotMap: array, bookedSlots: array, bookedSlotsDate: string}
      */
     private function editModalData($context, Carbon $carbonDate): array
     {
-        $pengajarKategoris = JadwalPengajarKategori::with(['jadwals', 'pengajar:id,name', 'kategori.mataPelajaran'])
+        $pengajarGrades = JadwalPengajarGrade::with(['jadwals', 'pengajar:id,name', 'grade.kategori.mataPelajaran'])
             ->where('company_id', $context->company->id)
-            ->where('status', JadwalPengajarKategori::STATUS_ACTIVE)
+            ->where('status', JadwalPengajarGrade::STATUS_ACTIVE)
             ->get();
 
         $branchSettings = JadwalBranchSetting::where('company_id', $context->company->id)->get()->keyBy('branch_office_id');
@@ -457,28 +470,30 @@ class JadwalKelasController extends Controller
         $pengajarKategoriMap = [];
         $pengajarSlotMap = [];
 
-        foreach ($pengajarKategoris as $pk) {
-            if (! $pk->pengajar || ! $pk->kategori) {
+        foreach ($pengajarGrades as $pg) {
+            $kategori = $pg->grade?->kategori;
+
+            if (! $pg->pengajar || ! $kategori) {
                 continue;
             }
 
             // Dedupe by pengajar_id (satu pengajar wajar punya lebih
-            // dari satu penugasan Kategori aktif) -- array_values() di-
+            // dari satu penugasan Grade aktif) -- array_values() di-
             // rapikan jadi list sebelum dikembalikan di bawah.
-            $allPengajars[$pk->pengajar_id] = ['id' => $pk->pengajar_id, 'name' => $pk->pengajar->name];
+            $allPengajars[$pg->pengajar_id] = ['id' => $pg->pengajar_id, 'name' => $pg->pengajar->name];
 
-            $mataPelajaran = $pk->kategori->mataPelajaran;
+            $mataPelajaran = $kategori->mataPelajaran;
 
             if ($mataPelajaran) {
-                $pengajarBidangMap[$pk->pengajar_id][$mataPelajaran->id] = [
+                $pengajarBidangMap[$pg->pengajar_id][$mataPelajaran->id] = [
                     'id' => $mataPelajaran->id,
                     'name' => $mataPelajaran->name,
                 ];
             }
 
-            $pengajarKategoriMap[$pk->pengajar_id][$pk->jadwal_kategori_id] = [
-                'id' => $pk->jadwal_kategori_id,
-                'name' => $pk->kategori->name,
+            $pengajarKategoriMap[$pg->pengajar_id][$kategori->id] = [
+                'id' => $kategori->id,
+                'name' => $kategori->name,
                 'jadwal_mata_pelajaran_id' => $mataPelajaran?->id,
             ];
 
@@ -486,7 +501,7 @@ class JadwalKelasController extends Controller
             $branchSetting = $branchOfficeId ? $branchSettings->get($branchOfficeId) : null;
             $durasi = $branchSetting?->durasi_sesi_default_menit ?: 30;
 
-            $slots = $pk->jadwals
+            $slots = $pg->jadwals
                 ->flatMap(fn ($slot) => collect($this->splitJamIntoChunks(substr($slot->jam_mulai, 0, 5), substr($slot->jam_selesai, 0, 5), $durasi))
                     ->map(fn ($chunk) => [
                         'hari' => $slot->hari,
@@ -502,7 +517,12 @@ class JadwalKelasController extends Controller
                     && $branchSetting->isWithinOperationalHours($chunk['jam_mulai'], $chunk['jam_selesai'])))
                 ->values();
 
-            $pengajarSlotMap[$pk->pengajar_id][$pk->jadwal_kategori_id] = $slots;
+            // Update 8 September 2026 (fitur Grade, lihat docblock di
+            // atas): GABUNG (bukan timpa) kalau Pengajar ini sudah
+            // punya slot lain untuk Kategori yang sama dari Grade
+            // berbeda.
+            $existingSlots = $pengajarSlotMap[$pg->pengajar_id][$kategori->id] ?? collect();
+            $pengajarSlotMap[$pg->pengajar_id][$kategori->id] = $existingSlots->concat($slots)->values();
         }
 
         // Update 7 September 2026 (lihat docblock di atas) -- jam yang

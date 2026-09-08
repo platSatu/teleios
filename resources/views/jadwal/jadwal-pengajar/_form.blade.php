@@ -1,29 +1,29 @@
-@if($kategori)
+@if($grade)
     {{-- Terkunci -- datang dari drill-down "+ Add Pengajar" di index
-             Kategori (jadwal_kategori_id ada & valid di query string).
+             Grade (jadwal_grade_id ada & valid di query string).
              Pola sama seperti "ina" project's University Album Photo
              create(): input disabled + hidden field terpisah supaya
              tetap terkirim walau elemen disabled. --}}
     <div class="mb-3">
-        <label class="form-label">Kategori</label>
-        <input type="text" class="form-control" value="{{ $kategori->name }}" disabled>
+        <label class="form-label">Grade</label>
+        <input type="text" class="form-control" value="{{ $kategori->name }} — {{ $grade->name }}" disabled>
     </div>
-    <input type="hidden" name="jadwal_kategori_id" value="{{ $kategori->id }}">
+    <input type="hidden" name="jadwal_grade_id" value="{{ $grade->id }}">
 @else
     {{-- Bebas -- mode global (menu sidebar "Pengajar" langsung) atau
              edit() yang SELALU dropdown bebas (lihat class docblock
              App\Http\Controllers\Jadwal\JadwalPengajarController). --}}
     <div class="mb-3">
-        <label class="form-label">Kategori</label>
-        <select name="jadwal_kategori_id" class="form-select @error('jadwal_kategori_id') is-invalid @enderror" required>
-            <option value="">- Pilih Kategori -</option>
-            @foreach ($kategoris as $k)
-                <option value="{{ $k->id }}" @selected(old('jadwal_kategori_id', $pengajarKategori->jadwal_kategori_id ?? '') == $k->id)>
-                    {{ $k->name }}@if($k->mataPelajaran) ({{ $k->mataPelajaran->name }})@endif
+        <label class="form-label">Grade</label>
+        <select name="jadwal_grade_id" class="form-select @error('jadwal_grade_id') is-invalid @enderror" required>
+            <option value="">- Pilih Grade -</option>
+            @foreach ($grades as $g)
+                <option value="{{ $g->id }}" @selected(old('jadwal_grade_id', $pengajarGrade->jadwal_grade_id ?? '') == $g->id)>
+                    {{ $g->kategori->name ?? '' }} — {{ $g->name }}@if($g->kategori && $g->kategori->mataPelajaran) ({{ $g->kategori->mataPelajaran->name }})@endif
                 </option>
             @endforeach
         </select>
-        @error('jadwal_kategori_id')
+        @error('jadwal_grade_id')
             <div class="invalid-feedback">{{ $message }}</div>
         @enderror
     </div>
@@ -34,15 +34,15 @@
     <select name="pengajar_id" class="form-select @error('pengajar_id') is-invalid @enderror" required>
         <option value="">- Pilih Pengajar -</option>
         @foreach ($teamMembers as $member)
-            <option value="{{ $member->id }}" @selected(old('pengajar_id', $pengajarKategori->pengajar_id ?? '') == $member->id)>{{ $member->name }}</option>
+            <option value="{{ $member->id }}" @selected(old('pengajar_id', $pengajarGrade->pengajar_id ?? '') == $member->id)>{{ $member->name }}</option>
         @endforeach
     </select>
     @error('pengajar_id')
         <div class="invalid-feedback">{{ $message }}</div>
     @enderror
     <div class="form-text">
-        @if($kategori)
-            Anggota tim company (Team Members) yang bisa dijadikan pengajar untuk Kategori "{{ $kategori->name }}".
+        @if($grade)
+            Anggota tim company (Team Members) yang bisa dijadikan pengajar untuk Grade "{{ $grade->name }}".
         @else
             Anggota tim company (Team Members) yang bisa dijadikan pengajar.
         @endif
@@ -54,12 +54,12 @@
     // bukan checkbox hari + satu jam yang berlaku ke semua hari --
     // kasus lapangan: pengajar bisa Senin 10:00-12:00 LALU 17:00-19:00
     // di hari yang sama, dan tiap hari boleh beda-beda. Lihat
-    // App\Models\JadwalPengajarJadwal & migration
-    // create_jadwal_pengajar_kategori_jadwal_table.php.
+    // App\Models\JadwalPengajarGradeJadwal & migration
+    // create_jadwal_pengajar_grade_jadwal_table.php.
     $existingJadwal = old('jadwal');
     if (! $existingJadwal) {
-        $existingJadwal = ($pengajarKategori ?? null)?->jadwals
-            ? $pengajarKategori->jadwals->map(fn ($j) => [
+        $existingJadwal = ($pengajarGrade ?? null)?->jadwals
+            ? $pengajarGrade->jadwals->map(fn ($j) => [
                 'hari' => $j->hari,
                 'jam_mulai' => substr($j->jam_mulai, 0, 5),
                 'jam_selesai' => substr($j->jam_selesai, 0, 5),
@@ -122,8 +122,8 @@
 <div class="mb-3">
     <label class="form-label">Status</label>
     <select name="status" class="form-select @error('status') is-invalid @enderror">
-        <option value="active" @selected(old('status', $pengajarKategori->status ?? 'active') === 'active')>Active</option>
-        <option value="inactive" @selected(old('status', $pengajarKategori->status ?? 'active') === 'inactive')>Inactive</option>
+        <option value="active" @selected(old('status', $pengajarGrade->status ?? 'active') === 'active')>Active</option>
+        <option value="inactive" @selected(old('status', $pengajarGrade->status ?? 'active') === 'inactive')>Inactive</option>
     </select>
     @error('status')
         <div class="invalid-feedback">{{ $message }}</div>

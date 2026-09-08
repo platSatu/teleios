@@ -6,14 +6,14 @@
         <div>
             <h4 class="mb-1">Tambah Pengajar</h4>
             <p class="text-muted mb-0">
-                @if($kategori)
-                    Pengajar baru untuk Kategori "{{ $kategori->name }}" ({{ $mataPelajaran->name }}).
+                @if($grade)
+                    Pengajar baru untuk Grade "{{ $grade->name }}" ({{ $kategori->name }} — {{ $mataPelajaran->name }}).
                 @else
-                    Pengajar baru -- pilih Kategori tujuan di bawah.
+                    Pengajar baru -- pilih Grade tujuan di bawah.
                 @endif
             </p>
         </div>
-        <a href="{{ route('jadwal.pengajar.index', array_filter(['jadwal_kategori_id' => $kategori->id ?? null])) }}" class="btn btn-light">
+        <a href="{{ route('jadwal.pengajar.index', array_filter(['jadwal_grade_id' => $grade->id ?? null])) }}" class="btn btn-light">
             <i class="ri-arrow-left-line"></i> Kembali
         </a>
     </div>
@@ -30,21 +30,21 @@
 
     @php
         // "Notifikasi jika tidak bisa" -- permintaan user untuk menu
-        // Pengajar yang berdiri sendiri: kalau belum ada Kategori sama
-        // sekali (mode global, dropdown Kategori bakal kosong) atau
+        // Pengajar yang berdiri sendiri: kalau belum ada Grade sama
+        // sekali (mode global, dropdown Grade bakal kosong) atau
         // belum ada Team Member yang bisa dijadikan pengajar, form
         // disembunyikan & diganti pesan yang jelas + link untuk
         // menyelesaikan prasyaratnya, daripada nampilin dropdown kosong.
-        $noKategoriAvailable = ! $kategori && $kategoris->isEmpty();
+        $noGradeAvailable = ! $grade && $grades->isEmpty();
         $noTeamMemberAvailable = $teamMembers->isEmpty();
-        $canAdd = ! $noKategoriAvailable && ! $noTeamMemberAvailable;
+        $canAdd = ! $noGradeAvailable && ! $noTeamMemberAvailable;
     @endphp
 
-    @if ($noKategoriAvailable)
+    @if ($noGradeAvailable)
         <div class="alert alert-warning">
-            Belum ada Kategori yang bisa dipilih. Buat Kategori dulu lewat
+            Belum ada Grade yang bisa dipilih. Buat Grade dulu lewat
             <a href="{{ route('jadwal.mata-pelajaran.index') }}" class="alert-link">Mata Pelajaran / Bidang</a>
-            sebelum menambahkan Pengajar.
+            (drill-down ke Kategori, lalu Grade) sebelum menambahkan Pengajar.
         </div>
     @elseif ($noTeamMemberAvailable)
         <div class="alert alert-warning">
@@ -59,15 +59,15 @@
                     @if ($canAdd)
                         <form action="{{ route('jadwal.pengajar.store') }}" method="POST">
                             @csrf
-                            @include('jadwal.jadwal-pengajar._form', ['pengajarKategori' => null])
+                            @include('jadwal.jadwal-pengajar._form', ['pengajarGrade' => null])
 
                             <div class="d-flex gap-2">
                                 <button type="submit" class="btn btn-primary">Simpan</button>
-                                <a href="{{ route('jadwal.pengajar.index', array_filter(['jadwal_kategori_id' => $kategori->id ?? null])) }}" class="btn btn-light">Batal</a>
+                                <a href="{{ route('jadwal.pengajar.index', array_filter(['jadwal_grade_id' => $grade->id ?? null])) }}" class="btn btn-light">Batal</a>
                             </div>
                         </form>
                     @else
-                        <a href="{{ route('jadwal.pengajar.index', array_filter(['jadwal_kategori_id' => $kategori->id ?? null])) }}" class="btn btn-light">
+                        <a href="{{ route('jadwal.pengajar.index', array_filter(['jadwal_grade_id' => $grade->id ?? null])) }}" class="btn btn-light">
                             <i class="ri-arrow-left-line"></i> Kembali
                         </a>
                     @endif

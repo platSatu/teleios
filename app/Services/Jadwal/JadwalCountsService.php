@@ -2,6 +2,7 @@
 
 namespace App\Services\Jadwal;
 
+use App\Models\JadwalPengajarGrade;
 use App\Models\JadwalPengajarKategori;
 use App\Models\JadwalRutin;
 use App\Models\JadwalStudent;
@@ -135,6 +136,61 @@ class JadwalCountsService
     }
 
     /**
+     * Jumlah murid AKTIF (distinct) per pasangan (pengajar_id,
+     * jadwal_grade_id) -- versi Grade dari activeMuridCountsForKategoris()
+     * di atas, dibuat untuk fitur Grade (permintaan user 8 September
+     * 2026: penugasan Pengajar pindah dari level Kategori ke level
+     * Grade baru). Sumber & aturan SAMA PERSIS (JadwalRutin AKTIF,
+     * status Student aktif) -- cuma dikelompokkan per jadwal_grade_id,
+     * bukan jadwal_kategori_id.
+     *
+     * @param  Collection<int, array{pengajar_id: string, jadwal_grade_id: string}>  $pairs  unik, tidak boleh berisi null
+     * @return Collection<string, int> keyed "{pengajar_id}|{jadwal_grade_id}"
+     */
+    public function activeMuridCountsForGrades(string $companyId, Collection $pairs): Collection
+    {
+        if ($pairs->isEmpty()) {
+            return collect();
+        }
+
+        return JadwalRutin::where('company_id', $companyId)
+            ->where('status', JadwalRutin::STATUS_ACTIVE)
+            ->whereHas('student', fn ($q) => $q->where('status', JadwalStudent::STATUS_ACTIVE))
+            ->where(function ($q) use ($pairs) {
+                foreach ($pairs as $p) {
+                    $q->orWhere(function ($qq) use ($p) {
+                        $qq->where('pengajar_id', $p['pengajar_id'])
+                            ->where('jadwal_grade_id', $p['jadwal_grade_id']);
+                    });
+                }
+            })
+            ->selectRaw('pengajar_id, jadwal_grade_id, count(distinct student_id) as total')
+            ->groupBy('pengajar_id', 'jadwal_grade_id')
+            ->get()
+            ->keyBy(fn ($row) => $row->pengajar_id.'|'.$row->jadwal_grade_id)
+            ->map(fn ($row) => (int) $row->total);
+    }
+
+    /**
+     * ID Student AKTIF (distinct) untuk SATU pasangan (pengajar_id,
+     * jadwal_grade_id) -- versi Grade dari
+     * activeStudentIdsForPengajarKategori() tepat di atas, sama pola
+     * & alasan.
+     *
+     * @return Collection<int, string>
+     */
+    public function activeStudentIdsForPengajarGrade(string $companyId, string $pengajarId, string $gradeId): Collection
+    {
+        return JadwalRutin::where('company_id', $companyId)
+            ->where('status', JadwalRutin::STATUS_ACTIVE)
+            ->where('pengajar_id', $pengajarId)
+            ->where('jadwal_grade_id', $gradeId)
+            ->whereHas('student', fn ($q) => $q->where('status', JadwalStudent::STATUS_ACTIVE))
+            ->distinct()
+            ->pluck('student_id');
+    }
+
+    /**
      * Nama Kategori AKTIF milik tiap Student, dikelompokkan per
      * `student_id` -- dipindah apa adanya dari
      * JadwalStudentController::index() (query sudah benar sejak awal,
@@ -231,13 +287,27 @@ class JadwalCountsService
      * merujuk baris Mata Pelajaran di query luar). Dipindah apa adanya
      * dari JadwalMataPelajaranController::index().
      */
+    /**
+     * Update 8 September 2026 (fitur Grade) -- SEBELUMNYA join langsung
+     * jadwal_pengajar_kategori -> jadwal_kategori (penugasan Pengajar
+     * dulu ada langsung di level Kategori). Penugasan Pengajar SEKARANG
+     * ada di App\Models\JadwalPengajarGrade (level Grade, di bawah
+     * Kategori) -- join jadi tiga tingkat: jadwal_pengajar_grade ->
+     * jadwal_grade -> jadwal_kategori. Tabel jadwal_pengajar_kategori
+     * LAMA sengaja tidak lagi disentuh di sini (data historis/frozen,
+     * lihat docblock App\Models\JadwalPengajarKategori) -- semua
+     * Kategori lama sudah dapat Grade default backfill yang membawa
+     * penugasan Pengajar lamanya, jadi badge ini tetap akurat untuk
+     * data lama maupun baru.
+     */
     public function pengajarCountSubquery(): Builder
     {
-        return JadwalPengajarKategori::query()
-            ->selectRaw('count(distinct jadwal_pengajar_kategori.pengajar_id)')
-            ->join('jadwal_kategori', 'jadwal_kategori.id', '=', 'jadwal_pengajar_kategori.jadwal_kategori_id')
+        return JadwalPengajarGrade::query()
+            ->selectRaw('count(distinct jadwal_pengajar_grade.pengajar_id)')
+            ->join('jadwal_grade', 'jadwal_grade.id', '=', 'jadwal_pengajar_grade.jadwal_grade_id')
+            ->join('jadwal_kategori', 'jadwal_kategori.id', '=', 'jadwal_grade.jadwal_kategori_id')
             ->whereColumn('jadwal_kategori.jadwal_mata_pelajaran_id', 'jadwal_mata_pelajaran.id')
-            ->where('jadwal_pengajar_kategori.status', JadwalPengajarKategori::STATUS_ACTIVE);
+            ->where('jadwal_pengajar_grade.status', JadwalPengajarGrade::STATUS_ACTIVE);
     }
 
     /**

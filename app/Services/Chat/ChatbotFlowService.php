@@ -5,6 +5,7 @@ namespace App\Services\Chat;
 use App\Models\Company;
 use App\Models\JadwalKelas;
 use App\Models\JadwalKelasRescheduleRequest;
+use App\Models\JadwalPengajarGrade;
 use App\Models\JadwalPengajarKategori;
 use App\Models\JadwalStudent;
 use App\Models\WaChatbotFlow;
@@ -710,31 +711,58 @@ class ChatbotFlowService
      * argumen eksplisit) kalau nanti mau menampilkan lebih dari satu
      * jam per hari.
      *
+     * Update 8 September 2026 (fitur Grade): sumber ketersediaan
+     * pengajar SEKARANG diutamakan dari App\Models\JadwalPengajarGrade
+     * (dicocokkan lewat `$original->jadwal_grade_id`, diisi otomatis
+     * oleh App\Services\Jadwal\JadwalRutinSesiGenerator sejak fitur
+     * Grade ada) -- FALLBACK ke App\Models\JadwalPengajarKategori lama
+     * (lewat `jadwal_kategori_id`) kalau sesi ini tidak punya
+     * jadwal_grade_id sama sekali ATAU Grade-nya kebetulan tidak (lagi)
+     * punya penugasan Pengajar aktif -- supaya data historis dari
+     * SEBELUM fitur Grade ada tetap jalan.
+     *
      * @return \Illuminate\Support\Collection<int, array{start: Carbon, end: Carbon}>
      */
     private function findOpenSlots(JadwalKelas $original, int $maxPerDay = 1, int $searchDays = 7): \Illuminate\Support\Collection
     {
         $durationMinutes = $original->start_time->diffInMinutes($original->end_time);
 
-        if ($durationMinutes <= 0 || ! $original->jadwal_kategori_id) {
+        if ($durationMinutes <= 0 || (! $original->jadwal_grade_id && ! $original->jadwal_kategori_id)) {
             return collect();
         }
 
-        $pengajarKategori = JadwalPengajarKategori::with('jadwals')
-            ->where('company_id', $original->company_id)
-            ->where('pengajar_id', $original->pengajar_id)
-            ->where('jadwal_kategori_id', $original->jadwal_kategori_id)
-            ->where('status', JadwalPengajarKategori::STATUS_ACTIVE)
-            ->first();
+        $jadwals = collect();
 
-        if (! $pengajarKategori) {
+        if ($original->jadwal_grade_id) {
+            $pengajarGrade = JadwalPengajarGrade::with('jadwals')
+                ->where('company_id', $original->company_id)
+                ->where('pengajar_id', $original->pengajar_id)
+                ->where('jadwal_grade_id', $original->jadwal_grade_id)
+                ->where('status', JadwalPengajarGrade::STATUS_ACTIVE)
+                ->first();
+
+            $jadwals = $pengajarGrade?->jadwals ?? collect();
+        }
+
+        if ($jadwals->isEmpty() && $original->jadwal_kategori_id) {
+            $pengajarKategori = JadwalPengajarKategori::with('jadwals')
+                ->where('company_id', $original->company_id)
+                ->where('pengajar_id', $original->pengajar_id)
+                ->where('jadwal_kategori_id', $original->jadwal_kategori_id)
+                ->where('status', JadwalPengajarKategori::STATUS_ACTIVE)
+                ->first();
+
+            $jadwals = $pengajarKategori?->jadwals ?? collect();
+        }
+
+        if ($jadwals->isEmpty()) {
             return collect();
         }
 
         // Carbon::dayOfWeek: 0=Minggu..6=Sabtu -- konvensi SAMA dengan
-        // kolom `hari` di jadwal_pengajar_kategori_jadwal (lihat
-        // migration-nya).
-        $blocksByHari = $pengajarKategori->jadwals->groupBy('hari');
+        // kolom `hari` di jadwal_pengajar_kategori_jadwal MAUPUN
+        // jadwal_pengajar_grade_jadwal (lihat migration-nya).
+        $blocksByHari = $jadwals->groupBy('hari');
 
         if ($blocksByHari->isEmpty()) {
             return collect();

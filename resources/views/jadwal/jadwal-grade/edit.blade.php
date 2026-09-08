@@ -4,10 +4,10 @@
 <div class="col-12">
     <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
         <div>
-            <h4 class="mb-1">Ubah Pengajar</h4>
-            <p class="text-muted mb-0">{{ $kategori->name ?? '-' }} / {{ $pengajarGrade->grade->name ?? '-' }} ({{ $mataPelajaran->name ?? '-' }}) — {{ $pengajarGrade->pengajar->name ?? '-' }}</p>
+            <h4 class="mb-1">Ubah Grade</h4>
+            <p class="text-muted mb-0">{{ $kategori->mataPelajaran->name }} / {{ $kategori->name }} — {{ $grade->name }}</p>
         </div>
-        <a href="{{ route('jadwal.pengajar.index', ['jadwal_grade_id' => $pengajarGrade->jadwal_grade_id]) }}" class="btn btn-light">
+        <a href="{{ route('jadwal.grade.index', ['jadwal_kategori_id' => $kategori->id]) }}" class="btn btn-light">
             <i class="ri-arrow-left-line"></i> Kembali
         </a>
     </div>
@@ -26,14 +26,14 @@
         <div class="col-lg-6">
             <div class="card border-0 shadow-sm">
                 <div class="card-body">
-                    <form action="{{ route('jadwal.pengajar.update', $pengajarGrade->id) }}" method="POST">
+                    <form action="{{ route('jadwal.grade.update', $grade->id) }}" method="POST">
                         @csrf
                         @method('PUT')
-                        @include('jadwal.jadwal-pengajar._form')
+                        @include('jadwal.jadwal-grade._form')
 
                         <div class="d-flex gap-2">
                             <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
-                            <a href="{{ route('jadwal.pengajar.index', ['jadwal_grade_id' => $pengajarGrade->jadwal_grade_id]) }}" class="btn btn-light">Batal</a>
+                            <a href="{{ route('jadwal.grade.index', ['jadwal_kategori_id' => $kategori->id]) }}" class="btn btn-light">Batal</a>
                         </div>
                     </form>
                 </div>

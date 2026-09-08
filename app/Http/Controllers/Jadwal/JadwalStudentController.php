@@ -7,11 +7,12 @@ use App\Http\Controllers\Controller;
 use App\Models\BranchOffice;
 use App\Models\Company;
 use App\Models\JadwalBranchSetting;
+use App\Models\JadwalGrade;
 use App\Models\JadwalKategori;
 use App\Models\JadwalKelas;
 use App\Models\JadwalMataPelajaran;
-use App\Models\JadwalPengajarJadwal;
-use App\Models\JadwalPengajarKategori;
+use App\Models\JadwalPengajarGrade;
+use App\Models\JadwalPengajarGradeJadwal;
 use App\Models\JadwalRuangan;
 use App\Models\JadwalRutin;
 use App\Models\JadwalStudent;
@@ -65,6 +66,19 @@ class JadwalStudentController extends Controller
 {
     use ResolvesCompanyContext;
 
+    // NOTE (fitur Grade, 8 September 2026): checklist ketersediaan
+    // Pengajar & seluruh alur "+ Add Student" di bawah ini SEKARANG
+    // bersumber dari App\Models\JadwalPengajarGrade (level Grade, di
+    // bawah Kategori) -- BUKAN lagi App\Models\JadwalPengajarKategori
+    // (dibiarkan sebagai data historis/frozen). Variabel/parameter yang
+    // sebelumnya bernama *Kategori* di method-method di bawah (mis.
+    // $kategoriId, $pengajarKategoris) sudah diganti *Grade* mengikuti
+    // ini. `jadwal_kategori_id` TETAP disimpan apa adanya di setiap
+    // App\Models\JadwalRutin baru (auto-derive dari grade->kategori)
+    // supaya badge/filter lama (lihat App\Services\Jadwal\
+    // JadwalCountsService) tetap jalan tanpa perubahan -- lihat
+    // docblock App\Models\JadwalGrade untuk konteks lengkap.
+
     /**
      * Update 4 September 2026 (laporan user: "ketika ada perubahan
      * jadwal wa nya terkirim 1x saja ya tidak tiap ada perubahan ya"):
@@ -92,7 +106,12 @@ class JadwalStudentController extends Controller
 
         $mataPelajaranId = $request->query('jadwal_mata_pelajaran_id');
         $pengajarId = $request->query('pengajar_id');
-        $kategoriId = $request->query('jadwal_kategori_id');
+        // Fitur Grade (8 September 2026): datang dari badge/tombol "Add
+        // Student" di index Pengajar (sekarang Grade-scoped, lihat
+        // resources/views/jadwal/jadwal-pengajar/index.blade.php), jadi
+        // param query string-nya jadwal_grade_id -- BUKAN lagi
+        // jadwal_kategori_id.
+        $gradeId = $request->query('jadwal_grade_id');
 
         $query = JadwalStudent::where('company_id', $company->id)
             ->with(['mataPelajaran:id,name', 'pengajar:id,name', 'branchOffice:id,name']);
@@ -123,11 +142,11 @@ class JadwalStudentController extends Controller
         // Student sendiri lewat tombol "Kembali"), TETAP pakai filter
         // lama (field mentah) supaya tidak mengubah alur yang sudah
         // benar di tempat lain.
-        if ($pengajarId && $kategoriId) {
-            $activeStudentIds = $this->countsService->activeStudentIdsForPengajarKategori(
+        if ($pengajarId && $gradeId) {
+            $activeStudentIds = $this->countsService->activeStudentIdsForPengajarGrade(
                 $company->id,
                 $pengajarId,
-                $kategoriId,
+                $gradeId,
             );
             $query->whereIn('id', $activeStudentIds);
         } else {
@@ -197,19 +216,19 @@ class JadwalStudentController extends Controller
             ? $this->companyTeamMembers($company)->firstWhere('id', $pengajarId)
             : null;
 
-        return view('jadwal.jadwal-student.index', compact('students', 'mataPelajaran', 'pengajar', 'mataPelajaranId', 'pengajarId', 'kategoriId'));
+        return view('jadwal.jadwal-student.index', compact('students', 'mataPelajaran', 'pengajar', 'mataPelajaranId', 'pengajarId', 'gradeId'));
     }
 
     public function create(Request $request): View
     {
         $context = $this->companyContext($request);
 
-        $kategoriId = $request->query('jadwal_kategori_id');
+        $gradeId = $request->query('jadwal_grade_id');
         $pengajarId = $request->query('pengajar_id');
         // Fix 5 September 2026 (lihat docblock pengajarSlotsPanel()) --
         // dipindah lebih awal (sebelumnya dibaca di bawah, dekat
         // `$lockedMataPelajaranForBranch`) supaya bisa dipakai untuk
-        // MEMFILTER checklist Kategori pengajar di bawah ke Bidang ini
+        // MEMFILTER checklist Grade pengajar di bawah ke Bidang ini
         // saja, bukan cuma untuk resolve branch.
         $mataPelajaranId = $request->query('jadwal_mata_pelajaran_id');
 
@@ -243,28 +262,28 @@ class JadwalStudentController extends Controller
         // Prioritas resolusi: context->branchOffice (kalau company
         // di-lock ke satu branch), fallback ke branch milik Mata
         // Pelajaran Kategori itu sendiri.
-        $pengajarKategoris = collect();
+        $pengajarGrades = collect();
 
         if ($pengajarId) {
-            $pengajarKategoris = JadwalPengajarKategori::with(['jadwals', 'kategori.mataPelajaran'])
+            $pengajarGrades = JadwalPengajarGrade::with(['jadwals', 'grade.kategori.mataPelajaran'])
                 ->where('company_id', $context->company->id)
                 ->where('pengajar_id', $pengajarId)
                 ->where('status', 'active')
-                ->when($kategoriId, fn ($q) => $q->where('jadwal_kategori_id', $kategoriId))
+                ->when($gradeId, fn ($q) => $q->where('jadwal_grade_id', $gradeId))
                 // Fix 5 September 2026 (lihat docblock
-                // pengajarSlotsPanel()/kategoriBelongsToMataPelajaran()):
+                // pengajarSlotsPanel()/gradeBelongsToMataPelajaran()):
                 // kalau tidak datang dari drill-down penuh
-                // ($kategoriId kosong) TAPI Bidang sudah dipilih di
+                // ($gradeId kosong) TAPI Bidang sudah dipilih di
                 // dropdown bebas ($mataPelajaranId ada), tetap batasi
-                // ke Kategori yang anak Bidang itu -- jangan tampilkan
-                // Kategori Pengajar ini dari Bidang lain.
-                ->when(! $kategoriId && $mataPelajaranId, fn ($q) => $q->whereHas('kategori', fn ($qq) => $qq->where('jadwal_mata_pelajaran_id', $mataPelajaranId)))
+                // ke Grade yang Kategori-nya anak Bidang itu -- jangan
+                // tampilkan Grade Pengajar ini dari Bidang lain.
+                ->when(! $gradeId && $mataPelajaranId, fn ($q) => $q->whereHas('grade.kategori', fn ($qq) => $qq->where('jadwal_mata_pelajaran_id', $mataPelajaranId)))
                 ->get();
 
-            foreach ($pengajarKategoris as $pk) {
+            foreach ($pengajarGrades as $pg) {
                 $branchOfficeId = $context->isLockedToBranch()
                     ? $context->branchOffice?->id
-                    : $pk->kategori?->mataPelajaran?->branch_office_id;
+                    : $pg->grade?->kategori?->mataPelajaran?->branch_office_id;
 
                 $branchSetting = $branchOfficeId
                     ? JadwalBranchSetting::where('branch_office_id', $branchOfficeId)->first()
@@ -276,10 +295,10 @@ class JadwalStudentController extends Controller
                 // seperti sebelumnya -- lihat docblock slotsFor(). Admin
                 // jadi tahu jam itu memang ditawarkan pengajar tapi
                 // sudah terisi, bukan mengira jam itu tidak pernah ada.
-                $pk->setAttribute('slots', $branchSetting
-                    ? $this->slotsFor($context, $pk, $pengajarId, $branchSetting)
+                $pg->setAttribute('slots', $branchSetting
+                    ? $this->slotsFor($context, $pg, $pengajarId, $branchSetting)
                     : collect());
-                $pk->setAttribute('branchSettingMissing', ! $branchSetting);
+                $pg->setAttribute('branchSettingMissing', ! $branchSetting);
             }
         }
 
@@ -308,17 +327,17 @@ class JadwalStudentController extends Controller
             'selectedBranchOfficeId' => $lockedMataPelajaranForBranch?->branch_office_id,
             'selectedMataPelajaranId' => $mataPelajaranId,
             'selectedPengajarId' => $pengajarId,
-            'selectedKategoriId' => $kategoriId,
+            'selectedGradeId' => $gradeId,
             // Update 4 September 2026: Pengajar HANYA dikunci (disabled)
-            // di skenario drill-down PENUH (Kategori+Pengajar
+            // di skenario drill-down PENUH (Grade+Pengajar
             // sekaligus) -- kalau cuma `pengajar_id` saja yang ada
             // (mis. dari onchange reload dropdown bebas, lihat
             // _form.blade.php), field-nya tetap dropdown bebas supaya
             // admin bisa ganti-ganti Pengajar & lihat checklist masing-
             // masing tanpa harus klik "Ganti Pengajar" dulu.
-            'pengajarLocked' => (bool) ($kategoriId && $pengajarId),
+            'pengajarLocked' => (bool) ($gradeId && $pengajarId),
             'previewPengajarId' => $pengajarId,
-            'pengajarKategoris' => $pengajarKategoris,
+            'pengajarGrades' => $pengajarGrades,
             // Update 4 September 2026: belum ada Student, jadi tidak ada
             // Ruangan "sekarang" untuk di-preselect -- lihat komentar
             // panjang di edit() soal $selectedRuanganId/$ruanganMixed
@@ -338,13 +357,13 @@ class JadwalStudentController extends Controller
             $request->merge(['branch_office_id' => $context->branchOffice?->id]);
         }
 
-        $kategoriId = $request->input('jadwal_kategori_id');
+        $gradeId = $request->input('jadwal_grade_id');
 
         $validator = $this->validator($request, $company);
 
         if ($validator->fails()) {
             return redirect()
-                ->route('jadwal.student.create', $request->only(['jadwal_mata_pelajaran_id', 'pengajar_id', 'jadwal_kategori_id']))
+                ->route('jadwal.student.create', $request->only(['jadwal_mata_pelajaran_id', 'pengajar_id', 'jadwal_grade_id']))
                 ->withErrors($validator)
                 ->withInput();
         }
@@ -356,23 +375,23 @@ class JadwalStudentController extends Controller
             ->first();
 
         // Update 4 September 2026 (bug fix lanjutan -- lihat komentar
-        // create()): checklist sekarang bisa berisi BANYAK Kategori
+        // create()): checklist sekarang bisa berisi BANYAK Grade
         // sekaligus (Pengajar bebas dipilih tanpa drill-down penuh),
         // jadi dikirim terkelompok `jadwal_rutin_slot_ids[<jadwal_
-        // kategori_id>][]` -- format yang SAMA dipakai update() (lihat
-        // di situ). `$kategoriId` (hidden field, cuma ke-isi kalau
+        // grade_id>][]` -- format yang SAMA dipakai update() (lihat
+        // di situ). `$gradeId` (hidden field, cuma ke-isi kalau
         // datang dari drill-down penuh) TETAP dipakai untuk konteks
         // redirect di bawah, TAPI TIDAK LAGI dipakai untuk proses slot
         // -- proses slot sekarang generik per grup, sama seperti
         // update().
-        $slotIdsByKategori = (array) $request->input('jadwal_rutin_slot_ids', []);
+        $slotIdsByGrade = (array) $request->input('jadwal_rutin_slot_ids', []);
         // Update 4 September 2026 (permintaan user, kolom Ruangan baru
         // di form Tambah Student): diterapkan ke SEMUA Jadwal Rutin yang
         // dibuat dari checklist di bawah, lihat docblock
         // createRutinFromSlots() untuk detail pengecekan bentroknya.
         $ruanganId = $validated['jadwal_ruangan_id'] ?? null;
 
-        [$student, $rutinCreated, $rutinSkipped] = DB::transaction(function () use ($company, $validated, $mataPelajaran, $slotIdsByKategori, $ruanganId) {
+        [$student, $rutinCreated, $rutinSkipped] = DB::transaction(function () use ($company, $validated, $mataPelajaran, $slotIdsByGrade, $ruanganId) {
             $student = JadwalStudent::create([
                 'company_id' => $company->id,
                 'branch_office_id' => $validated['branch_office_id'] ?? $mataPelajaran?->branch_office_id,
@@ -387,24 +406,24 @@ class JadwalStudentController extends Controller
             $created = 0;
             $skipped = [];
 
-            foreach ($slotIdsByKategori as $kid => $chunkIds) {
+            foreach ($slotIdsByGrade as $gid => $chunkIds) {
                 $chunkIds = array_values(array_filter((array) $chunkIds));
 
-                if (! $kid || ! $chunkIds) {
+                if (! $gid || ! $chunkIds) {
                     continue;
                 }
 
                 // Fix 5 September 2026 -- lihat docblock
-                // kategoriBelongsToMataPelajaran(): jangan pernah bikin
-                // JadwalRutin dari Kategori yang bukan anak Bidang yang
+                // gradeBelongsToMataPelajaran(): jangan pernah bikin
+                // JadwalRutin dari Grade yang bukan anak Bidang yang
                 // baru saja dipilih di Student ini.
-                if (! $this->kategoriBelongsToMataPelajaran($company->id, (string) $kid, $validated['jadwal_mata_pelajaran_id'])) {
-                    $skipped[] = 'Slot di bawah Kategori yang bukan bagian dari Mata Pelajaran / Bidang yang dipilih dilewati (tidak disimpan).';
+                if (! $this->gradeBelongsToMataPelajaran($company->id, (string) $gid, $validated['jadwal_mata_pelajaran_id'])) {
+                    $skipped[] = 'Slot di bawah Grade yang bukan bagian dari Mata Pelajaran / Bidang yang dipilih dilewati (tidak disimpan).';
 
                     continue;
                 }
 
-                [$c, $s] = $this->createRutinFromSlots($company, $student, (string) $kid, $validated['pengajar_id'], $chunkIds, $ruanganId);
+                [$c, $s] = $this->createRutinFromSlots($company, $student, (string) $gid, $validated['pengajar_id'], $chunkIds, $ruanganId);
                 $created += $c;
                 $skipped = array_merge($skipped, $s);
             }
@@ -426,7 +445,7 @@ class JadwalStudentController extends Controller
             ->route('jadwal.student.index', array_filter([
                 'jadwal_mata_pelajaran_id' => $validated['jadwal_mata_pelajaran_id'],
                 'pengajar_id' => $validated['pengajar_id'],
-                'jadwal_kategori_id' => $kategoriId,
+                'jadwal_grade_id' => $gradeId,
             ]))
             ->with('success', $message);
     }
@@ -447,13 +466,25 @@ class JadwalStudentController extends Controller
      * kelihatan kosong saat form dibuka bisa saja baru saja terisi admin
      * lain sebelum submit ini).
      *
-     * @param  array<int, string>  $chunkIds  Format tiap elemen: "{jadwal_pengajar_kategori_jadwal_id}|{H:i jam mulai chunk}" (lihat slotsFor()).
+     * @param  array<int, string>  $chunkIds  Format tiap elemen: "{jadwal_pengajar_grade_jadwal_id}|{H:i jam mulai chunk}" (lihat slotsFor()).
      * @param  string|null  $ruanganId  Update 4 September 2026 (permintaan user, kolom Ruangan baru di form Student): Ruangan yang dipilih admin di dropdown Ruangan Tambah/Edit Student, diterapkan ke SEMUA baris Jadwal Rutin baru yang dibuat dari sini (null = "Tanpa Ruangan", perilaku lama). Dicek bentrok Ruangan juga (bukan cuma Pengajar) lewat JadwalRutinConflictService::findRuanganConflict() -- dua murid beda Pengajar sekalipun tidak boleh dipasang ke Ruangan fisik yang sama di jam yang bentrok, sama prinsip yang sudah dipakai App\Http\Controllers\Jadwal\JadwalRutinController untuk alur manual.
      * @param  string|null  $changedBy  Update 4 September 2026 (laporan user: notifikasi WA ke Pengajar + histori before/after, lihat App\Services\Jadwal\JadwalScheduleChangeNotifier's docblock) -- SENGAJA dipakai dobel fungsi sebagai "siapa yang mengubah" SEKALIGUS "apakah perlu notifikasi/log sama sekali": non-null (dikirim update(), admin yang sedang login) = ya, kirim WA + tulis JadwalChangeLog; null (default, dipakai store() waktu bikin Student BARU) = tidak -- murid baru bukan "perubahan jadwal", jadi sengaja tidak ikut memicu notifikasi/log ini (tetap scoped ke laporan bug-nya: jadwal murid yang SUDAH ADA berubah).
      * @return array{0: int, 1: array<int, string>} [jumlah Jadwal Rutin dibuat, daftar alasan chunk yang dilewati]
      */
-    private function createRutinFromSlots(Company $company, JadwalStudent $student, string $kategoriId, string $pengajarId, array $chunkIds, ?string $ruanganId = null, ?string $changedBy = null): array
+    private function createRutinFromSlots(Company $company, JadwalStudent $student, string $gradeId, string $pengajarId, array $chunkIds, ?string $ruanganId = null, ?string $changedBy = null): array
     {
+        // Fitur Grade (8 September 2026) -- perlu Kategori PARENT dari
+        // Grade ini untuk tetap mengisi jadwal_kategori_id pada baris
+        // JadwalRutin yang dibuat di bawah (lihat class docblock).
+        $grade = JadwalGrade::where('company_id', $company->id)->find($gradeId);
+
+        if (! $grade) {
+            // Kemungkinan request di-tempering (Grade tidak ada/bukan
+            // milik company ini) -- lewati diam-diam, sama prinsipnya
+            // dengan parentSlot yang tidak ditemukan di bawah.
+            return [0, []];
+        }
+
         $branchOfficeId = $student->branch_office_id;
         $branchSetting = $branchOfficeId
             ? JadwalBranchSetting::where('branch_office_id', $branchOfficeId)->first()
@@ -466,10 +497,10 @@ class JadwalStudentController extends Controller
         $parsed = array_filter(array_map([$this, 'parseChunkId'], $chunkIds));
         $parentSlotIds = array_values(array_unique(array_column($parsed, 'slot_id')));
 
-        $parentSlots = JadwalPengajarJadwal::whereIn('id', $parentSlotIds)
-            ->whereHas('pengajarKategori', function ($q) use ($company, $kategoriId, $pengajarId) {
+        $parentSlots = JadwalPengajarGradeJadwal::whereIn('id', $parentSlotIds)
+            ->whereHas('pengajarGrade', function ($q) use ($company, $gradeId, $pengajarId) {
                 $q->where('company_id', $company->id)
-                    ->where('jadwal_kategori_id', $kategoriId)
+                    ->where('jadwal_grade_id', $gradeId)
                     ->where('pengajar_id', $pengajarId);
             })
             ->get()
@@ -576,7 +607,8 @@ class JadwalStudentController extends Controller
                 'company_id' => $company->id,
                 'branch_office_id' => $branchOfficeId,
                 'student_id' => $student->id,
-                'jadwal_kategori_id' => $kategoriId,
+                'jadwal_kategori_id' => $grade->jadwal_kategori_id,
+                'jadwal_grade_id' => $grade->id,
                 'pengajar_id' => $pengajarId,
                 'jadwal_ruangan_id' => $ruanganId,
                 'hari' => $parentSlot->hari,
@@ -633,11 +665,11 @@ class JadwalStudentController extends Controller
      * ke-submit), grup itu DILEWATI SELURUHNYA (tidak ada JadwalRutin
      * yang dibuat sama sekali untuknya) -- bukan cuma diperingatkan.
      */
-    private function kategoriBelongsToMataPelajaran(string $companyId, string $kategoriId, string $mataPelajaranId): bool
+    private function gradeBelongsToMataPelajaran(string $companyId, string $gradeId, string $mataPelajaranId): bool
     {
-        return JadwalKategori::where('company_id', $companyId)
-            ->where('id', $kategoriId)
-            ->where('jadwal_mata_pelajaran_id', $mataPelajaranId)
+        return JadwalGrade::where('company_id', $companyId)
+            ->where('id', $gradeId)
+            ->whereHas('kategori', fn ($q) => $q->where('jadwal_mata_pelajaran_id', $mataPelajaranId))
             ->exists();
     }
 
@@ -694,7 +726,7 @@ class JadwalStudentController extends Controller
     }
 
     /**
-     * Semua chunk ketersediaan Pengajar (App\Models\JadwalPengajarJadwal,
+     * Semua chunk ketersediaan Pengajar (App\Models\JadwalPengajarGradeJadwal,
      * sudah dipecah per durasi sesi default branch lewat
      * splitSlotIntoChunks()) yang MASIH DALAM JAM OPERASIONAL branch --
      * dipakai checklist di form Add Student & panel Edit Student (lihat
@@ -725,14 +757,14 @@ class JadwalStudentController extends Controller
      * @param  string|null  $excludeStudentId  Murid yang Jadwal Rutin-nya SENDIRI tidak dihitung "bentrok" (dipakai Edit Student -- murid itu boleh lihat slot yang memang sudah dia pakai sebagai TIDAK taken/`mine` => true, bukan "taken by dirinya sendiri"). null di create() (murid belum ada, `mine` selalu false).
      * @return Collection<int, array{id: string, hari: int, hari_label: string, jam_mulai: string, jam_selesai: string, durasi_menit: int, taken: bool, taken_by: string|null, mine: bool}>
      */
-    private function slotsFor($context, JadwalPengajarKategori $pengajarAvailability, string $pengajarId, JadwalBranchSetting $branchSetting, ?string $excludeStudentId = null): Collection
+    private function slotsFor($context, JadwalPengajarGrade $pengajarAvailability, string $pengajarId, JadwalBranchSetting $branchSetting, ?string $excludeStudentId = null): Collection
     {
         $conflictService = app(JadwalRutinConflictService::class);
         $today = now()->toDateString();
         $durasiMenit = $branchSetting->durasi_sesi_default_menit;
 
         return $pengajarAvailability->jadwals
-            ->flatMap(function (JadwalPengajarJadwal $slot) use ($durasiMenit) {
+            ->flatMap(function (JadwalPengajarGradeJadwal $slot) use ($durasiMenit) {
                 return collect($this->splitSlotIntoChunks(substr($slot->jam_mulai, 0, 5), substr($slot->jam_selesai, 0, 5), $durasiMenit))
                     ->map(fn ($chunk) => [
                         'slot_id' => $slot->id,
@@ -877,12 +909,12 @@ class JadwalStudentController extends Controller
      * null berarti belum ada Bidang terpilih sama sekali, checklist
      * kosong (sama seperti belum ada Pengajar terpilih).
      *
-     * @return array{pengajarKategoris: \Illuminate\Support\Collection, branchSettingMissing: bool}
+     * @return array{pengajarGrades: \Illuminate\Support\Collection, branchSettingMissing: bool}
      */
     private function pengajarSlotsPanel($context, ?string $pengajarId, JadwalStudent $student, ?string $mataPelajaranId = null): array
     {
         if (! $pengajarId || ! $mataPelajaranId) {
-            return ['pengajarKategoris' => collect(), 'branchSettingMissing' => false];
+            return ['pengajarGrades' => collect(), 'branchSettingMissing' => false];
         }
 
         $branchOfficeId = $student->branch_office_id;
@@ -890,26 +922,26 @@ class JadwalStudentController extends Controller
             ? JadwalBranchSetting::where('branch_office_id', $branchOfficeId)->first()
             : null;
 
-        $pengajarKategoris = JadwalPengajarKategori::with(['jadwals', 'kategori:id,name'])
+        $pengajarGrades = JadwalPengajarGrade::with(['jadwals', 'grade.kategori:id,name'])
             ->where('company_id', $context->company->id)
             ->where('pengajar_id', $pengajarId)
             ->where('status', 'active')
-            ->whereHas('kategori', fn ($q) => $q->where('jadwal_mata_pelajaran_id', $mataPelajaranId))
+            ->whereHas('grade.kategori', fn ($q) => $q->where('jadwal_mata_pelajaran_id', $mataPelajaranId))
             ->get();
 
-        foreach ($pengajarKategoris as $pk) {
-            $pk->setAttribute('slots', $branchSetting
-                ? $this->slotsFor($context, $pk, $pengajarId, $branchSetting, $student->id)
+        foreach ($pengajarGrades as $pg) {
+            $pg->setAttribute('slots', $branchSetting
+                ? $this->slotsFor($context, $pg, $pengajarId, $branchSetting, $student->id)
                 : collect());
             // Update 4 September 2026: per-baris juga (bukan cuma flag
             // global) supaya bentuknya sama dengan create() -- dipakai
             // _kategori-tabs.blade.php yang jadi satu sumber tab dipakai
             // create.blade.php DAN edit.blade.php.
-            $pk->setAttribute('branchSettingMissing', ! $branchSetting);
+            $pg->setAttribute('branchSettingMissing', ! $branchSetting);
         }
 
         return [
-            'pengajarKategoris' => $pengajarKategoris,
+            'pengajarGrades' => $pengajarGrades,
             'branchSettingMissing' => ! $branchSetting,
         ];
     }
@@ -971,7 +1003,7 @@ class JadwalStudentController extends Controller
         // `jadwal_rutin_id`-nya `nullOnDelete()`, konsisten dengan
         // JadwalRutinController::destroy() yang juga tidak membersihkan
         // sesi.
-        $slotIdsByKategori = (array) $request->input('jadwal_rutin_slot_ids', []);
+        $slotIdsByGrade = (array) $request->input('jadwal_rutin_slot_ids', []);
         // Update 4 September 2026 (permintaan user, kolom Ruangan baru
         // di form Edit Student): dropdown Ruangan di sini berlaku untuk
         // SEMUA jadwal aktif murid ini (satu murid = satu Ruangan yang
@@ -1004,7 +1036,7 @@ class JadwalStudentController extends Controller
         // kehadiran yang sudah tercatat tidak diam-diam ditimpa.
         $ruanganId = $validated['jadwal_ruangan_id'] ?? null;
 
-        [$rutinCreated, $rutinSkipped, $rutinRemoved, $ruanganUpdated, $ruanganSkipped, $sesiRuanganUpdated] = DB::transaction(function () use ($context, $company, $validated, $mataPelajaran, $student, $slotIdsByKategori, $ruanganId) {
+        [$rutinCreated, $rutinSkipped, $rutinRemoved, $ruanganUpdated, $ruanganSkipped, $sesiRuanganUpdated] = DB::transaction(function () use ($context, $company, $validated, $mataPelajaran, $student, $slotIdsByGrade, $ruanganId) {
             $student->update([
                 'branch_office_id' => $validated['branch_office_id'] ?? $mataPelajaran?->branch_office_id,
                 'jadwal_mata_pelajaran_id' => $validated['jadwal_mata_pelajaran_id'],
@@ -1101,10 +1133,10 @@ class JadwalStudentController extends Controller
 
             $panel = $this->pengajarSlotsPanel($context, $validated['pengajar_id'], $student);
 
-            foreach ($panel['pengajarKategoris'] as $pk) {
-                $submitted = array_values(array_filter((array) ($slotIdsByKategori[$pk->jadwal_kategori_id] ?? [])));
+            foreach ($panel['pengajarGrades'] as $pg) {
+                $submitted = array_values(array_filter((array) ($slotIdsByGrade[$pg->jadwal_grade_id] ?? [])));
 
-                $toRemove = $pk->slots
+                $toRemove = $pg->slots
                     ->where('mine', true)
                     ->reject(fn (array $slot) => in_array($slot['id'], $submitted, true));
 
@@ -1127,7 +1159,7 @@ class JadwalStudentController extends Controller
                     // pengajar lama).
                     $rows = JadwalRutin::where('company_id', $company->id)
                         ->where('student_id', $student->id)
-                        ->where('jadwal_kategori_id', $pk->jadwal_kategori_id)
+                        ->where('jadwal_grade_id', $pg->jadwal_grade_id)
                         ->where('pengajar_id', $validated['pengajar_id'])
                         ->where('status', JadwalRutin::STATUS_ACTIVE)
                         ->where('hari', $slot['hari'])
@@ -1149,25 +1181,25 @@ class JadwalStudentController extends Controller
                 }
             }
 
-            foreach ($slotIdsByKategori as $kategoriId => $chunkIds) {
+            foreach ($slotIdsByGrade as $gradeId => $chunkIds) {
                 $chunkIds = array_values(array_filter((array) $chunkIds));
 
-                if (! $kategoriId || ! $chunkIds) {
+                if (! $gradeId || ! $chunkIds) {
                     continue;
                 }
 
                 // Fix 5 September 2026 -- lihat docblock
-                // kategoriBelongsToMataPelajaran(): jangan pernah bikin
-                // JadwalRutin dari Kategori yang bukan anak Bidang yang
+                // gradeBelongsToMataPelajaran(): jangan pernah bikin
+                // JadwalRutin dari Grade yang bukan anak Bidang yang
                 // baru saja dipilih di Student ini (mis. tab checklist
-                // Kategori dari Bidang lain sempat ke-submit).
-                if (! $this->kategoriBelongsToMataPelajaran($company->id, (string) $kategoriId, $validated['jadwal_mata_pelajaran_id'])) {
-                    $skipped[] = 'Slot di bawah Kategori yang bukan bagian dari Mata Pelajaran / Bidang yang dipilih dilewati (tidak disimpan).';
+                // Grade dari Bidang lain sempat ke-submit).
+                if (! $this->gradeBelongsToMataPelajaran($company->id, (string) $gradeId, $validated['jadwal_mata_pelajaran_id'])) {
+                    $skipped[] = 'Slot di bawah Grade yang bukan bagian dari Mata Pelajaran / Bidang yang dipilih dilewati (tidak disimpan).';
 
                     continue;
                 }
 
-                [$c, $s] = $this->createRutinFromSlots($company, $student, (string) $kategoriId, $validated['pengajar_id'], $chunkIds, $ruanganId, auth()->id());
+                [$c, $s] = $this->createRutinFromSlots($company, $student, (string) $gradeId, $validated['pengajar_id'], $chunkIds, $ruanganId, auth()->id());
                 $created += $c;
                 $skipped = array_merge($skipped, $s);
             }
@@ -1520,10 +1552,17 @@ class JadwalStudentController extends Controller
                 return;
             }
 
-            $valid = JadwalPengajarKategori::where('company_id', $company->id)
+            // Fitur Grade (8 September 2026): penugasan Pengajar
+            // sekarang ada di App\Models\JadwalPengajarGrade (level
+            // Grade, di bawah Kategori) -- BUKAN lagi
+            // App\Models\JadwalPengajarKategori. Semua penugasan lama
+            // sudah ikut dibackfill ke tabel baru ini (lihat migration
+            // backfill_default_jadwal_grade_for_existing_kategori.php),
+            // jadi query di sini cukup baca tabel baru saja.
+            $valid = JadwalPengajarGrade::where('company_id', $company->id)
                 ->where('pengajar_id', $pengajarId)
-                ->where('status', JadwalPengajarKategori::STATUS_ACTIVE)
-                ->whereHas('kategori', fn ($q) => $q->where('jadwal_mata_pelajaran_id', $mataPelajaranId))
+                ->where('status', JadwalPengajarGrade::STATUS_ACTIVE)
+                ->whereHas('grade.kategori', fn ($q) => $q->where('jadwal_mata_pelajaran_id', $mataPelajaranId))
                 ->exists();
 
             if (! $valid) {

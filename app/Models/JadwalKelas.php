@@ -76,6 +76,7 @@ class JadwalKelas extends Model
         'student_id',
         'jadwal_rutin_id',
         'jadwal_kategori_id',
+        'jadwal_grade_id',
         'jadwal_ruangan_id',
         'start_time',
         'end_time',
@@ -129,9 +130,23 @@ class JadwalKelas extends Model
         return $this->belongsTo(JadwalRutin::class, 'jadwal_rutin_id');
     }
 
+    /**
+     * LEGACY (fitur Grade, 8 September 2026) -- jadwal_kategori_id
+     * TETAP diisi (auto-derive dari grade->kategori) untuk kompatibilitas
+     * badge/filter lama. Snapshot harga/persentase sesi ini (harga_sesi,
+     * persentase_company, persentase_pengajar) sejak fitur Grade dibaca
+     * dari grade() di bawah saat sesi digenerate, bukan dari kategori()
+     * ini lagi -- lihat App\Services\Jadwal\JadwalRutinSesiGenerator.
+     */
     public function kategori()
     {
         return $this->belongsTo(JadwalKategori::class, 'jadwal_kategori_id');
+    }
+
+    /** Grade (App\Models\JadwalGrade) tempat harga/persentase snapshot sesi ini berasal saat digenerate. */
+    public function grade()
+    {
+        return $this->belongsTo(JadwalGrade::class, 'jadwal_grade_id');
     }
 
     public function ruangan()

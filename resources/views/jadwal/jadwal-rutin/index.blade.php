@@ -47,7 +47,7 @@
                                 <tr>
                                     <td class="fw-semibold">{{ $rutin->hariLabel() }}</td>
                                     <td>{{ substr($rutin->jam_mulai, 0, 5) }}–{{ $rutin->jamSelesai() }}</td>
-                                    <td>{{ $rutin->kategori?->mataPelajaran?->name }} — {{ $rutin->kategori?->name }}</td>
+                                    <td>{{ $rutin->kategori?->mataPelajaran?->name }} — {{ $rutin->kategori?->name }} — {{ $rutin->grade?->name ?? '-' }}</td>
                                     <td>{{ $rutin->pengajar?->name }}</td>
                                     <td>{{ $rutin->ruangan?->name ?? '-' }}</td>
                                     <td class="text-muted">

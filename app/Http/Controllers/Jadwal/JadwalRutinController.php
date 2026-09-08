@@ -6,7 +6,7 @@ use App\Http\Controllers\Concerns\ResolvesCompanyContext;
 use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\JadwalBranchSetting;
-use App\Models\JadwalKategori;
+use App\Models\JadwalGrade;
 use App\Models\JadwalMataPelajaran;
 use App\Models\JadwalRuangan;
 use App\Models\JadwalRutin;
@@ -27,6 +27,14 @@ use Illuminate\View\View;
  * Reguler) -- diakses lewat tombol "Jadwal Rutin" di baris index
  * Student (jadwal.student.index), jadwal_mata_pelajaran_id WAJIB ada
  * di query string (drill-down terakhir).
+ *
+ * Update 8 September 2026 (fitur Grade): dropdown "Kategori" di form
+ * ini SEKARANG memilih App\Models\JadwalGrade (level baru di bawah
+ * Kategori, pemilik harga & split fee -- lihat docblock JadwalGrade),
+ * bukan Kategori langsung lagi. `jadwal_kategori_id` TETAP disimpan di
+ * baris JadwalRutin (auto-derive dari grade->kategori) supaya
+ * badge/filter lama tidak berubah, `jadwal_grade_id` yang jadi sumber
+ * harga baru (lihat App\Services\Jadwal\JadwalRutinSesiGenerator).
  *
  * Validasi bentrok pengajar/ruangan (spec poin 5) + jam operasional
  * branch (spec poin 1) dicek DI SINI, saat baris disimpan -- lihat
@@ -57,7 +65,7 @@ class JadwalRutinController extends Controller
 
         $rutins = JadwalRutin::where('company_id', $company->id)
             ->where('student_id', $student->id)
-            ->with(['kategori.mataPelajaran:id,name', 'pengajar:id,name', 'ruangan:id,name'])
+            ->with(['kategori.mataPelajaran:id,name', 'grade:id,jadwal_kategori_id,name', 'pengajar:id,name', 'ruangan:id,name'])
             ->orderBy('hari')
             ->orderBy('jam_mulai')
             ->get();
@@ -107,11 +115,14 @@ class JadwalRutinController extends Controller
 
         $validated = $validator->validated();
 
+        $grade = JadwalGrade::where('company_id', $company->id)->findOrFail($validated['jadwal_grade_id']);
+
         JadwalRutin::create([
             'company_id' => $company->id,
             'branch_office_id' => $student->branch_office_id,
             'student_id' => $student->id,
-            'jadwal_kategori_id' => $validated['jadwal_kategori_id'],
+            'jadwal_kategori_id' => $grade->jadwal_kategori_id,
+            'jadwal_grade_id' => $grade->id,
             'pengajar_id' => $validated['pengajar_id'],
             'jadwal_ruangan_id' => $validated['jadwal_ruangan_id'] ?? null,
             'hari' => $validated['hari'],
@@ -161,8 +172,11 @@ class JadwalRutinController extends Controller
 
         $validated = $validator->validated();
 
+        $grade = JadwalGrade::where('company_id', $company->id)->findOrFail($validated['jadwal_grade_id']);
+
         $rutin->update([
-            'jadwal_kategori_id' => $validated['jadwal_kategori_id'],
+            'jadwal_kategori_id' => $grade->jadwal_kategori_id,
+            'jadwal_grade_id' => $grade->id,
             'pengajar_id' => $validated['pengajar_id'],
             'jadwal_ruangan_id' => $validated['jadwal_ruangan_id'] ?? null,
             'hari' => $validated['hari'],
@@ -232,6 +246,13 @@ class JadwalRutinController extends Controller
      * BUKAN cuma Kelas yang tersimpan di jadwal_student.jadwal_mata_pelajaran_id,
      * karena satu murid boleh punya Jadwal Rutin lintas Kelas berbeda
      * (spec poin 4). Pengajar & Ruangan juga branch-scoped yang sama.
+     *
+     * Update 8 September 2026 (fitur Grade): tiap Kategori aktif juga
+     * membawa daftar Grade aktif miliknya (`grades`) -- dropdown form
+     * memilih Grade (harga & split fee ada di level ini sekarang), bukan
+     * Kategori langsung. Kategori yang belum punya Grade aktif sama
+     * sekali tetap tampil di data ini apa adanya (tidak difilter), view
+     * yang memutuskan cara menampilkannya (lihat _form.blade.php).
      */
     private function formData($context, JadwalStudent $student): array
     {
@@ -242,7 +263,9 @@ class JadwalRutinController extends Controller
             ->when($branchOfficeId, fn ($q) => $q->where(function ($q2) use ($branchOfficeId) {
                 $q2->where('branch_office_id', $branchOfficeId)->orWhereNull('branch_office_id');
             }))
-            ->with(['kategoris' => fn ($q) => $q->where('status', 'active')->orderBy('name')])
+            ->with(['kategoris' => fn ($q) => $q->where('status', 'active')
+                ->with(['grades' => fn ($q2) => $q2->where('status', 'active')->orderBy('name')])
+                ->orderBy('name')])
             ->orderBy('name')
             ->get();
 
@@ -266,11 +289,11 @@ class JadwalRutinController extends Controller
         ?string $ignoreId = null,
     ): ValidatorContract {
         $validator = Validator::make($request->all(), [
-            'jadwal_kategori_id' => [
-                'required', 'uuid', 'exists:jadwal_kategori,id',
+            'jadwal_grade_id' => [
+                'required', 'uuid', 'exists:jadwal_grade,id',
                 function ($attribute, $value, $fail) use ($company) {
-                    if ($value && ! JadwalKategori::where('company_id', $company->id)->where('id', $value)->exists()) {
-                        $fail('Kategori tidak valid.');
+                    if ($value && ! JadwalGrade::where('company_id', $company->id)->where('id', $value)->exists()) {
+                        $fail('Grade tidak valid.');
                     }
                 },
             ],
