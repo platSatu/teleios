@@ -87,11 +87,22 @@ class ChatbotFlowService
      * & nullable throughout for backward compatibility with an older Go
      * build that hasn't been redeployed with this field yet.
      *
+     * Update 14 September 2026 (laporan user: pengajar membalas WA
+     * konfirmasi kehadiran tapi absensi tidak pernah ter-update) --
+     * $senderPhone SEKARANG juga diteruskan ke activeState() di bawah,
+     * dipakai sebagai fallback KALAU exact match device_id+chat_jid
+     * gagal (lihat activeState()'s docblock) -- sesi yang dimulai
+     * PROAKTIF oleh sistem (mis. App\Jobs\SendJadwalAttendanceConfirmation)
+     * menebak chat_jid dari nomor HP, tapi WhatsApp bisa melaporkan
+     * chat yang sama lewat "...@lid" begitu pengajar benar-benar
+     * membalas -- tanpa fallback ini, balasannya jatuh sebagai pesan
+     * biasa (bukan jawaban flow) karena dianggap "tidak ada sesi aktif".
+     *
      * @return array{messages: array<int, string>, ended: bool}|null
      */
     public function handleIncoming(string $deviceId, string $chatJid, string $body, ?string $senderPhone = null): ?array
     {
-        $state = $this->activeState($deviceId, $chatJid);
+        $state = $this->activeState($deviceId, $chatJid, $senderPhone);
 
         if ($state) {
             return $this->exitIfRequested($state, $body) ?? $this->continueFlow($state, $body);
@@ -112,10 +123,22 @@ class ChatbotFlowService
      * that's been idle longer than its flow's session_timeout_minutes, is
      * cleaned up here rather than left to accumulate forever, and treated
      * as "no active session" either way.
+     *
+     * Update 14 September 2026 (fallback lewat sender_phone, lihat
+     * findStateBySenderPhone()'s docblock untuk root cause & alasan
+     * lengkap) -- exact match device_id+chat_jid TETAP dicoba dulu
+     * (jalur ini tidak berubah sama sekali untuk kasus normal), $senderPhone
+     * cuma dipakai KALAU itu gagal. Parameter baru, default null --
+     * caller lama (tidak ada, cuma handleIncoming() satu-satunya) tidak
+     * perlu berubah kalau tidak butuh fallback ini.
      */
-    public function activeState(string $deviceId, string $chatJid): ?WaChatbotState
+    public function activeState(string $deviceId, string $chatJid, ?string $senderPhone = null): ?WaChatbotState
     {
         $state = WaChatbotState::where('device_id', $deviceId)->where('chat_jid', $chatJid)->first();
+
+        if (! $state) {
+            $state = $this->findStateBySenderPhone($deviceId, $chatJid, $senderPhone);
+        }
 
         if (! $state) {
             return null;
@@ -141,6 +164,95 @@ class ChatbotFlowService
             $state->delete();
 
             return null;
+        }
+
+        return $state;
+    }
+
+    /**
+     * Fallback 14 September 2026 (laporan user: pengajar membalas WA
+     * konfirmasi kehadiran -- baik angka maupun teks -- tapi absensi
+     * tidak pernah ter-update). Root cause: sesi yang dimulai PROAKTIF
+     * oleh sistem (App\Jobs\SendJadwalAttendanceConfirmation, satu-
+     * satunya caller start() dengan chat_jid TEBAKAN saat ini) menebak
+     * chat_jid dari nomor HP pengajar ("<digit>@s.whatsapp.net"), tapi
+     * WhatsApp bisa melaporkan chat yang sama lewat id "...@lid" yang
+     * sama sekali tidak mengandung nomor HP begitu pengajar BENERAN
+     * membalas (kasus produksi nyata, lihat migration
+     * 2026_09_08_090000_add_sender_phone_to_wa_chatbot_states_table.php's
+     * docblock) -- exact match device_id+chat_jid di activeState() di
+     * atas gagal, sesi dianggap "tidak ada", balasan jatuh sebagai
+     * pesan biasa (bukan jawaban flow), attendance_status tidak pernah
+     * tersimpan.
+     *
+     * Dicari lewat kolom `sender_phone` yang SUDAH ADA sejak migration
+     * di atas (diisi start() dari nomor yang caller proaktif berikan --
+     * App\Jobs\SendJadwalAttendanceConfirmation sekarang ikut mengisinya
+     * dengan nomor pengajar, lihat perubahan di file itu). Begitu
+     * ketemu, chat_jid baris ini SEKALIAN disamakan ke $chatJid yang
+     * baru saja masuk supaya balasan BERIKUTNYA pengajar yang sama
+     * (mis. step "materi apa yang diajarkan") langsung match persis
+     * tanpa perlu fallback ini lagi -- sekali "self-heal", bukan
+     * fallback yang dipakai terus tiap pesan.
+     *
+     * Sengaja TIDAK menyentuh apa pun kalau $senderPhone kosong (webhook
+     * dari build Go lama yang belum kirim field ini) atau tidak ada
+     * baris yang sender_phone-nya cocok -- flow lain (customer-initiated,
+     * yang exact match-nya memang selalu berhasil karena chat_jid start()
+     * = chat_jid webhook yang sama persis) tidak terpengaruh sama sekali
+     * oleh perubahan ini.
+     */
+    private function findStateBySenderPhone(string $deviceId, string $chatJid, ?string $senderPhone): ?WaChatbotState
+    {
+        if (! $senderPhone) {
+            return null;
+        }
+
+        $normalized = PhoneNumber::normalize($senderPhone);
+
+        if ($normalized === '') {
+            return null;
+        }
+
+        $state = WaChatbotState::where('device_id', $deviceId)
+            ->where('sender_phone', $normalized)
+            ->first();
+
+        if (! $state) {
+            return null;
+        }
+
+        $oldChatJid = $state->chat_jid;
+
+        if ($oldChatJid === $chatJid) {
+            return $state;
+        }
+
+        try {
+            $state->chat_jid = $chatJid;
+            $state->save();
+
+            Log::info('chatbot-flow: sesi dicocokkan ulang lewat sender_phone, chat_jid diperbarui', [
+                'device_id' => $deviceId,
+                'sender_phone' => $normalized,
+                'old_chat_jid' => $oldChatJid,
+                'new_chat_jid' => $chatJid,
+            ]);
+        } catch (Throwable $e) {
+            // Sangat kecil kemungkinannya (butuh baris LAIN yang sudah
+            // pakai device_id+$chatJid ini persis, tabrakan unique index)
+            // -- kalau toh terjadi, biarkan chat_jid lama apa adanya dan
+            // tetap kembalikan $state (sesi tetap ketemu & jalan lewat
+            // fallback ini lagi di balasan berikutnya) daripada melempar
+            // error ke webhook caller.
+            Log::warning('chatbot-flow: sesi cocok lewat sender_phone tapi gagal update chat_jid', [
+                'device_id' => $deviceId,
+                'sender_phone' => $normalized,
+                'attempted_chat_jid' => $chatJid,
+                'error' => $e->getMessage(),
+            ]);
+
+            $state->chat_jid = $oldChatJid;
         }
 
         return $state;

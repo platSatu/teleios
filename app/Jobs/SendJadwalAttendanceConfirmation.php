@@ -151,11 +151,26 @@ class SendJadwalAttendanceConfirmation implements ShouldQueue
         try {
             $flow = $provisioner->ensureFlowFor($setting, $company);
 
+            // Fix 14 September 2026 (laporan user: pengajar membalas WA
+            // konfirmasi kehadiran tapi absensi tidak pernah ter-update)
+            // -- SEBELUMNYA $senderPhone di sini selalu null, jadi baris
+            // App\Models\WaChatbotState sesi ini tidak pernah tahu nomor
+            // HP pengajarnya sendiri. $jid di atas ditebak dari nomor HP
+            // ("<digit>@s.whatsapp.net"), tapi begitu pengajar BENERAN
+            // membalas, WhatsApp bisa melaporkan chat yang sama lewat id
+            // "...@lid" (tidak mengandung nomor HP sama sekali) --
+            // App\Services\Chat\ChatbotFlowService::activeState() gagal
+            // menemukan sesi ini lewat chat_jid, dan TANPA sender_phone
+            // di baris ini, fallback barunya (findStateBySenderPhone())
+            // juga tidak ada apa-apa untuk dicocokkan. Passing nomor
+            // pengajar di sini mengisi sender_phone (lihat
+            // ChatbotFlowService::start()) supaya fallback itu bisa
+            // jalan.
             $result = $chatbotFlow->start(
                 $flow,
                 $setting->device_id,
                 $jid,
-                null,
+                $pengajar->handphone,
                 ['jadwal_kelas_id' => $kelas->id],
                 $this->composeFirstMessage($kelas),
             );
