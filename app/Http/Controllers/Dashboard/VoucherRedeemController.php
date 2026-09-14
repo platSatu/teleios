@@ -33,11 +33,24 @@ class VoucherRedeemController extends Controller
             ->latest()
             ->get();
 
+        // Fix 14 September 2026 (laporan user: daftar "Sedang Aktif"
+        // kepanjangan sampai bawah, semua voucher expired ikut nge-load
+        // sekaligus tanpa batas) -- SEBELUMNYA ->get() polos, jumlah
+        // baris di sini terus bertambah seumur akun (voucher expired
+        // tidak pernah dihapus, cuma ditandai badge "Expired" di view).
+        // Diganti paginate(10), pola sama persis yang sudah dipakai
+        // JadwalStudentController/JadwalPengajarController/
+        // JadwalGradeController (paginate()->withQueryString()->onEachSide(1)).
+        // $pendingVouchers di atas SENGAJA dibiarkan ->get() -- daftar itu
+        // cuma voucher yang BELUM di-redeem, wajar selalu pendek, dan
+        // bukan yang dikeluhkan user.
         $activeVouchers = Voucher::where('user_id', $userId)
             ->where('status', 'active')
             ->with('package.categoryApplication')
             ->latest()
-            ->get();
+            ->paginate(10)
+            ->withQueryString()
+            ->onEachSide(1);
 
         return view('dashboard.voucher-redeem.index', compact('pendingVouchers', 'activeVouchers'));
     }
