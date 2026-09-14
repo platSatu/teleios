@@ -339,8 +339,29 @@
                     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
                         <label class="form-label mb-0">Pilih Grup WhatsApp</label>
                         <div class="position-relative" style="max-width:260px; width:100%;">
-                            <i class="ri-search-line position-absolute top-50 start-0 translate-middle-y ms-2 text-muted small"></i>
-                            <input type="text" id="groupSearchInput" class="form-control form-control-sm ps-4" placeholder="Cari grup...">
+                            {{--
+                                Fix 14 September 2026 (laporan user: icon
+                                search-nya berantakan/nempel ke teks "Cari
+                                grup..."). SEBELUMNYA posisi icon & padding
+                                input mengandalkan utility class Bootstrap
+                                "logical property" (ps-4/start-0/top-50/
+                                translate-middle-y) -- kelas-kelas ini baru
+                                ada di Bootstrap 5.1+ dan admin theme statis
+                                project ini (lihat CLAUDE.md section 5:
+                                public/be/assets/css/bootstrap.min.css,
+                                bukan lewat Vite/npm) kemungkinan besar CSS-
+                                nya sudah di-purge/versi lama yang tidak
+                                menyertakan kelas-kelas itu -- efeknya icon
+                                tidak benar-benar ke-posisikan & input tidak
+                                dapat padding kiri sama sekali, jadi teks
+                                nempel ke icon. Diganti inline style murni
+                                (selalu jalan di CSS versi apa pun, tidak
+                                bergantung utility class yang mungkin hilang)
+                                -- pola sama sebaiknya dipakai lagi kalau ada
+                                icon-di-dalam-input serupa di halaman lain.
+                            --}}
+                            <i class="ri-search-line text-muted small" style="position:absolute; top:50%; left:10px; transform:translateY(-50%); pointer-events:none;"></i>
+                            <input type="text" id="groupSearchInput" class="form-control form-control-sm" style="padding-left:30px;" placeholder="Cari grup...">
                         </div>
                     </div>
                     <div id="groupChecklist" class="border rounded p-2" style="max-height:260px;overflow-y:auto;"
