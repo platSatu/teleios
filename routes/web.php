@@ -126,6 +126,12 @@ use App\Http\Controllers\Crm\CustomerTaskController;
 use App\Http\Controllers\Crm\DealController;
 use App\Http\Controllers\Form\FormBranchController;
 use App\Http\Controllers\Form\FormCategoryController;
+use App\Http\Controllers\Tagihan\TagihanCategoryController;
+use App\Http\Controllers\Tagihan\TagihanDendaTierController;
+use App\Http\Controllers\Tagihan\TagihanPelangganController;
+use App\Http\Controllers\Tagihan\TagihanController;
+use App\Http\Controllers\Tagihan\TagihanPenerimaController;
+use App\Http\Controllers\Tagihan\Public\TagihanPublicController;
 use App\Http\Controllers\Form\FormContentController;
 use App\Http\Controllers\Form\FormFooterController;
 use App\Http\Controllers\Form\FormHeaderController;
@@ -500,6 +506,98 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
             ->group(function () {
                 Route::get('/', 'index')->name('jadwal.laporan.index');
                 Route::get('/export', 'export')->name('jadwal.laporan.export');
+            });
+    });
+
+    // Fitur "Tagihan" -- aplikasi pembayaran/invoice berdiri sendiri
+    // (lihat App\Models\Tagihan* & migration-nya, 22 September 2026):
+    // company bisa menagih pelanggan-nya sendiri (SPP-style berulang
+    // atau sekali bayar), collect via Duitku, dengan halaman publik
+    // tanpa login. SENGAJA belum di-gate 'active.package:Pembayaran' --
+    // saat kategori package "Pembayaran" ini dibahas di sesi
+    // sebelumnya, pemilik akun eksplisit bilang gating-nya "di luar
+    // scope dulu". Tinggal tambahkan 'active.package:Pembayaran' ke
+    // middleware group ini kalau nanti mau diaktifkan, sama pola
+    // dengan 'form'/'jadwal' di atas.
+    //
+    // Halaman PUBLIK bayar tagihan (app.konexa.id/tagihan/{branch-slug}/
+    // {token}) TIDAK ada di sini -- itu rute top-level tanpa auth,
+    // didaftarkan terpisah di bawah (lihat komentar dekat
+    // TagihanPublicController). Beda dengan /{slug} milik Form, URL
+    // publik Tagihan punya prefix tetap "tagihan/" jadi TIDAK perlu
+    // ditaruh paling bawah file ini -- tidak akan pernah "mencuri" rute
+    // lain seperti /login, /dashboard, dst.
+    Route::prefix('tagihan')->middleware(['menu.access'])->group(function () {
+        Route::prefix('category')
+            ->controller(TagihanCategoryController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('tagihan.category.index');
+                Route::get('/create', 'create')->name('tagihan.category.create');
+                Route::post('/', 'store')->name('tagihan.category.store');
+                Route::get('/{id}/edit', 'edit')->name('tagihan.category.edit');
+                Route::put('/{id}', 'update')->name('tagihan.category.update');
+                Route::delete('/{id}', 'destroy')->name('tagihan.category.destroy');
+            });
+
+        // Aturan denda bertingkat milik satu category -- nested di
+        // bawah category karena tidak pernah berdiri sendiri (selalu
+        // punya tagihan_category_id), lihat App\Models\TagihanDendaTier.
+        Route::prefix('category/{tagihanCategory}/denda-tier')
+            ->controller(TagihanDendaTierController::class)
+            ->group(function () {
+                Route::post('/', 'store')->name('tagihan.denda-tier.store');
+                Route::put('/{id}', 'update')->name('tagihan.denda-tier.update');
+                Route::delete('/{id}', 'destroy')->name('tagihan.denda-tier.destroy');
+            });
+
+        Route::prefix('pelanggan')
+            ->controller(TagihanPelangganController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('tagihan.pelanggan.index');
+                Route::get('/create', 'create')->name('tagihan.pelanggan.create');
+                Route::post('/', 'store')->name('tagihan.pelanggan.store');
+                Route::get('/{id}/edit', 'edit')->name('tagihan.pelanggan.edit');
+                Route::put('/{id}', 'update')->name('tagihan.pelanggan.update');
+                Route::delete('/{id}', 'destroy')->name('tagihan.pelanggan.destroy');
+                // Checklist langganan category (TagihanCategoryPelanggan) --
+                // dipisah dari update() biasa karena ini toggle per-baris,
+                // bukan bagian form utama pelanggan.
+                Route::post('/{id}/category/{categoryId}/toggle', 'toggleCategory')->name('tagihan.pelanggan.category.toggle');
+            });
+
+        Route::prefix('invoice')
+            ->controller(TagihanController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('tagihan.index');
+                Route::get('/create', 'create')->name('tagihan.create');
+                Route::post('/', 'store')->name('tagihan.store');
+                Route::get('/{id}', 'show')->name('tagihan.show');
+                Route::get('/{id}/edit', 'edit')->name('tagihan.edit');
+                Route::put('/{id}', 'update')->name('tagihan.update');
+                Route::delete('/{id}', 'destroy')->name('tagihan.destroy');
+                // Tambah/hapus baris TagihanPenerima secara manual tanpa
+                // mengubah daftar langganan category (lihat docblock
+                // tagihan_category_pelanggan) -- checklist pelanggan mana
+                // saja yang ditagih untuk periode ini.
+                Route::post('/{id}/penerima', 'addPenerima')->name('tagihan.penerima.add');
+                Route::delete('/{id}/penerima/{penerimaId}', 'removePenerima')->name('tagihan.penerima.remove');
+                // Aturan pengingat (H-7/H-3/dst) khusus tagihan ini.
+                Route::post('/{id}/reminder-rule', 'addReminderRule')->name('tagihan.reminder-rule.add');
+                Route::delete('/{id}/reminder-rule/{ruleId}', 'removeReminderRule')->name('tagihan.reminder-rule.remove');
+            });
+
+        // Daftar invoice per-penerima (lintas Tagihan) -- laporan &
+        // histori pembayaran, lihat App\Http\Controllers\Tagihan\
+        // TagihanPenerimaController's docblock.
+        Route::prefix('laporan')
+            ->controller(TagihanPenerimaController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('tagihan.laporan.index');
+                Route::get('/{id}', 'show')->name('tagihan.laporan.show');
+                Route::post('/{id}/batalkan', 'cancel')->name('tagihan.laporan.cancel');
+                // Regenerate public_token -- kalau link lama sudah
+                // ter-share ke orang yang salah.
+                Route::post('/{id}/regenerate-token', 'regenerateToken')->name('tagihan.laporan.regenerate-token');
             });
     });
 
@@ -1831,6 +1929,24 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
 });
 
 require __DIR__ . '/auth.php';
+
+// Halaman publik bayar Tagihan -- app.konexa.id/tagihan/{branch-slug}/
+// {token}, TANPA auth (pelanggan langsung input nama dll lalu bayar,
+// tidak perlu account/login). Prefix "tagihan/" tetap, bukan wildcard
+// segmen-pertama seperti /{slug} milik Form di bawah, jadi aman
+// didaftarkan di sini (tidak akan "mencuri" rute lain) -- tapi tetap
+// ditaruh setelah auth.php seperti /dokumentasi supaya urutan baca
+// file ini konsisten (rute admin dulu, publik belakangan). Kunci akses
+// sebenarnya adalah {token} (App\Models\TagihanPenerima::public_token),
+// {branch-slug} cuma kosmetik/URL yang enak dibaca -- lihat
+// App\Http\Controllers\Tagihan\Public\TagihanPublicController.
+Route::prefix('tagihan/{branchSlug}/{token}')
+    ->controller(TagihanPublicController::class)
+    ->group(function () {
+        Route::get('/', 'show')->name('tagihan.public.show');
+        Route::post('/checkout', 'proceedToDuitku')->name('tagihan.public.checkout');
+        Route::get('/return', 'returnFromDuitku')->name('tagihan.public.return');
+    });
 
 // Halaman publik pengisi Form (fitur Form, lihat grup route 'form' di
 // atas untuk sisi admin-nya) -- app.konexa.id/{slug}, TANPA auth, sama

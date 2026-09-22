@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\Frontend\VideoController as FrontendVideoController
 use App\Http\Controllers\Api\Frontend\VisitorLogController as FrontendVisitorLogController;
 use App\Http\Controllers\Api\Frontend\WebSettingController as FrontendWebSettingController;
 use App\Http\Controllers\User\Deposit\DuitkuCallbackController;
+use App\Http\Controllers\Tagihan\TagihanDuitkuCallbackController;
 
 // Server-to-server webhook Duitku posts payment results to — resolves
 // to POST /api/duitku/callback (this file is auto-prefixed with "api"
@@ -32,6 +33,16 @@ use App\Http\Controllers\User\Deposit\DuitkuCallbackController;
 // (builds the callbackUrl sent to Duitku via route('deposit.duitku.callback')).
 Route::post('/duitku/callback', [DuitkuCallbackController::class, 'handle'])
     ->name('deposit.duitku.callback');
+
+// Webhook Duitku terpisah khusus fitur Tagihan (bukan dipakai bareng
+// endpoint Deposit di atas) -- merchantOrderId Tagihan pakai prefix
+// "TGH-" (lihat App\Models\TagihanPenerima::boot()) beda dari "DEP-"
+// milik Deposit, jadi App\Http\Controllers\Tagihan\
+// TagihanDuitkuCallbackController mencari baris tagihan_penerima
+// sendiri, bukan numpang lookup Deposit. Sama pola stateless/no-CSRF
+// dan sama-sama trust dari signature check di dalam controller.
+Route::post('/tagihan/duitku/callback', [TagihanDuitkuCallbackController::class, 'handle'])
+    ->name('tagihan.duitku.callback');
 
 // Server-to-server webhook the Go backend posts to every time a WhatsApp
 // message actually arrives (see g_backend's WaInboxService.

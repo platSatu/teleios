@@ -36,6 +36,7 @@ class TagihanPenerima extends Model
         'tagihan_pelanggan_id',
         'company_id',
         'branch_office_id',
+        'order_number',
         'amount',
         'denda_amount',
         'status',
@@ -62,6 +63,19 @@ class TagihanPenerima extends Model
         static::creating(function (self $penerima) {
             if (empty($penerima->public_token)) {
                 $penerima->public_token = (string) Str::uuid();
+            }
+
+            // merchantOrderId yang dikirim ke Duitku (lihat App\Http\
+            // Controllers\Tagihan\Public\TagihanPublicController &
+            // App\Http\Controllers\Tagihan\TagihanDuitkuCallbackController)
+            // -- SENGAJA bukan public_token (itu kredensial akses
+            // halaman publik, tidak boleh nongol di dashboard Duitku
+            // atau di query string manapun) dan bukan juga `id` murni
+            // (prefix "TGH-" dipakai TagihanDuitkuCallbackController
+            // buat memastikan callback ini benar milik Tagihan, bukan
+            // nyasar dari App\Models\Deposit yang pakai prefix "DEP-").
+            if (empty($penerima->order_number)) {
+                $penerima->order_number = 'TGH-'.now()->format('YmdHis').strtoupper(Str::random(6));
             }
         });
     }

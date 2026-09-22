@@ -177,6 +177,47 @@
                     </li>
                 @endif
 
+                {{-- Menu "Tagihan" -- aplikasi pembayaran/invoice berdiri
+                         sendiri (22 September 2026, lihat App\Models\Tagihan*
+                         & routes/web.php's 'tagihan' group). SENGAJA belum
+                         dibungkus package-gate seperti Form/Jadwal di atas
+                         -- saat kategori package "Pembayaran" dibahas,
+                         pemilik akun eksplisit bilang gating-nya "di luar
+                         scope dulu". Tambahkan @if ($hasActivePembayaranPackage)
+                         di sini nanti kalau mau diaktifkan, pola sama
+                         dengan Form/Jadwal. --}}
+                <li class="pe-slide pe-has-sub">
+                    <a href="#collapseTagihan" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
+                        aria-controls="collapseTagihan">
+                        <i class="uil uil-invoice pe-nav-icon"></i>
+                        <span class="pe-nav-content">Tagihan</span>
+                        <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
+                        <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
+                    </a>
+                    <ul class="pe-slide-menu collapse" id="collapseTagihan">
+                        <li class="pe-slide-item">
+                            <a href="{{ route('tagihan.category.index') }}" class="pe-nav-link">
+                                Kategori Tagihan
+                            </a>
+                        </li>
+                        <li class="pe-slide-item">
+                            <a href="{{ route('tagihan.pelanggan.index') }}" class="pe-nav-link">
+                                Pelanggan
+                            </a>
+                        </li>
+                        <li class="pe-slide-item">
+                            <a href="{{ route('tagihan.index') }}" class="pe-nav-link">
+                                Tagihan (Invoice)
+                            </a>
+                        </li>
+                        <li class="pe-slide-item">
+                            <a href="{{ route('tagihan.laporan.index') }}" class="pe-nav-link">
+                                Laporan
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+
                 {{-- Chat menu (and its whole "Pengaturan" sub-tree) only
                          shown while the user has at least one active,
                          not-yet-expired package — same rule as the routes

@@ -105,6 +105,13 @@ return Application::configure(basePath: dirname(__DIR__))
             ->everyMinute()
             ->withoutOverlapping();
 
+        // Sama alasan/pola persis dengan deposit:process-expiry di atas,
+        // tapi untuk fitur Tagihan (App\Models\TagihanPenerima) -- lihat
+        // App\Console\Commands\ProcessTagihanExpiry.
+        $schedule->command('tagihan:process-expiry')
+            ->everyMinute()
+            ->withoutOverlapping();
+
         // Flags WhatsApp conversations whose first-response/resolution
         // SLA due date has passed — see
         // App\Console\Commands\EvaluateChatSlaBreaches. Minute-granular

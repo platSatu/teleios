@@ -4,6 +4,7 @@ namespace App\Services\Payment;
 
 use App\Models\Deposit;
 use App\Models\DuitkuSetting;
+use App\Models\TagihanPenerima;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -208,6 +209,96 @@ class DuitkuService
         }
 
         return $valid;
+    }
+
+    /**
+     * Sama persis alurnya dengan createInvoice(Deposit) di atas, tapi
+     * untuk App\Models\TagihanPenerima (fitur Tagihan/pembayaran) --
+     * dipisah jadi method sendiri (bukan generalisasi satu method untuk
+     * dua model) karena field sumbernya beda total (nama/kontak dari
+     * TagihanPelanggan, bukan User, dan tidak ada wallet/user_id sama
+     * sekali) serta callback/return URL-nya sendiri (lihat
+     * App\Http\Controllers\Tagihan\TagihanDuitkuCallbackController vs
+     * App\Http\Controllers\User\Deposit\DuitkuCallbackController).
+     *
+     * merchantOrderId = TagihanPenerima::order_number (prefix "TGH-",
+     * lihat model's boot()) -- BUKAN public_token, supaya kredensial
+     * akses halaman publik tidak pernah nongol di dashboard Duitku.
+     *
+     * paymentAmount = amount + denda_amount (denda_amount di sini
+     * diasumsikan SUDAH di-set oleh pemanggil sebelum method ini
+     * dipanggil, lihat App\Http\Controllers\Tagihan\Public\
+     * TagihanPublicController::proceedToDuitku() yang menyimpan hasil
+     * TagihanPenerima::hitungDenda() ke kolom itu tepat sebelum
+     * createInvoice dipanggil).
+     *
+     * @return array{raw: array, paymentUrl: ?string, reference: ?string, statusCode: ?string, statusMessage: ?string, request_payload: array}
+     */
+    public function createInvoiceForTagihan(TagihanPenerima $penerima, string $branchSlug): array
+    {
+        $penerima->loadMissing('pelanggan');
+        $pelanggan = $penerima->pelanggan;
+
+        $totalAmount = (int) round((float) $penerima->amount + (float) $penerima->denda_amount);
+        $name = $pelanggan?->name ?: 'Pelanggan';
+        [$firstName, $lastName] = $this->splitName($name);
+        $phone = $pelanggan?->phone_number ?: '';
+        $email = $pelanggan?->email ?: 'noreply@example.com';
+
+        $productDetails = $penerima->tagihan?->name ?: 'Pembayaran Tagihan';
+
+        $payload = [
+            'paymentAmount' => $totalAmount,
+            'merchantOrderId' => $penerima->order_number,
+            'productDetails' => $productDetails,
+            'additionalParam' => '',
+            'merchantUserInfo' => (string) $penerima->tagihan_pelanggan_id,
+            'customerVaName' => $name,
+            'email' => $email,
+            'phoneNumber' => $phone,
+            'itemDetails' => [
+                [
+                    'name' => $productDetails,
+                    'price' => $totalAmount,
+                    'quantity' => 1,
+                ],
+            ],
+            'customerDetail' => [
+                'firstName' => $firstName,
+                'lastName' => $lastName,
+                'email' => $email,
+                'phoneNumber' => $phone,
+                'billingAddress' => $this->address($firstName, $lastName, $phone),
+                'shippingAddress' => $this->address($firstName, $lastName, $phone),
+            ],
+            'callbackUrl' => route('tagihan.duitku.callback'),
+            'returnUrl' => route('tagihan.public.return', ['branchSlug' => $branchSlug, 'token' => $penerima->public_token]),
+            'expiryPeriod' => (int) config('services.duitku.expiry_minutes', 60),
+        ];
+
+        $timestamp = (string) round(microtime(true) * 1000);
+        $signature = hash_hmac('sha256', $this->merchantCode . $timestamp, $this->apiKey);
+
+        $response = Http::withHeaders([
+            'x-duitku-signature' => $signature,
+            'x-duitku-timestamp' => $timestamp,
+            'x-duitku-merchantcode' => $this->merchantCode,
+        ])->post($this->apiBaseUrl() . '/api/merchant/createinvoice', $payload);
+
+        $decoded = $response->json() ?? [];
+
+        if ($response->failed() && empty($decoded)) {
+            throw new RuntimeException('Duitku Error: ' . $response->status() . ' response: ' . $response->body());
+        }
+
+        return [
+            'raw' => $decoded,
+            'paymentUrl' => $decoded['paymentUrl'] ?? null,
+            'reference' => $decoded['reference'] ?? null,
+            'statusCode' => $decoded['statusCode'] ?? null,
+            'statusMessage' => $decoded['statusMessage'] ?? ($response->failed() ? $response->body() : null),
+            'request_payload' => $payload,
+        ];
     }
 
     /**
