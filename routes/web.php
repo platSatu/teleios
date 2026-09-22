@@ -813,6 +813,7 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::put('/{id}', 'update')->name('chat.message-schedules.update');
                 Route::delete('/{id}', 'destroy')->name('chat.message-schedules.destroy');
                 Route::get('/{id}/history', 'history')->name('chat.message-schedules.history');
+                Route::post('/{id}/resend-failed', 'resendFailed')->name('chat.message-schedules.resend-failed');
             });
 
         Route::prefix('message-templates')

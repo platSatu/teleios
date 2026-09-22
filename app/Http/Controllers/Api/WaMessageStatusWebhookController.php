@@ -19,6 +19,17 @@ use Illuminate\Support\Facades\Log;
  * backend accepted the send request" (status='sent') and "Read" being a
  * permanent placeholder.
  *
+ * delivered_count/read_count/recipient_total (diskusi 22 September 2026)
+ * -- WhatsApp mengirim tanda-terima TERPISAH per anggota grup, dan
+ * g_backend sekarang melacak tiap anggota secara terpisah juga (lihat
+ * WaMessageReceipt di sisi Go) alih-alih menyamaratakan semuanya jadi satu
+ * `status` -- itu sebabnya sebelum ini, "read" ke grup tidak pernah bisa
+ * lebih dari 1 walau anggotanya banyak yang baca. Setiap panggilan webhook
+ * ini sekarang membawa hitungan TERBARU (bukan delta), jadi selalu di-
+ * MAX-kan terhadap yang sudah tersimpan, bukan ditambahkan begitu saja --
+ * lebih dari satu request bisa datang untuk pesan yang sama dari anggota
+ * grup yang berbeda-beda.
+ *
  * Only scheduled sends have a matching row here (App\Jobs\
  * SendScheduledWaMessage captures message_id the moment it sends) — a
  * receipt for a manually-sent inbox message just finds no match and is a
@@ -33,6 +44,12 @@ class WaMessageStatusWebhookController extends Controller
             'device_id' => ['required', 'string'],
             'message_id' => ['required', 'string'],
             'status' => ['required', 'string', 'in:delivered,read,played'],
+            'delivered_count' => ['nullable', 'integer', 'min:0'],
+            'read_count' => ['nullable', 'integer', 'min:0'],
+            // 0 dari g_backend berarti "ukuran grup belum diketahui",
+            // BUKAN "0 penerima" -- lihat migration
+            // add_receipt_counts_to_wa_message_schedule_logs.php.
+            'recipient_total' => ['nullable', 'integer', 'min:0'],
         ]);
 
         $log = WaMessageScheduleLog::where('message_id', $validated['message_id'])->first();
@@ -53,20 +70,34 @@ class WaMessageStatusWebhookController extends Controller
         $incomingRank = WaMessageScheduleLog::STATUS_RANK[$incomingStatus] ?? 0;
         $currentRank = WaMessageScheduleLog::STATUS_RANK[$log->status] ?? 0;
 
-        if ($incomingRank <= $currentRank) {
+        $updates = [
+            // Selalu di-MAX-kan, TIDAK digerbang oleh $incomingRank <=
+            // $currentRank di bawah -- receipt dari anggota grup KEDUA,
+            // KETIGA, dst tetap harus menaikkan hitungan walau `status`
+            // pesan (skala pesan, bukan per-anggota) sudah mentok di
+            // rank tertinggi sejak anggota pertama.
+            'delivered_count' => max($log->delivered_count, $validated['delivered_count'] ?? 0),
+            'read_count' => max($log->read_count, $validated['read_count'] ?? 0),
+        ];
+
+        if (! empty($validated['recipient_total'])) {
+            $updates['recipient_total'] = max($log->recipient_total ?? 0, $validated['recipient_total']);
+        }
+
+        if ($incomingRank > $currentRank) {
             // Never move backwards — same rule g_backend's own
             // messageStatusRank() applies to wa_messages.status, kept
             // consistent on this side too (e.g. a delayed 'delivered'
             // landing after 'read' already did).
-            return response()->json(['status' => 'stale, ignored']);
+            $updates['status'] = $incomingStatus;
         }
 
-        $log->forceFill(['status' => $incomingStatus])->save();
+        $log->forceFill($updates)->save();
 
         Log::info('wa-message-status: log updated', [
             'log_id' => $log->id,
             'message_id' => $validated['message_id'],
-            'status' => $incomingStatus,
+            'updates' => $updates,
         ]);
 
         return response()->json(['status' => 'updated', 'log_id' => $log->id]);

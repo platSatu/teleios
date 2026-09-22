@@ -35,6 +35,9 @@ class WaMessageScheduleLog extends Model
         'error',
         'sent_at',
         'attempts',
+        'delivered_count',
+        'read_count',
+        'recipient_total',
     ];
 
     /**
@@ -70,6 +73,9 @@ class WaMessageScheduleLog extends Model
         'send_date' => 'date',
         'sent_at' => 'datetime',
         'attempts' => 'integer',
+        'delivered_count' => 'integer',
+        'read_count' => 'integer',
+        'recipient_total' => 'integer',
     ];
 
     protected static function boot()
@@ -101,5 +107,31 @@ class WaMessageScheduleLog extends Model
     public function recipientValue(): string
     {
         return Str::after($this->recipient_key, ':');
+    }
+
+    /**
+     * "3/8 dibaca" for a group recipient whose size g_backend has
+     * managed to fetch (recipient_total > 1) — null when there's nothing
+     * more precise to show than the bare read_count (a 'phone'/'user'
+     * recipient, where the denominator is always trivially 1 anyway, or
+     * a group whose member count isn't known yet), so the history view
+     * falls back to showing just the count on its own.
+     */
+    public function readFraction(): ?string
+    {
+        if ($this->recipient_total && $this->recipient_total > 1) {
+            return "{$this->read_count}/{$this->recipient_total}";
+        }
+
+        return null;
+    }
+
+    public function deliveredFraction(): ?string
+    {
+        if ($this->recipient_total && $this->recipient_total > 1) {
+            return "{$this->delivered_count}/{$this->recipient_total}";
+        }
+
+        return null;
     }
 }

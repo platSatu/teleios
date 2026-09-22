@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Chat;
 
 use App\Http\Controllers\Concerns\ResolvesCompanyContext;
 use App\Http\Controllers\Controller;
+use App\Jobs\SendScheduledWaMessage;
 use App\Models\Company;
 use App\Models\CompanyToUser;
 use App\Models\User;
@@ -81,16 +82,22 @@ class MessageScheduleController extends Controller
                 // "Belum diproses" fallback) doesn't go stale the moment
                 // a receipt advances a row past 'sent'.
                 'logs as sent_count' => fn ($q) => $q->whereIn('status', ['sent', 'delivered', 'read']),
-                // 'delivered' rank-and-above — real WhatsApp delivery
-                // receipts forwarded by App\Http\Controllers\Api\
-                // WaMessageStatusWebhookController, not just "handed to
-                // the Go backend" like the old sent-only count implied.
-                'logs as delivered_count' => fn ($q) => $q->whereIn('status', ['delivered', 'read']),
-                'logs as read_count' => fn ($q) => $q->where('status', 'read'),
                 'logs as failed_count' => fn ($q) => $q->where('status', 'failed'),
                 'logs as pending_count' => fn ($q) => $q->where('status', 'pending'),
                 'steps',
             ])
+            // Delivered/Read are now SUMS of per-log delivered_count/
+            // read_count (diskusi 22 September 2026), not a count of log
+            // ROWS whose status matches — one log row can BE a whole
+            // WhatsApp group, and g_backend now reports how many of that
+            // group's actual members delivered/read it (see
+            // WaMessageStatusWebhookController), so counting rows would
+            // still cap a group's read count at 1 regardless of how many
+            // members really read it. For 'phone'/'user' recipients this
+            // sums to exactly the same thing withCount used to give
+            // (each row's delivered_count/read_count is 0 or 1 there).
+            ->withSum('logs as delivered_count', 'delivered_count')
+            ->withSum('logs as read_count', 'read_count')
             ->latest()
             ->paginate(10)
             ->withQueryString()
@@ -282,7 +289,54 @@ class MessageScheduleController extends Controller
         $recipientLabels = $this->recipientLabels($schedule->recipients ?? []);
         $stepLabels = $this->stepLabels($schedule);
 
-        return view('chat.message-schedules.history', compact('schedule', 'logs', 'recipientLabels', 'stepLabels'));
+        // Dihitung terpisah dari $logs (yang cuma satu halaman
+        // paginated) -- tombol "Resend yang Gagal" butuh total SELURUH
+        // baris 'failed' pada schedule ini, bukan cuma yang tampil di
+        // halaman saat ini.
+        $failedCount = $schedule->logs()->where('status', 'failed')->count();
+
+        return view('chat.message-schedules.history', compact('schedule', 'logs', 'recipientLabels', 'stepLabels', 'failedCount'));
+    }
+
+    /**
+     * "Resend yang Gagal" (diskusi 22 September 2026) -- mengirim ULANG
+     * HANYA baris App\Models\WaMessageScheduleLog yang statusnya
+     * 'failed' pada schedule ini, tanpa mengirim ulang ke penerima yang
+     * sudah sukses/masih pending/di-skip. Tidak menulis ulang seluruh
+     * alur kirim di sini -- cukup set ulang tiap baris ke 'pending'
+     * (supaya langsung kelihatan "sedang diproses lagi" di halaman ini
+     * sebelum job-nya benar-benar jalan) lalu dispatch ulang
+     * App\Jobs\SendScheduledWaMessage yang SAMA persis dipakai alur
+     * kirim normal -- job itu sendiri yang menangani validasi ulang
+     * (opt-out, kuota paket, device offline, dst) dari awal, jadi tidak
+     * ada logika kirim yang diduplikasi di sini.
+     */
+    public function resendFailed(Request $request, string $id): RedirectResponse
+    {
+        $company = $this->ownedCompanyOrFail($request);
+
+        $schedule = WaMessageSchedule::where('company_id', $company->id)
+            ->where('id', $id)
+            ->firstOrFail();
+
+        $failedLogs = $schedule->logs()->where('status', 'failed')->get();
+
+        if ($failedLogs->isEmpty()) {
+            return back()->with('error', 'Tidak ada pengiriman yang gagal untuk dikirim ulang.');
+        }
+
+        foreach ($failedLogs as $log) {
+            $log->forceFill(['status' => 'pending'])->save();
+
+            SendScheduledWaMessage::dispatch(
+                $schedule->id,
+                $log->recipient_key,
+                $log->send_date->toDateString(),
+                $log->step_order,
+            );
+        }
+
+        return back()->with('success', "{$failedLogs->count()} pengiriman yang gagal sedang dikirim ulang.");
     }
 
     private function validator(Request $request, Company $company)

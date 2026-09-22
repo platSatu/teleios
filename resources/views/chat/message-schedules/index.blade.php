@@ -134,8 +134,16 @@
                                     $userCount = $recipients->where('type', 'user')->count();
                                     $isRunning = $schedule->status === 'active'
                                         && $schedule->isActiveOn(now()->toDateString());
+                                    // Sebelumnya '>' (harus SUDAH LEWAT tanggal akhir) --
+                                    // untuk jadwal yang date_start == date_end == hari ini,
+                                    // syarat itu tidak akan pernah terpenuhi sampai BESOK,
+                                    // walau pesannya sendiri sudah selesai terkirim/dibaca hari
+                                    // ini juga (pending_count == 0). Diperbaiki jadi '>=' 22
+                                    // September 2026 -- "hari ini SUDAH sampai tanggal akhir"
+                                    // + tidak ada lagi yang pending sudah cukup buat "Selesai",
+                                    // tidak perlu menunggu tengah malam lewat.
                                     $isDone = $schedule->status === 'active'
-                                        && now()->toDateString() > $schedule->date_end->toDateString()
+                                        && now()->toDateString() >= $schedule->date_end->toDateString()
                                         && $schedule->pending_count == 0;
                                 @endphp
                                 <tr>

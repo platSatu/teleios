@@ -15,6 +15,15 @@
             </p>
         </div>
         <div class="d-flex gap-2">
+            @if($failedCount > 0)
+                <form method="POST" action="{{ route('chat.message-schedules.resend-failed', $schedule->id) }}"
+                      onsubmit="return confirm('Kirim ulang {{ $failedCount }} pengiriman yang gagal?');">
+                    @csrf
+                    <button type="submit" class="btn btn-warning">
+                        <i class="ri-refresh-line"></i> Resend yang Gagal ({{ $failedCount }})
+                    </button>
+                </form>
+            @endif
             <a href="{{ route('chat.message-schedules.edit', $schedule->id) }}" class="btn btn-light">
                 <i class="ri-edit-line"></i> Edit Jadwal
             </a>
@@ -23,6 +32,13 @@
             </a>
         </div>
     </div>
+
+    @if(session('success'))
+        <div class="alert alert-success">{{ session('success') }}</div>
+    @endif
+    @if(session('error'))
+        <div class="alert alert-danger">{{ session('error') }}</div>
+    @endif
 
     <div class="card border-0 shadow-sm">
         <div class="card-body">
@@ -57,8 +73,24 @@
                                 @endif
                                 <td style="white-space: nowrap;">{{ $recipientLabels[$log->recipient_key] ?? $log->recipient_key }}</td>
                                 <td style="white-space: nowrap;">
-                                    @if($log->status === 'sent')
-                                        <span class="badge bg-success-subtle text-success"><i class="ri-check-double-line"></i> Terkirim</span>
+                                    {{-- Sebelumnya cek '=== sent' saja, jadi begitu status naik
+                                         ke 'delivered'/'read' (lihat App\Http\Controllers\Api\
+                                         WaMessageStatusWebhookController) baris ini malah balik
+                                         kelihatan "Menunggu" -- padahal pesannya sudah lama
+                                         terkirim. Diperbaiki 22 September 2026, sekaligus
+                                         menampilkan pecahan "x/y" untuk penerima grup yang
+                                         ukurannya diketahui (App\Models\WaMessageScheduleLog::
+                                         readFraction()/deliveredFraction()). --}}
+                                    @if($log->status === 'read')
+                                        <span class="badge bg-info-subtle text-info">
+                                            <i class="ri-eye-line"></i> Dibaca{{ $log->readFraction() ? ' ('.$log->readFraction().')' : '' }}
+                                        </span>
+                                    @elseif($log->status === 'delivered')
+                                        <span class="badge bg-primary-subtle text-primary">
+                                            <i class="ri-check-double-line"></i> Delivered{{ $log->deliveredFraction() ? ' ('.$log->deliveredFraction().')' : '' }}
+                                        </span>
+                                    @elseif($log->status === 'sent')
+                                        <span class="badge bg-success-subtle text-success"><i class="ri-check-line"></i> Terkirim</span>
                                     @elseif($log->status === 'failed')
                                         <span class="badge bg-danger-subtle text-danger"><i class="ri-error-warning-line"></i> Gagal</span>
                                     @elseif($log->status === 'skipped')
@@ -69,7 +101,7 @@
                                 </td>
                                 <td style="white-space: nowrap;">{{ $log->attempts }}</td>
                                 <td style="white-space: nowrap;">
-                                    @if($log->status === 'sent')
+                                    @if(in_array($log->status, ['sent', 'delivered', 'read']))
                                         <span class="text-muted small">{{ $log->sent_at?->translatedFormat('d M Y H:i') }}</span>
                                     @elseif($log->error)
                                         <span class="text-danger small">{{ $log->error }}</span>
