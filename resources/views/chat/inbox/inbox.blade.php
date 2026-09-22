@@ -472,7 +472,23 @@
         .wa-msg-highlight { background: #fef08a; border-radius: 3px; }
         .wa-msg-highlight-active { background: #fbbf24; }
 
-        .wa-icon-btn { border: none; background: transparent; color: #6b7280; width: 32px; height: 32px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; }
+        {{-- line-height/padding reset is the actual fix here, not just
+             belt-and-suspenders: <button> keeps the browser's default
+             line-height (inherited ~1.5 from the page), which inflates
+             the icon glyph's own line box taller than the 32px button
+             and — because that extra space isn't split evenly above/
+             below the glyph for most icon fonts — visually renders the
+             icon a few px lower than the button's true center. The
+             button's actual hit area (and its hover background) stays
+             correctly centered the whole time, so tapping the
+             *visible* icon undershoots into the box below it — exactly
+             the "klik harus agak ke atas dari icon" symptom reported by
+             the user, and confusing for anyone who doesn't know to
+             compensate. line-height: 1 removes the inflated line box
+             entirely, so the glyph centers exactly where the flex
+             centering (and the hit area) already puts it. --}}
+        .wa-icon-btn { border: none; background: transparent; color: #6b7280; width: 32px; height: 32px; padding: 0; line-height: 1; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; }
+        .wa-icon-btn i { line-height: 1; }
         .wa-icon-btn:hover { background: #f1f5f9; color: #374151; }
 
         .wa-presence-pill { font-size: 0.72rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
@@ -571,7 +587,8 @@
              instead of overflowing/wrapping the whole toolbar row. --}}
         .wa-send-icons { display: flex; align-items: center; gap: 2px; flex-shrink: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
         .wa-send-icons::-webkit-scrollbar { display: none; }
-        .wa-send-btn { border: none; background: #16a34a; color: #fff; border-radius: 999px; padding: 8px 16px; display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.85rem; flex-shrink: 0; white-space: nowrap; }
+        .wa-send-btn { border: none; background: #16a34a; color: #fff; border-radius: 999px; padding: 8px 16px; line-height: 1; display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.85rem; flex-shrink: 0; white-space: nowrap; }
+        .wa-send-btn i { line-height: 1; }
         .wa-send-btn:hover { background: #128a3e; }
 
         /* --- right column --- */
