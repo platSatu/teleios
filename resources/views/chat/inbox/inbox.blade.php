@@ -79,15 +79,32 @@
 
                 <form id="wa-send-form" class="wa-send-form d-none">
                     <input type="file" id="wa-attach-input" class="d-none" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.txt">
-                    <div class="wa-send-icons">
-                        <button type="button" id="wa-emoji-btn" class="wa-icon-btn" title="Emoji"><i class="ri-emotion-line"></i></button>
-                        <button type="button" id="wa-quick-reply-btn" class="wa-icon-btn" title="Balasan cepat"><i class="ri-flashlight-line"></i></button>
-                        <button type="button" id="wa-template-btn" class="wa-icon-btn" title="Template pesan"><i class="ri-apps-2-line"></i></button>
-                        <button type="button" id="wa-poll-btn" class="wa-icon-btn" title="Buat survei/poll" data-bs-toggle="modal" data-bs-target="#wa-poll-modal"><i class="ri-bar-chart-box-line"></i></button>
-                        <button type="button" id="wa-attach-btn" class="wa-icon-btn" title="Lampirkan file"><i class="ri-attachment-2"></i></button>
+                    {{-- Composer redesigned as a 2-row card (text on top,
+                         icon toolbar + Send pill below) instead of cramming
+                         5 icon buttons + textarea + send button into one
+                         horizontal row — that layout left the textarea too
+                         narrow on phones, so its placeholder wrapped to a
+                         2nd line the fixed rows="1" height couldn't fit,
+                         and the wrapped text visibly clipped/bled out of
+                         the pill (reported by user with a screenshot).
+                         Giving the textarea its own full-width row removes
+                         that width pressure entirely. --}}
+                    <div class="wa-composer-card">
+                        <textarea id="wa-send-input" class="wa-send-input" placeholder="Type a message... ( / for quick reply)" autocomplete="off" rows="1"></textarea>
+                        <div class="wa-composer-toolbar">
+                            <div class="wa-send-icons">
+                                <button type="button" id="wa-emoji-btn" class="wa-icon-btn" title="Emoji"><i class="ri-emotion-line"></i></button>
+                                <button type="button" id="wa-quick-reply-btn" class="wa-icon-btn" title="Balasan cepat"><i class="ri-flashlight-line"></i></button>
+                                <button type="button" id="wa-template-btn" class="wa-icon-btn" title="Template pesan"><i class="ri-apps-2-line"></i></button>
+                                <button type="button" id="wa-poll-btn" class="wa-icon-btn" title="Buat survei/poll" data-bs-toggle="modal" data-bs-target="#wa-poll-modal"><i class="ri-bar-chart-box-line"></i></button>
+                                <button type="button" id="wa-attach-btn" class="wa-icon-btn" title="Lampirkan file"><i class="ri-attachment-2"></i></button>
+                            </div>
+                            <button type="submit" class="wa-send-btn" title="Kirim">
+                                <span class="wa-send-btn-label">Send</span>
+                                <i class="ri-send-plane-2-fill"></i>
+                            </button>
+                        </div>
                     </div>
-                    <textarea id="wa-send-input" class="wa-send-input" placeholder="Type a message... ( / for quick reply)" autocomplete="off" rows="1"></textarea>
-                    <button type="submit" class="wa-send-btn" title="Kirim"><i class="ri-send-plane-2-fill"></i></button>
                 </form>
 
                 <div id="wa-picker-popover" class="wa-picker-popover d-none">
@@ -354,21 +371,24 @@
 
             .wa-thread-body { padding: 12px; }
             .wa-msg-bubble { max-width: 86%; }
-            .wa-send-form { padding: 8px 10px; gap: 8px; }
-            .wa-send-icons { gap: 2px; }
-            .wa-picker-popover { left: 8px; right: 8px; max-width: none; max-height: 45vh; }
+            .wa-send-form { padding: 8px 10px; }
+            .wa-composer-card { padding: 8px 10px 6px; }
+            .wa-picker-popover { left: 8px; right: 8px; max-width: none; max-height: 45vh; bottom: 100px; }
         }
 
         /* --- very small phones: the icon row (emoji/quick-reply/
-           template/attach) plus input plus send button was crowding
-           together and clipping on ~320-360px wide screens — trim the
-           icon buttons and input padding a bit further here rather than
-           letting them overflow/wrap awkwardly. --- */
+           template/attach) plus the Send pill was crowding together and
+           clipping on ~320-360px wide screens — trim the icon buttons
+           and drop the Send button's text label (icon-only) here rather
+           than letting the toolbar row overflow/wrap awkwardly. The
+           .wa-send-icons horizontal-scroll fallback above (see its own
+           comment) is what catches anything narrower than this still
+           doesn't have room for. --- */
         @media (max-width: 380px) {
             .wa-icon-btn { width: 28px; height: 28px; }
             .wa-send-icons { gap: 0; }
-            .wa-send-input { padding: 8px 12px; }
-            .wa-send-btn { width: 38px; height: 38px; }
+            .wa-send-btn { padding: 7px 12px; }
+            .wa-send-btn-label { display: none; }
             .wa-chat-item-assignee { display: none; }
         }
 
@@ -509,9 +529,16 @@
         .wa-attach-preview .wa-attach-preview-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .wa-attach-preview button { border: none; background: transparent; color: #ef4444; font-size: 0.8rem; font-weight: 600; }
 
-        .wa-send-form { display: flex; align-items: center; gap: 16px; padding: 12px 20px; background: #fff; border-top: 1px solid #ece3d8; }
+        .wa-send-form { padding: 10px 16px; background: #fff; border-top: 1px solid #ece3d8; }
 
-        .wa-picker-popover { position: absolute; left: 16px; right: 16px; bottom: 64px; max-width: 360px; max-height: 320px; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); display: flex; flex-direction: column; z-index: 20; }
+        {{-- Popover (emoji/quick-reply/template picker) is positioned
+             absolute against .wa-col-thread and anchored `bottom` from
+             its edge — that offset has to clear the composer's actual
+             rendered height, which grew when the composer became a
+             2-row card (see .wa-composer-card below), so it moved up
+             from 64px to 108px to match (measured against the card's
+             new padding/gap/toolbar height at the default font size). --}}
+        .wa-picker-popover { position: absolute; left: 16px; right: 16px; bottom: 108px; max-width: 360px; max-height: 320px; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); display: flex; flex-direction: column; z-index: 20; }
         .wa-picker-popover-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid #f0f0f0; font-weight: 600; font-size: 0.86rem; flex-shrink: 0; }
         .wa-picker-popover-body { overflow-y: auto; padding: 8px; }
         .wa-emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; }
@@ -523,11 +550,28 @@
         .wa-picker-list-item .wa-picker-list-preview { font-size: 0.78rem; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
         .wa-picker-shortcut-tag { font-size: 0.68rem; font-weight: 600; color: #6d28d9; background: #ede9fe; border-radius: 999px; padding: 1px 8px; }
         .wa-picker-empty { padding: 16px; text-align: center; color: #9ca3af; font-size: 0.84rem; }
-        .wa-send-icons { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-        .wa-send-input { flex: 1 1 auto; border: 1px solid #e5e7eb; border-radius: 18px; padding: 10px 18px; font-size: 0.88rem; background: #f9fafb; min-width: 0; resize: none; overflow-y: auto; max-height: 120px; line-height: 1.35; font-family: inherit; }
-        .wa-send-input:focus { outline: none; border-color: #16a34a; background: #fff; }
+        {{-- Composer card: textarea on its own full-width row, icon
+             toolbar + Send pill on the row below — replaces the old
+             single-row layout (5 icon buttons + textarea + round send
+             button all fighting for the same horizontal space), which
+             left the textarea too narrow on phones and clipped its
+             wrapped placeholder text. See the HTML comment above the
+             markup for the full "why" and the user report that
+             prompted this. --}}
+        .wa-composer-card { display: flex; flex-direction: column; gap: 6px; border: 1px solid #e5e7eb; border-radius: 18px; background: #f9fafb; padding: 10px 14px 8px; }
+        .wa-composer-card:focus-within { border-color: #16a34a; background: #fff; }
+        .wa-send-input { display: block; width: 100%; border: none; background: transparent; padding: 0; margin: 0; font-size: 0.88rem; resize: none; overflow-y: auto; max-height: 120px; line-height: 1.4; font-family: inherit; }
+        .wa-send-input:focus { outline: none; }
         .wa-msg-row.wa-msg-optimistic .wa-msg-bubble { opacity: 0.7; }
-        .wa-send-btn { border: none; background: #16a34a; color: #fff; width: 42px; height: 42px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; margin-left: 2px; }
+        .wa-composer-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        {{-- overflow-x:auto + hidden scrollbar is a safety net (not the
+             primary fix) for extremely narrow phones — if the 5 icons
+             genuinely can't all fit even after freeing up the textarea's
+             width, they scroll horizontally within their own strip
+             instead of overflowing/wrapping the whole toolbar row. --}}
+        .wa-send-icons { display: flex; align-items: center; gap: 2px; flex-shrink: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+        .wa-send-icons::-webkit-scrollbar { display: none; }
+        .wa-send-btn { border: none; background: #16a34a; color: #fff; border-radius: 999px; padding: 8px 16px; display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.85rem; flex-shrink: 0; white-space: nowrap; }
         .wa-send-btn:hover { background: #128a3e; }
 
         /* --- right column --- */
