@@ -413,6 +413,9 @@
                                              berhenti berlangganan broadcast.
                                              See App\Http\Controllers\Chat\
                                              OptOutController. --}}
+                                    {{-- Dikomentari sementara atas permintaan
+                                             user (22 September 2026) -- BUKAN
+                                             dihapus.
                                     @if ($canSeeChatMenu('chat.opt-outs.index'))
                                         <li class="pe-slide-item">
                                             <a href="{{ route('chat.opt-outs.index') }}" class="pe-nav-link">
@@ -420,6 +423,7 @@
                                             </a>
                                         </li>
                                     @endif
+                                    --}}
                                     {{-- "Label" moved here from the now-removed
                                              Pengaturan > Laporan submenu — that
                                              submenu was almost entirely dead
