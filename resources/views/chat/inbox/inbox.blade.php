@@ -934,16 +934,31 @@
                 return fetch(item.attachment_url, { credentials: 'same-origin' })
                     .then(function (res) { return res.ok ? res.blob() : null; })
                     .then(function (blob) {
-                        if (!blob) return;
+                        if (!blob) {
+                            // Most common real-world cause: the public
+                            // storage symlink (`php artisan storage:link`)
+                            // is missing on this environment, so
+                            // attachment_url 404s even though the file
+                            // exists on disk — Broadcast/Pesan Terjadwal
+                            // sends are unaffected (they read the file
+                            // straight off disk, not through this public
+                            // URL), only this Inbox picker path is. Warn
+                            // loudly instead of silently sending text-only
+                            // with no trace the file was ever supposed to
+                            // be there.
+                            alert('Lampiran template gagal dimuat (file tidak ditemukan di server). Teks akan tetap terkirim tanpa lampiran — hubungi admin untuk memeriksa penyimpanan file.');
+                            return;
+                        }
                         var filename = item.attachment_original_name || 'attachment';
                         var file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
                         showAttachPreview(file);
                     })
                     .catch(function () {
-                        // Attachment fetch failed — the composed text was
-                        // already inserted by the caller, so the send
-                        // still goes out (just without the file) rather
-                        // than silently doing nothing.
+                        // Network error fetching the attachment — the
+                        // composed text was already inserted by the
+                        // caller, so warn but still let the send go out
+                        // (just without the file) rather than blocking it.
+                        alert('Lampiran template gagal dimuat (gangguan jaringan). Teks akan tetap terkirim tanpa lampiran.');
                     });
             }
 
