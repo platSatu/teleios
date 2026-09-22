@@ -9,6 +9,8 @@ use App\Models\PaymentWebhook;
 use App\Models\TagihanPenerima;
 use App\Models\TransactionStatusHistory;
 use App\Services\Payment\DuitkuService;
+use App\Services\Wallet\WalletLedgerService;
+use App\Services\Wallet\WalletProvisioningService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
@@ -36,6 +38,16 @@ use Throwable;
  * sesuai instruksi eksplisit "jangan sambungkan dulu ya dengan
  * whatsapp" saat fitur ini didiskusikan. App\Models\TagihanReminderLog
  * sudah disiapkan strukturnya untuk itu nanti.
+ *
+ * Update 22 September 2026 (fitur Saldo Branch/Tarik Saldo) -- begitu
+ * resultCode '00' (lunas), SEKARANG juga meng-kredit App\Models\Wallet
+ * milik BranchOffice tempat Tagihan ini dibuat (dapat/dibuat lewat
+ * App\Services\Wallet\WalletProvisioningService::forBranch(), lalu
+ * dikredit lewat App\Services\Wallet\WalletLedgerService::credit() --
+ * di DALAM transaction lockForUpdate() yang sama persis dengan update
+ * status lunas, jadi tidak mungkin lunas tercatat tanpa saldo ikut
+ * bertambah atau sebaliknya). Wallet ini yang nanti jadi sumber dana
+ * fitur "Transfer Fee" bulanan ke pengajar dan "Tarik Saldo" Company.
  */
 class TagihanDuitkuCallbackController extends Controller
 {
@@ -168,6 +180,34 @@ class TagihanDuitkuCallbackController extends Controller
                         'user_agent' => request()->userAgent(),
                         'created_at' => now(),
                     ]);
+
+                    // Fitur Saldo Branch (22 September 2026) -- lihat
+                    // docblock class di atas. branch_office_id WAJIB ada
+                    // di TagihanPenerima (lihat migration create_tagihan_
+                    // penerima_table.php), jadi tidak perlu guard null di
+                    // sini seperti attachment_path yang memang nullable.
+                    $totalDibayar = (float) $penerima->amount + (float) $penerima->denda_amount;
+
+                    // Guard >0 -- WalletLedgerService::credit() melempar
+                    // RuntimeException untuk amount<=0, yang kalau tidak
+                    // dijaga di sini akan ikut membatalkan (rollback)
+                    // penandaan lunas di atas walau resultCode-nya jelas
+                    // sukses. Nominal 0 seharusnya tidak pernah terjadi
+                    // untuk Tagihan asli, tapi lebih aman diam-diam
+                    // dilewati daripada menggagalkan seluruh callback.
+                    if ($totalDibayar > 0) {
+                        $branchWallet = WalletProvisioningService::forBranch($penerima->branch_office_id);
+
+                        WalletLedgerService::credit(
+                            $branchWallet,
+                            $totalDibayar,
+                            TagihanPenerima::class,
+                            $penerima->id,
+                            'Pembayaran Tagihan lunas — '.($penerima->order_number ?: $penerima->id),
+                            null,
+                            'TAGIHAN_PAYMENT',
+                        );
+                    }
                 } elseif ($resultCode === '01') {
                     $outcomeStatus = 'pending';
 
