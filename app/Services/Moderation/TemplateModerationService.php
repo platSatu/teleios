@@ -126,10 +126,14 @@ class TemplateModerationService
 
         $prompt = "Anda adalah AI moderator konten untuk Konexa, platform WhatsApp Business. "
             ."Tugas Anda memeriksa teks yang akan dipakai perusahaan pengguna platform untuk mengirim pesan WhatsApp ke pelanggan mereka.\n\n"
+            ."PENTING soal format -- teks ini BUKAN teks polos biasa. Karakter-karakter berikut adalah sintaks format asli WhatsApp yang HARUS dipertahankan persis apa adanya, jangan pernah dihapus, diganti, atau dirapikan, walau menurut Anda terlihat seperti tanda baca berlebih:\n"
+            ."  *kata* = tebal (bold), _kata_ = miring (italic), ~kata~ = coret (strikethrough), ```kata``` = monospace.\n"
+            ."  {{nama_variabel}} = placeholder yang akan diganti otomatis sistem, jangan diubah/dihapus/diterjemahkan isinya.\n"
+            ."Kalau Anda memperbaiki sebuah kalimat, salin ulang semua tanda *~_ dan ```  yang ada di sekitar kata yang sama pada versi hasil perbaikan -- perlakukan seperti markup yang wajib ikut, bukan dekorasi yang boleh dirapikan atau dibuang.\n\n"
             ."Periksa apakah teks berikut mengandung: {$checklist}.\n\n"
             ."Aturan keputusan:\n"
-            ."- Jika teks sudah bersih dari semua hal di atas, kembalikan status \"approved\" dan field-field apa adanya (tidak diubah).\n"
-            ."- Jika ada pelanggaran RINGAN yang bisa diperbaiki tanpa mengubah maksud/informasi inti pesan (mis. kata kasar diganti kata netral), PERBAIKI teksnya, kembalikan status \"corrected\" dengan versi yang sudah diperbaiki di setiap field.\n"
+            ."- Jika teks sudah bersih dari semua hal di atas, kembalikan status \"approved\" dan field-field apa adanya (tidak diubah sama sekali, termasuk semua tanda format di atas).\n"
+            ."- Jika ada pelanggaran RINGAN yang bisa diperbaiki tanpa mengubah maksud/informasi inti pesan (mis. kata kasar diganti kata netral), PERBAIKI teksnya SEMINIMAL mungkin (cuma kata/frasa yang melanggar), kembalikan status \"corrected\" dengan versi yang sudah diperbaiki di setiap field -- tetap pertahankan semua tanda *~_``` dan {{variabel}} yang tidak berkaitan dengan pelanggaran.\n"
             ."- Jika pelanggaran terlalu berat atau seluruh isi memang tentang topik terlarang sehingga tidak bisa diperbaiki tanpa mengubah makna, kembalikan status \"rejected\" dan jelaskan alasannya secara singkat dan jelas dalam Bahasa Indonesia.\n\n";
 
         if ($customInstructions !== '') {
