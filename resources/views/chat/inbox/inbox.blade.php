@@ -1851,6 +1851,22 @@
                     threadSubEl.textContent = 'online';
                     threadPresencePillEl.textContent = 'Online';
                     threadPresencePillEl.className = 'wa-presence-pill wa-pill-online';
+                } else if (presence.known === false) {
+                    // g_backend has NEVER received an actual presence
+                    // event for this contact (see PresenceInfo.Known's
+                    // docblock, wa-connectdevice-service.go) -- most
+                    // commonly because the contact's own WhatsApp privacy
+                    // setting simply doesn't share last-seen/online status
+                    // with us at all. Previously this fell into the same
+                    // "Offline" branch as a contact we'd genuinely
+                    // confirmed was offline, which is why the pill could
+                    // show a confident "Offline" on literally every single
+                    // chat (22 September 2026 report) even ones that were
+                    // actually online right then -- shown honestly as
+                    // "unknown" instead of a wrong "Offline".
+                    threadSubEl.textContent = '';
+                    threadPresencePillEl.textContent = 'Status tidak diketahui';
+                    threadPresencePillEl.className = 'wa-presence-pill wa-pill-offline';
                 } else {
                     threadSubEl.textContent = presence.last_seen ? ('terakhir dilihat ' + timeLabel(presence.last_seen)) : '';
                     threadPresencePillEl.textContent = 'Offline';
