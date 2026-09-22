@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Models\JadwalReminderSetting;
 use App\Models\Voucher;
 use App\Services\Company\CompanyContextResolver;
+use App\Support\MenuGateCategories;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -94,33 +95,58 @@ class AppServiceProvider extends ServiceProvider
                 }
             }
 
-            // Category-scoped version of $hasActivePackage above, dipakai
-            // menu "Pengaturan Pengingat" Jadwal (lihat
-            // App\Services\PackageLimitService::hasActiveCategoryPackage()'s
-            // docblock untuk kenapa ini query terpisah, bukan filter
-            // tambahan ke $hasActivePackage yang sudah ada) -- sengaja
-            // dihitung dengan query company_id langsung (bukan lewat
-            // $billingUserId/user_id di atas), konsisten dengan pola
-            // PackageLimitService yang lain (resolveActiveVoucher() dkk),
-            // supaya cara menghitungnya tetap satu sumber kebenaran kalau
-            // dipanggil ulang dari controller/job.
+            // Category-scoped versions of $hasActivePackage above.
+            // $hasActiveChatPackage dipakai menu "Pengaturan Pengingat"
+            // Jadwal (lihat App\Services\PackageLimitService::
+            // hasActiveCategoryPackage()'s docblock untuk kenapa ini
+            // query terpisah, bukan filter tambahan ke $hasActivePackage
+            // yang sudah ada).
+            //
+            // $hasActiveFormPackage / $hasActiveJadwalPackage (22
+            // September 2026) gate the Form and Jadwal sidebar sections
+            // THEMSELVES — those two modules used to be shown to every
+            // logged-in user regardless of package (see menu.blade.php's
+            // git history / routes/web.php's old comments), deliberately
+            // changed so Form/Jadwal/WhatsApp are sold and gated as fully
+            // independent services: a company holding only a WhatsApp
+            // Blast package does NOT get Form/Jadwal for free, and vice
+            // versa. See App\Support\MenuGateCategories's docblock.
+            //
+            // All three sengaja dihitung dengan query company_id langsung
+            // (bukan lewat $billingUserId/user_id di atas), konsisten
+            // dengan pola PackageLimitService yang lain
+            // (resolveActiveVoucher() dkk), supaya cara menghitungnya
+            // tetap satu sumber kebenaran kalau dipanggil ulang dari
+            // controller/job.
             $hasActiveChatPackage = false;
+            $hasActiveFormPackage = false;
+            $hasActiveJadwalPackage = false;
 
             if ($user) {
                 if ($user->user_type === 'SUPERADMIN') {
                     $hasActiveChatPackage = true;
+                    $hasActiveFormPackage = true;
+                    $hasActiveJadwalPackage = true;
                 } else {
                     $chatContext = app(CompanyContextResolver::class)->resolve($user);
 
                     if ($chatContext?->company) {
-                        $hasActiveChatPackage = app(\App\Services\PackageLimitService::class)
+                        $packageLimits = app(\App\Services\PackageLimitService::class);
+
+                        $hasActiveChatPackage = $packageLimits
                             ->hasActiveCategoryPackage($chatContext->company, JadwalReminderSetting::CHAT_CATEGORY_NAMES);
+                        $hasActiveFormPackage = $packageLimits
+                            ->hasActiveCategoryPackage($chatContext->company, MenuGateCategories::FORM_CATEGORY_NAMES);
+                        $hasActiveJadwalPackage = $packageLimits
+                            ->hasActiveCategoryPackage($chatContext->company, MenuGateCategories::JADWAL_CATEGORY_NAMES);
                     }
                 }
             }
 
             $view->with('hasActivePackage', $hasActivePackage);
             $view->with('hasActiveChatPackage', $hasActiveChatPackage);
+            $view->with('hasActiveFormPackage', $hasActiveFormPackage);
+            $view->with('hasActiveJadwalPackage', $hasActiveJadwalPackage);
             $view->with('allowedChatRouteNames', $allowedChatRouteNames);
         });
     }

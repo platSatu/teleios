@@ -39,122 +39,143 @@
                     branch, lihat App\Http\Controllers\Form\*.
                     Diletakkan SETELAH "Dashboards" dan SEBELUM "Jadwal"
                     (urutan: Dashboard, Form, Jadwal) sesuai spek fitur
-                    ini. Sama seperti menu Jadwal di bawah: TIDAK
-                    dibungkus "$hasActivePackage" (bukan bagian
-                    langganan Chat), App\Http\Middleware\
-                    EnsureMenuAccess tetap backstop di level route.
-                    Cuma 2 level teratas (Branch, Category) yang
+                    ini. Cuma 2 level teratas (Branch, Category) yang
                     langsung ada di sidebar -- Header/Content/Footer/
                     Setting dibuka lewat tombol drill-down per baris,
                     sama seperti Jadwal.
+
+                    Sejak 22 September 2026: DIBUNGKUS $hasActiveFormPackage
+                    -- Form dijual sebagai layanan terpisah dari Chat/
+                    WhatsApp Blast, jadi company yang cuma punya package
+                    WhatsApp Blast TIDAK otomatis dapat akses Form. Lihat
+                    App\Support\MenuGateCategories & routes/web.php's
+                    'active.package:Form' (gate route-nya, di luar
+                    sidebar ini). App\Http\Middleware\EnsureMenuAccess
+                    tetap backstop di level route untuk pembatasan
+                    per-role.
                 --}}
-                <li class="pe-slide pe-has-sub">
-                    <a href="#collapseForm" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
-                        aria-controls="collapseForm">
-                        <i class="uil uil-file-alt pe-nav-icon"></i>
-                        <span class="pe-nav-content">Form</span>
-                        <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
-                        <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
-                    </a>
-                    <ul class="pe-slide-menu collapse" id="collapseForm">
-                        <li class="pe-slide-item">
-                            <a href="{{ route('form.branch.index') }}" class="pe-nav-link">
-                                Branch
-                            </a>
-                        </li>
-                        <li class="pe-slide-item">
-                            <a href="{{ route('form.category.index') }}" class="pe-nav-link">
-                                Form Category
-                            </a>
-                        </li>
-                    </ul>
-                </li>
+                @if ($hasActiveFormPackage)
+                    <li class="pe-slide pe-has-sub">
+                        <a href="#collapseForm" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
+                            aria-controls="collapseForm">
+                            <i class="uil uil-file-alt pe-nav-icon"></i>
+                            <span class="pe-nav-content">Form</span>
+                            <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
+                            <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
+                        </a>
+                        <ul class="pe-slide-menu collapse" id="collapseForm">
+                            <li class="pe-slide-item">
+                                <a href="{{ route('form.branch.index') }}" class="pe-nav-link">
+                                    Branch
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('form.category.index') }}" class="pe-nav-link">
+                                    Form Category
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                @endif
 
                 {{--
                     Menu "Jadwal" -- jadwal kelas kursus, generik lintas
                     bidang pendidikan (musik, bahasa, dll.), lihat
                     App\Http\Controllers\Jadwal\*. Diletakkan di atas
                     "Chat" (bukan di dalamnya) karena bukan bagian dari
-                    fitur/paket Chat -- makanya juga TIDAK dibungkus
-                    kondisi "$hasActivePackage" seperti Chat di bawah. Belum
-                    ada filter per-role ($canSeeChatMenu-equivalent) di
-                    sini -- App\Http\Middleware\EnsureMenuAccess tetap
-                    jadi backstop di level route (lihat routes/web.php),
-                    ini cuma belum ada baris App\Models\ApplicationMenu
-                    untuk dibatasi. Tambahkan filter serupa Chat kalau
-                    nanti fitur ini butuh pembatasan per-role.
+                    fitur/paket Chat. Belum ada filter per-role
+                    ($canSeeChatMenu-equivalent) di sini --
+                    App\Http\Middleware\EnsureMenuAccess tetap jadi
+                    backstop di level route (lihat routes/web.php), ini
+                    cuma belum ada baris App\Models\ApplicationMenu untuk
+                    dibatasi. Tambahkan filter serupa Chat kalau nanti
+                    fitur ini butuh pembatasan per-role.
+
+                    Sejak 22 September 2026: DIBUNGKUS $hasActiveJadwalPackage
+                    -- Jadwal dijual sebagai layanan terpisah dari Chat/
+                    WhatsApp Blast, jadi company yang cuma punya package
+                    WhatsApp Blast TIDAK otomatis dapat akses Jadwal.
+                    Lihat App\Support\MenuGateCategories & routes/web.php's
+                    'active.package:Jadwal'. Item "Pengaturan Pengingat"/
+                    "Permintaan Reschedule" DI BAWAH tetap punya gate
+                    tambahan $hasActiveChatPackage-nya sendiri -- itu soal
+                    beda: apakah company JUGA punya akses WhatsApp untuk
+                    kirim reminder-nya, bukan soal akses Jadwal itu
+                    sendiri.
                 --}}
-                <li class="pe-slide pe-has-sub">
-                    <a href="#collapseJadwal" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
-                        aria-controls="collapseJadwal">
-                        <i class="uil uil-calendar-alt pe-nav-icon"></i>
-                        <span class="pe-nav-content">Jadwal</span>
-                        <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
-                        <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
-                    </a>
-                    <ul class="pe-slide-menu collapse" id="collapseJadwal">
-                        <li class="pe-slide-item">
-                            <a href="{{ route('jadwal.branch.index') }}" class="pe-nav-link">
-                                Branch
-                            </a>
-                        </li>
-                        <li class="pe-slide-item">
-                            <a href="{{ route('jadwal.mata-pelajaran.index') }}" class="pe-nav-link">
-                                Mata Pelajaran / Bidang
-                            </a>
-                        </li>
-                        {{-- Pengajar sekarang punya menu sendiri (bukan
-                                 cuma lewat drill-down "+ Add Pengajar" di
-                                 index Kategori) -- permintaan user 3
-                                 September 2026. Tanpa query string =
-                                 mode global, lihat App\Http\Controllers\
-                                 Jadwal\JadwalPengajarController::index(). --}}
-                        <li class="pe-slide-item">
-                            <a href="{{ route('jadwal.pengajar.index') }}" class="pe-nav-link">
-                                Pengajar
-                            </a>
-                        </li>
-                        <li class="pe-slide-item">
-                            <a href="{{ route('jadwal.student.index') }}" class="pe-nav-link">
-                                Student
-                            </a>
-                        </li>
-                        <li class="pe-slide-item">
-                            <a href="{{ route('jadwal.kelas.index') }}" class="pe-nav-link">
-                                Jadwal Kelas
-                            </a>
-                        </li>
-                        <li class="pe-slide-item">
-                            <a href="{{ route('jadwal.laporan.index') }}" class="pe-nav-link">
-                                Laporan
-                            </a>
-                        </li>
-                        {{-- Cuma tampil kalau company punya package aktif
-                                 kategori Chat/WhatsApp secara spesifik --
-                                 BUKAN $hasActivePackage yang dipakai menu
-                                 Chat di bawah (itu "punya package apa
-                                 saja"). Lihat App\Services\
-                                 PackageLimitService::hasActiveCategoryPackage()
-                                 & App\Models\JadwalReminderSetting::
-                                 CHAT_CATEGORY_NAMES. Company yang cuma
-                                 subscribe Jadwal tidak melihat item ini
-                                 sama sekali -- konsisten dengan
-                                 JadwalReminderSettingController yang juga
-                                 menolak akses langsung ke route-nya. --}}
-                        @if ($hasActiveChatPackage)
+                @if ($hasActiveJadwalPackage)
+                    <li class="pe-slide pe-has-sub">
+                        <a href="#collapseJadwal" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
+                            aria-controls="collapseJadwal">
+                            <i class="uil uil-calendar-alt pe-nav-icon"></i>
+                            <span class="pe-nav-content">Jadwal</span>
+                            <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
+                            <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
+                        </a>
+                        <ul class="pe-slide-menu collapse" id="collapseJadwal">
                             <li class="pe-slide-item">
-                                <a href="{{ route('jadwal.settings.edit') }}" class="pe-nav-link">
-                                    Pengaturan Pengingat
+                                <a href="{{ route('jadwal.branch.index') }}" class="pe-nav-link">
+                                    Branch
                                 </a>
                             </li>
                             <li class="pe-slide-item">
-                                <a href="{{ route('jadwal.reschedule-requests.index') }}" class="pe-nav-link">
-                                    Permintaan Reschedule
+                                <a href="{{ route('jadwal.mata-pelajaran.index') }}" class="pe-nav-link">
+                                    Mata Pelajaran / Bidang
                                 </a>
                             </li>
-                        @endif
-                    </ul>
-                </li>
+                            {{-- Pengajar sekarang punya menu sendiri (bukan
+                                     cuma lewat drill-down "+ Add Pengajar" di
+                                     index Kategori) -- permintaan user 3
+                                     September 2026. Tanpa query string =
+                                     mode global, lihat App\Http\Controllers\
+                                     Jadwal\JadwalPengajarController::index(). --}}
+                            <li class="pe-slide-item">
+                                <a href="{{ route('jadwal.pengajar.index') }}" class="pe-nav-link">
+                                    Pengajar
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('jadwal.student.index') }}" class="pe-nav-link">
+                                    Student
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('jadwal.kelas.index') }}" class="pe-nav-link">
+                                    Jadwal Kelas
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('jadwal.laporan.index') }}" class="pe-nav-link">
+                                    Laporan
+                                </a>
+                            </li>
+                            {{-- Cuma tampil kalau company punya package aktif
+                                     kategori Chat/WhatsApp secara spesifik --
+                                     BUKAN $hasActivePackage yang dipakai menu
+                                     Chat di bawah (itu "punya package apa
+                                     saja"). Lihat App\Services\
+                                     PackageLimitService::hasActiveCategoryPackage()
+                                     & App\Models\JadwalReminderSetting::
+                                     CHAT_CATEGORY_NAMES. Company yang cuma
+                                     subscribe Jadwal tidak melihat item ini
+                                     sama sekali -- konsisten dengan
+                                     JadwalReminderSettingController yang juga
+                                     menolak akses langsung ke route-nya. --}}
+                            @if ($hasActiveChatPackage)
+                                <li class="pe-slide-item">
+                                    <a href="{{ route('jadwal.settings.edit') }}" class="pe-nav-link">
+                                        Pengaturan Pengingat
+                                    </a>
+                                </li>
+                                <li class="pe-slide-item">
+                                    <a href="{{ route('jadwal.reschedule-requests.index') }}" class="pe-nav-link">
+                                        Permintaan Reschedule
+                                    </a>
+                                </li>
+                            @endif
+                        </ul>
+                    </li>
+                @endif
 
                 {{-- Chat menu (and its whole "Pengaturan" sub-tree) only
                          shown while the user has at least one active,

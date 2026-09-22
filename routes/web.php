@@ -211,15 +211,22 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
     // Fitur "Form" -- form builder Google-Forms-style per branch, lihat
     // App\Http\Controllers\Form\*. Diletakkan SEBELUM grup 'jadwal' di
     // bawah supaya urutannya sama dengan sidebar: Dashboard, Form, Jadwal
-    // (lihat resources/views/layouts/partials/menu.blade.php). Sama
-    // seperti grup 'jadwal': bukan bagian dari langganan paket 'chat',
-    // jadi TANPA 'active.package', cuma 'menu.access' sebagai backstop.
+    // (lihat resources/views/layouts/partials/menu.blade.php).
+    //
+    // Sejak 22 September 2026: digate 'active.package:Form' -- Form
+    // dijual sebagai layanan terpisah dari Chat/WhatsApp Blast, jadi
+    // company yang cuma punya package WhatsApp Blast TIDAK otomatis
+    // dapat akses Form (harus beli package kategori "Form" sendiri).
+    // Lihat App\Support\MenuGateCategories & menu.blade.php's
+    // $hasActiveFormPackage (gate sisi sidebar, konsisten dengan gate
+    // route ini). 'menu.access' tetap dipasang sebagai backstop per-role
+    // seperti sebelumnya.
     //
     // Halaman PUBLIK pengisi form (app.konexa.id/{slug}) TIDAK ada di
     // sini -- itu rute top-level tanpa auth, didaftarkan PALING BAWAH
     // file ini (setelah require auth.php) supaya /{slug} tidak pernah
     // menang lawan /login, /register, dst.
-    Route::prefix('form')->middleware(['menu.access'])->group(function () {
+    Route::prefix('form')->middleware(['active.package:Form', 'menu.access'])->group(function () {
         // Drill-down: Branch -> Form Category -> Form Header -> Form
         // Content -> Form Footer -> Form Setting (pola sama persis
         // dengan drill-down 'jadwal' di bawah).
@@ -298,14 +305,27 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
     // Fitur "Jadwal" -- jadwal kelas kursus, generik lintas bidang
     // pendidikan (musik, bahasa, dll.), lihat App\Http\Controllers\
     // Jadwal\*. Bukan bagian dari langganan paket 'chat' -- makanya di
-    // luar prefix 'chat' di bawah dan TANPA 'active.package'. 'menu.access'
-    // tetap dipasang (backstop yang sama seperti grup 'chat' di bawah)
-    // meski belum ada baris App\Models\ApplicationMenu untuk 'jadwal.*'
-    // -- middleware itu fail-open kalau menu belum dikatalogkan, jadi
-    // aman dipasang dari awal. Diletakkan SEBELUM grup 'chat' supaya
-    // urutannya sama dengan sidebar (lihat resources/views/layouts/
-    // partials/menu.blade.php).
-    Route::prefix('jadwal')->middleware(['menu.access'])->group(function () {
+    // luar prefix 'chat' di bawah. 'menu.access' tetap dipasang
+    // (backstop yang sama seperti grup 'chat' di bawah) meski belum ada
+    // baris App\Models\ApplicationMenu untuk 'jadwal.*' -- middleware
+    // itu fail-open kalau menu belum dikatalogkan, jadi aman dipasang
+    // dari awal. Diletakkan SEBELUM grup 'chat' supaya urutannya sama
+    // dengan sidebar (lihat resources/views/layouts/partials/
+    // menu.blade.php).
+    //
+    // Sejak 22 September 2026: digate 'active.package:Jadwal' -- Jadwal
+    // dijual sebagai layanan terpisah dari Chat/WhatsApp Blast, jadi
+    // company yang cuma punya package WhatsApp Blast TIDAK otomatis
+    // dapat akses Jadwal (harus beli package kategori "Jadwal" sendiri).
+    // Lihat App\Support\MenuGateCategories & menu.blade.php's
+    // $hasActiveJadwalPackage. Fitur reminder-via-WA DI DALAM Jadwal
+    // (JadwalReminderSettingController dkk) tetap punya gate
+    // 'active.package:Chat,WhatsApp,Whatsapp Blast'-nya SENDIRI di
+    // level controller (lihat App\Models\JadwalReminderSetting::
+    // CHAT_CATEGORY_NAMES) -- itu soal beda: apakah company JUGA punya
+    // akses WhatsApp untuk kirim reminder-nya, bukan soal akses Jadwal
+    // itu sendiri, jadi TIDAK diubah di sini.
+    Route::prefix('jadwal')->middleware(['active.package:Jadwal', 'menu.access'])->group(function () {
         // Drill-down: Branch -> Mata Pelajaran / Bidang -> Pengajar ->
         // Student -> Jadwal Kelas (lihat App\Http\Controllers\Jadwal\
         // JadwalBranchController's docblock, mengikuti pola "ina"
