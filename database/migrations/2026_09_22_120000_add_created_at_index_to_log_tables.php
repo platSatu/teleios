@@ -48,6 +48,22 @@ return new class extends Migration
         'payment_transactions' => ['reference_type', 'reference_id', 'created_at'],
     ];
 
+    /**
+     * Override eksplisit untuk index yang nama otomatisnya (lihat
+     * indexName() di bawah) kepanjangan buat MySQL (limit identifier
+     * 64 karakter) -- 'payment_transactions_reference_type_reference_id_created_at_index'
+     * itu 68 karakter, gagal dengan error 1059 begitu benar-benar
+     * dijalankan di server (baru ketahuan sekarang, bukan waktu
+     * php -l -- itu cuma cek syntax PHP, bukan panjang identifier
+     * MySQL). 4 index lain di atas semuanya masih di bawah 64 karakter,
+     * jadi tetap pakai nama otomatis seperti sebelumnya.
+     *
+     * @var array<string, string>
+     */
+    private array $indexNameOverrides = [
+        'payment_transactions' => 'payment_transactions_ref_created_at_index',
+    ];
+
     public function up(): void
     {
         foreach ($this->indexes as $table => $columns) {
@@ -90,12 +106,15 @@ return new class extends Migration
      * Spells out Laravel's own default index-naming convention
      * (`<table>_<col1>_<col2>..._index`) explicitly, rather than relying
      * on Blueprint to generate it implicitly, so up() and down() are
-     * guaranteed to agree on the same name Schema::hasIndex() checks.
+     * guaranteed to agree on the same name Schema::hasIndex() checks --
+     * KECUALI kalau ada di $indexNameOverrides (lihat di atas), dipakai
+     * apa adanya supaya tetap di bawah limit 64 karakter MySQL.
      *
      * @param  array<int, string>  $columns
      */
     private function indexName(string $table, array $columns): string
     {
-        return strtolower($table.'_'.implode('_', $columns).'_index');
+        return $this->indexNameOverrides[$table]
+            ?? strtolower($table.'_'.implode('_', $columns).'_index');
     }
 };
