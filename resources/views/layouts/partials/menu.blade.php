@@ -240,6 +240,16 @@
                                 Transfer Fee Pengajar
                             </a>
                         </li>
+                        <li class="pe-slide-item">
+                            <a href="{{ route('keuangan.withdrawal.index') }}" class="pe-nav-link">
+                                Tarik Saldo
+                            </a>
+                        </li>
+                        <li class="pe-slide-item">
+                            <a href="{{ route('keuangan.withdrawal.approval.index') }}" class="pe-nav-link">
+                                Persetujuan Tarik Saldo
+                            </a>
+                        </li>
                     </ul>
                 </li>
 

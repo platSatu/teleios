@@ -133,6 +133,8 @@ use App\Http\Controllers\Tagihan\TagihanController;
 use App\Http\Controllers\Tagihan\TagihanPenerimaController;
 use App\Http\Controllers\Tagihan\Public\TagihanPublicController;
 use App\Http\Controllers\Keuangan\PengajarFeeTransferController;
+use App\Http\Controllers\Keuangan\BranchWithdrawalController;
+use App\Http\Controllers\Keuangan\WithdrawalApprovalController;
 use App\Http\Controllers\Form\FormContentController;
 use App\Http\Controllers\Form\FormFooterController;
 use App\Http\Controllers\Form\FormHeaderController;
@@ -174,6 +176,7 @@ use App\Http\Controllers\Dashboard\PackageController as DashboardPackageControll
 use App\Http\Controllers\Dashboard\PackageCheckoutController;
 use App\Http\Controllers\Dashboard\VoucherRedeemController;
 use App\Http\Controllers\Dashboard\WalletTransferController;
+use App\Http\Controllers\Wallet\WalletWithdrawalController;
 use Illuminate\Support\Facades\Route;
 
 // Route::get('/', function () {
@@ -616,6 +619,28 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
             ->group(function () {
                 Route::get('/', 'index')->name('keuangan.transfer-fee.index');
                 Route::post('/execute', 'execute')->name('keuangan.transfer-fee.execute');
+            });
+
+        // "Tarik Saldo" -- Wallet milik BranchOffice, ditarik ke
+        // rekening bank Company. Lihat App\Http\Controllers\Keuangan\
+        // BranchWithdrawalController.
+        Route::prefix('tarik-saldo')
+            ->controller(BranchWithdrawalController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('keuangan.withdrawal.index');
+                Route::post('/', 'store')->name('keuangan.withdrawal.store');
+            });
+
+        // Antrean persetujuan -- satu halaman utk SEMUA permintaan
+        // tarik saldo yang boleh dilihat caller (Wallet pribadi
+        // pengajar/reseller MAUPUN Wallet Branch), lihat
+        // App\Http\Controllers\Keuangan\WithdrawalApprovalController.
+        Route::prefix('persetujuan-tarik-saldo')
+            ->controller(WithdrawalApprovalController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('keuangan.withdrawal.approval.index');
+                Route::post('/{id}/approve', 'approve')->name('keuangan.withdrawal.approval.approve');
+                Route::post('/{id}/reject', 'reject')->name('keuangan.withdrawal.approval.reject');
             });
     });
 
@@ -1297,6 +1322,17 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
             Route::post('/lookup', 'lookupRecipient')->name('dashboard.wallet-transfer.lookup');
             Route::post('/', 'store')->name('dashboard.wallet-transfer.store');
             Route::get('/{transfer}/success', 'success')->name('dashboard.wallet-transfer.success');
+        });
+
+    // "Tarik Saldo" in the profile dropdown -- personal Wallet
+    // (pengajar & reseller alike, see WalletWithdrawalController's
+    // class docblock). Approval lives under keuangan.withdrawal.approval.*.
+    Route::prefix('wallet/withdrawal')
+        ->controller(WalletWithdrawalController::class)
+        ->group(function () {
+            Route::get('/', 'index')->name('wallet.withdrawal.index');
+            Route::post('/', 'store')->name('wallet.withdrawal.store');
+            Route::post('/{id}/cancel', 'cancel')->name('wallet.withdrawal.cancel');
         });
 
 });

@@ -283,6 +283,14 @@
                                     </a>
                                 </li>
                                 <li class="profile-item">
+                                    <a href="{{ route('wallet.withdrawal.index') }}"
+                                        class="text-body d-flex align-items-center justify-content-between">
+                                        <span>
+                                            <i class="ri-bank-line me-3"></i>Tarik Saldo
+                                        </span>
+                                    </a>
+                                </li>
+                                <li class="profile-item">
                                     <a href="{{ route('user-settings.pin.edit') }}"
                                         class="text-body d-flex align-items-center justify-content-between">
                                         <span>
