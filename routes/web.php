@@ -135,6 +135,7 @@ use App\Http\Controllers\Tagihan\Public\TagihanPublicController;
 use App\Http\Controllers\Keuangan\PengajarFeeTransferController;
 use App\Http\Controllers\Keuangan\BranchWithdrawalController;
 use App\Http\Controllers\Keuangan\WithdrawalApprovalController;
+use App\Http\Controllers\Keuangan\SaldoDashboardController;
 use App\Http\Controllers\Form\FormContentController;
 use App\Http\Controllers\Form\FormFooterController;
 use App\Http\Controllers\Form\FormHeaderController;
@@ -177,6 +178,7 @@ use App\Http\Controllers\Dashboard\PackageCheckoutController;
 use App\Http\Controllers\Dashboard\VoucherRedeemController;
 use App\Http\Controllers\Dashboard\WalletTransferController;
 use App\Http\Controllers\Wallet\WalletWithdrawalController;
+use App\Http\Controllers\Wallet\WalletDashboardController;
 use Illuminate\Support\Facades\Route;
 
 // Route::get('/', function () {
@@ -614,6 +616,12 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
     // fitur Grade) -- fitur "Tarik Saldo" (WalletWithdrawal) menyusul
     // di bawah menu yang sama, belum ada di sini.
     Route::prefix('keuangan')->middleware(['menu.access'])->group(function () {
+        // "Dashboard Saldo" -- ringkasan saldo & histori tiap level
+        // (Branch/Company), lihat App\Http\Controllers\Keuangan\
+        // SaldoDashboardController.
+        Route::get('/dashboard-saldo', [SaldoDashboardController::class, 'index'])
+            ->name('keuangan.dashboard.index');
+
         Route::prefix('transfer-fee')
             ->controller(PengajarFeeTransferController::class)
             ->group(function () {
@@ -1334,6 +1342,12 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
             Route::post('/', 'store')->name('wallet.withdrawal.store');
             Route::post('/{id}/cancel', 'cancel')->name('wallet.withdrawal.cancel');
         });
+
+    // "Riwayat Saldo" in the profile dropdown -- personal Wallet
+    // histori gabungan (top up, transfer, komisi referral, fee
+    // mengajar, tarik saldo), lihat WalletDashboardController.
+    Route::get('/wallet/dashboard', [WalletDashboardController::class, 'index'])
+        ->name('wallet.dashboard.index');
 
 });
 

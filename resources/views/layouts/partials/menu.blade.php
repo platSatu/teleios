@@ -236,6 +236,11 @@
                     </a>
                     <ul class="pe-slide-menu collapse" id="collapseKeuangan">
                         <li class="pe-slide-item">
+                            <a href="{{ route('keuangan.dashboard.index') }}" class="pe-nav-link">
+                                Dashboard Saldo
+                            </a>
+                        </li>
+                        <li class="pe-slide-item">
                             <a href="{{ route('keuangan.transfer-fee.index') }}" class="pe-nav-link">
                                 Transfer Fee Pengajar
                             </a>

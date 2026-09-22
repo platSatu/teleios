@@ -16,6 +16,7 @@ class Wallet extends Model
 
     protected $fillable = [
         'user_id',
+        'branch_office_id',
         'currency',
         'balance',
         'status',
@@ -44,6 +45,16 @@ class Wallet extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+
+    /**
+     * Lihat App\Services\Wallet\WalletProvisioningService::forBranch() --
+     * jalur pembuatan Wallet milik BranchOffice (bukan User).
+     */
+    public function branchOffice()
+    {
+        return $this->belongsTo(BranchOffice::class);
     }
 
 

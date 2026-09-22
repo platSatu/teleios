@@ -291,6 +291,14 @@
                                     </a>
                                 </li>
                                 <li class="profile-item">
+                                    <a href="{{ route('wallet.dashboard.index') }}"
+                                        class="text-body d-flex align-items-center justify-content-between">
+                                        <span>
+                                            <i class="ri-history-line me-3"></i>Riwayat Saldo
+                                        </span>
+                                    </a>
+                                </li>
+                                <li class="profile-item">
                                     <a href="{{ route('user-settings.pin.edit') }}"
                                         class="text-body d-flex align-items-center justify-content-between">
                                         <span>
