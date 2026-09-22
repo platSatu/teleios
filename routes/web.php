@@ -132,6 +132,7 @@ use App\Http\Controllers\Tagihan\TagihanPelangganController;
 use App\Http\Controllers\Tagihan\TagihanController;
 use App\Http\Controllers\Tagihan\TagihanPenerimaController;
 use App\Http\Controllers\Tagihan\Public\TagihanPublicController;
+use App\Http\Controllers\Keuangan\PengajarFeeTransferController;
 use App\Http\Controllers\Form\FormContentController;
 use App\Http\Controllers\Form\FormFooterController;
 use App\Http\Controllers\Form\FormHeaderController;
@@ -598,6 +599,23 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 // Regenerate public_token -- kalau link lama sudah
                 // ter-share ke orang yang salah.
                 Route::post('/{id}/regenerate-token', 'regenerateToken')->name('tagihan.laporan.regenerate-token');
+            });
+    });
+
+    // Fitur "Keuangan" -- Saldo Branch/Company/Reseller & Tarik Saldo
+    // (diskusi 22 September 2026, lihat App\Models\Wallet,
+    // App\Models\PengajarFeeTransfer, App\Models\WalletWithdrawal).
+    // "Transfer Fee" bulanan di bawah ini adalah bagian PERTAMA yang
+    // jadi (debit Wallet Branch, kredit Wallet tiap pengajar, dihitung
+    // dari App\Models\JadwalKelas::feePengajar() yang sudah ada sejak
+    // fitur Grade) -- fitur "Tarik Saldo" (WalletWithdrawal) menyusul
+    // di bawah menu yang sama, belum ada di sini.
+    Route::prefix('keuangan')->middleware(['menu.access'])->group(function () {
+        Route::prefix('transfer-fee')
+            ->controller(PengajarFeeTransferController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('keuangan.transfer-fee.index');
+                Route::post('/execute', 'execute')->name('keuangan.transfer-fee.execute');
             });
     });
 

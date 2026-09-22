@@ -218,6 +218,31 @@
                     </ul>
                 </li>
 
+                {{-- Menu "Keuangan" -- Saldo Branch/Company/Reseller &
+                         Tarik Saldo (diskusi 22 September 2026, lihat
+                         App\Models\Wallet, App\Models\PengajarFeeTransfer).
+                         "Transfer Fee" adalah item PERTAMA yang jadi --
+                         item "Tarik Saldo"/"Persetujuan Penarikan"
+                         menyusul di sini nanti, belum ditambahkan. Sama
+                         seperti Tagihan, SENGAJA belum dibungkus
+                         package-gate. --}}
+                <li class="pe-slide pe-has-sub">
+                    <a href="#collapseKeuangan" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
+                        aria-controls="collapseKeuangan">
+                        <i class="uil uil-wallet pe-nav-icon"></i>
+                        <span class="pe-nav-content">Keuangan</span>
+                        <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
+                        <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
+                    </a>
+                    <ul class="pe-slide-menu collapse" id="collapseKeuangan">
+                        <li class="pe-slide-item">
+                            <a href="{{ route('keuangan.transfer-fee.index') }}" class="pe-nav-link">
+                                Transfer Fee Pengajar
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+
                 {{-- Chat menu (and its whole "Pengaturan" sub-tree) only
                          shown while the user has at least one active,
                          not-yet-expired package — same rule as the routes
