@@ -133,7 +133,18 @@ class SendAutoReplyMessage implements ShouldQueue
             // docblock for the full tag list.
             $body = $tagResolver->resolve($rule->reply_message, $rule->company);
 
-            $inbox->send($token, $rule->device_id, $this->chatJid, $body);
+            // $rule->company passed through so InboxService::send() applies
+            // its own centralized requireActivePackage() guard too (see
+            // that method's docblock) — this job's own requireActivePackage()
+            // check above still runs first as a cheap early-exit before any
+            // tag resolution happens, this is just defense-in-depth for the
+            // moment of the actual send. $limitMetric explicitly null (not
+            // the default 'broadcast_send'): auto-reply still isn't metered
+            // against any quota — checklist item #8 (CLAUDE.md) is still an
+            // open decision on whether it ever should be — so this must NOT
+            // start silently consuming a company's broadcast_send quota for
+            // messages that were never counted against it before.
+            $inbox->send($token, $rule->device_id, $this->chatJid, $body, $rule->company, null);
 
             $rule->forceFill([
                 'trigger_count' => $rule->trigger_count + 1,

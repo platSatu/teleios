@@ -119,7 +119,14 @@ class SendAiBotReply implements ShouldQueue
 
             $reply = $generator->generate($bot, $this->incomingBody, $history);
 
-            $inbox->send($token, $bot->device_id, $this->chatJid, $reply);
+            // $bot->company passed through for InboxService::send()'s own
+            // centralized requireActivePackage() guard (defense-in-depth
+            // alongside this job's own early check above) — $limitMetric
+            // explicitly null for the same reason as SendAutoReplyMessage:
+            // AI bot replies aren't metered against broadcast_send quota
+            // (checklist item #8, CLAUDE.md, still undecided), so this must
+            // not start silently consuming it.
+            $inbox->send($token, $bot->device_id, $this->chatJid, $reply, $bot->company, null);
 
             $bot->forceFill([
                 'trigger_count' => $bot->trigger_count + 1,

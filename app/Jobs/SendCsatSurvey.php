@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Exceptions\PackageLimitExceededException;
 use App\Models\WaConversation;
 use App\Models\WaCsatSurvey;
 use App\Services\Chat\CsatSurveyService;
@@ -71,7 +72,15 @@ class SendCsatSurvey implements ShouldQueue
         try {
             $token = $jwtService->mintFor($owner);
 
-            $message = $inbox->sendPoll($token, $conversation->device_id, $conversation->chat_jid, $question, $options, 1);
+            // $company passed through so this finally gets the same
+            // requireActivePackage() guard every other outbound WA path
+            // has (CLAUDE.md checklist item #3/9.5 — this job previously
+            // had ZERO protection at all). $limitMetric explicitly null:
+            // a CSAT survey fires once per resolved conversation, not a
+            // company-initiated broadcast, same reasoning as
+            // SendChatbotFlowMessages/SendAutoReplyMessage for not
+            // metering it against broadcast_send quota.
+            $message = $inbox->sendPoll($token, $conversation->device_id, $conversation->chat_jid, $question, $options, 1, $company, null);
 
             WaCsatSurvey::create([
                 'company_id' => $company->id,
@@ -83,6 +92,18 @@ class SendCsatSurvey implements ShouldQueue
                 'question' => $question,
                 'options' => $options,
                 'sent_at' => now(),
+            ]);
+        } catch (PackageLimitExceededException $e) {
+            // Company's package expired between the conversation being
+            // resolved and this job actually running — not a transient
+            // send failure (same reasoning as SendChatbotFlowMessages'
+            // identical catch), so logged distinctly and NOT rethrown:
+            // retrying won't fix an expired package.
+            Log::info('csat-survey: skipped, package/quota guard blocked send', [
+                'conversation_id' => $conversation->id,
+                'device_id' => $conversation->device_id,
+                'chat_jid' => $conversation->chat_jid,
+                'reason' => $e->getMessage(),
             ]);
         } catch (Throwable $e) {
             Log::warning('csat-survey: SendCsatSurvey failed', [

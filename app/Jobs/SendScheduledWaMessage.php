@@ -319,32 +319,15 @@ class SendScheduledWaMessage implements ShouldQueue
             return;
         }
 
-        // The real, concurrency-safe quota check-and-consume: atomic
-        // (locked, single-transaction) so many of this exact job running
-        // across several queue workers for the same company at once
-        // can't all read "still room" before any of them writes back —
-        // see App\Services\PackageLimitService::reserve()'s docblock.
-        // Placed here, right before the network call, once every other
-        // reason this send might not happen has already been ruled out
-        // (same reasoning as the throttle guard above it) — a slot is
-        // never reserved for a send that was going to be skipped/failed
-        // anyway. If the send below then fails, release() gives the
-        // reservation back in the catch block so a retried/failed
-        // attempt never permanently burns quota it never actually used.
-        if ($schedule->company) {
-            try {
-                $packageLimits->reserve($schedule->company, 'broadcast_send');
-            } catch (PackageLimitExceededException $e) {
-                $log->forceFill([
-                    'status' => WaMessageScheduleLog::STATUS_SKIPPED,
-                    'error' => $e->getMessage(),
-                    'attempts' => $log->attempts + 1,
-                ])->save();
-
-                return;
-            }
-        }
-
+        // The real, concurrency-safe quota check-and-consume now happens
+        // INSIDE App\Services\Chat\InboxService::send()/sendStoredMedia()
+        // itself (see guardPackageLimit()'s docblock there — CLAUDE.md
+        // checklist item #3, Fase 1) — $schedule->company is passed to
+        // those calls below instead of reserving here manually. Still
+        // guarded by the same try/catch as the send itself (right below)
+        // so a PackageLimitExceededException thrown at reserve-time (no
+        // room left) is recorded the same STATUS_SKIPPED way it always
+        // was, not as a genuine send failure.
         try {
             $token = $jwtService->mintFor($owner);
 
@@ -369,7 +352,8 @@ class SendScheduledWaMessage implements ShouldQueue
                     Storage::disk('public')->path($template->attachment_path),
                     $template->attachment_original_name ?: basename($template->attachment_path),
                     $this->realMimeType($template->attachment_path, $template->attachment_type),
-                    $body
+                    $body,
+                    $schedule->company
                 );
             } elseif ($content['attachmentPath'] && Storage::disk('public')->exists($content['attachmentPath'])) {
                 $sent = $inbox->sendStoredMedia(
@@ -379,10 +363,11 @@ class SendScheduledWaMessage implements ShouldQueue
                     Storage::disk('public')->path($content['attachmentPath']),
                     $content['attachmentName'] ?: basename($content['attachmentPath']),
                     $this->realMimeType($content['attachmentPath'], $content['attachmentType']),
-                    $body
+                    $body,
+                    $schedule->company
                 );
             } else {
-                $sent = $inbox->send($token, $schedule->device_id, $chatJid, $body);
+                $sent = $inbox->send($token, $schedule->device_id, $chatJid, $body, $schedule->company);
             }
 
             $log->forceFill([
@@ -396,15 +381,26 @@ class SendScheduledWaMessage implements ShouldQueue
                 'attempts' => $log->attempts + 1,
                 'error' => null,
             ])->save();
+        } catch (PackageLimitExceededException $e) {
+            // Thrown by InboxService::send()/sendStoredMedia()'s own
+            // guardPackageLimit() (CLAUDE.md checklist item #3) — either
+            // the company's package expired in the moment between the
+            // early requireActivePackage() check above and this send, or
+            // (far more commonly) reserve() found no broadcast_send quota
+            // room left. Recorded as STATUS_SKIPPED exactly like the
+            // early requireActivePackage() guard above, not as a genuine
+            // send failure — no quota was actually consumed (reserve()
+            // throws before incrementing anything), and this must NOT
+            // burn one of $tries' retry attempts: a company that's simply
+            // out of quota isn't a transient error that retrying will
+            // fix, so retrying it would only delay the log settling into
+            // its final state for no benefit.
+            $log->forceFill([
+                'status' => WaMessageScheduleLog::STATUS_SKIPPED,
+                'error' => $e->getMessage(),
+                'attempts' => $log->attempts + 1,
+            ])->save();
         } catch (Throwable $e) {
-            // The reservation made above didn't correspond to a real
-            // send after all — give it back before retrying/failing, so
-            // quota is only ever permanently spent on a message that
-            // genuinely went out.
-            if ($schedule->company) {
-                $packageLimits->release($schedule->company, 'broadcast_send');
-            }
-
             // Auto-pause/resume: the device simply being offline right
             // now isn't treated as a send failure — see
             // InboxService::isDeviceDisconnected()'s docblock and

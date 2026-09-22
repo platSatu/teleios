@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Exceptions\PackageLimitExceededException;
 use App\Models\Company;
 use App\Services\Chat\InboxService;
 use App\Services\Chat\SystemJwtService;
@@ -52,7 +53,8 @@ class SendChatbotFlowMessages implements ShouldQueue
             return;
         }
 
-        $owner = Company::find($this->companyId)?->user;
+        $company = Company::find($this->companyId);
+        $owner = $company?->user;
 
         if (! $owner) {
             Log::warning('chatbot-flow: cannot send, company has no owner user', [
@@ -76,8 +78,33 @@ class SendChatbotFlowMessages implements ShouldQueue
                     sleep(1);
                 }
 
-                $inbox->send($token, $this->deviceId, $this->chatJid, $body);
+                // $company passed through so this finally gets the same
+                // requireActivePackage() guard every other outbound WA
+                // path has (CLAUDE.md checklist item #3/9.5 — this job
+                // previously had ZERO protection at all, a company whose
+                // package expired kept getting chatbot-flow replies sent
+                // forever). $limitMetric explicitly null, same reasoning
+                // as SendAutoReplyMessage/SendAiBotReply: a chatbot-flow
+                // reply is triggered by an incoming message the same way
+                // auto-reply/AI bot are, not a company-initiated broadcast
+                // — whether it should ever count against broadcast_send
+                // quota is the same open decision as checklist item #8,
+                // not something to decide silently here.
+                $inbox->send($token, $this->deviceId, $this->chatJid, $body, $company, null);
             }
+        } catch (PackageLimitExceededException $e) {
+            // Company's package expired mid-flow (or between steps) —
+            // not a transient send failure, so logged distinctly and NOT
+            // rethrown: rethrowing would trigger this job's normal
+            // tries/backoff retry, but retrying an expired-package send
+            // will never succeed on its own, so there's nothing a retry
+            // would fix.
+            Log::info('chatbot-flow: skipped, package/quota guard blocked send', [
+                'company_id' => $this->companyId,
+                'device_id' => $this->deviceId,
+                'chat_jid' => $this->chatJid,
+                'reason' => $e->getMessage(),
+            ]);
         } catch (Throwable $e) {
             Log::warning('chatbot-flow: SendChatbotFlowMessages failed', [
                 'company_id' => $this->companyId,

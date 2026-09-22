@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\PackageLimitExceededException;
 use App\Http\Controllers\Controller;
 use App\Models\WaApiKey;
 use App\Services\Chat\InboxService;
@@ -80,7 +81,17 @@ class WaApiSendMessageController extends Controller
 
         try {
             $token = $jwtService->mintFor($owner);
-            $result = $inbox->send($token, $apiKey->device_id, $chatJid, $validated['message']);
+
+            // $apiKey->company passed through so this third-party send
+            // finally goes through the same package-active/quota guard
+            // every other outbound WA path already has (CLAUDE.md
+            // checklist item #3 — this controller was the original gap
+            // that started the whole centralization: previously a
+            // company whose package had expired, or whose broadcast_send
+            // quota was exhausted, could keep sending through this
+            // endpoint forever). See InboxService::guardPackageLimit()'s
+            // docblock for exactly what this does and doesn't check.
+            $result = $inbox->send($token, $apiKey->device_id, $chatJid, $validated['message'], $apiKey->company);
 
             Log::info('WaApiSendMessageController: send success', [
                 'api_key_id' => $apiKey->id,
@@ -94,6 +105,31 @@ class WaApiSendMessageController extends Controller
                 'status' => 'sent',
                 'message' => $result,
             ]);
+        } catch (PackageLimitExceededException $e) {
+            // metricKey() 'active_package' (requireActivePackage()'s own
+            // marker) means the company simply isn't a paying customer
+            // right now — 403 Forbidden, matching the "you're not allowed
+            // to do this at all" semantics. Any other metric key (right
+            // now, only 'broadcast_send') means they ARE active but have
+            // used up this period's quota — 429 Too Many Requests, since
+            // that's a temporary, retry-later condition rather than a
+            // permission problem. $e->getMessage() is already a safe,
+            // human-readable Indonesian sentence (see that exception
+            // class's own docblock) — no translation/mapping needed here,
+            // unlike describeSendFailure() below which exists specifically
+            // because the Go backend's raw errors AREN'T safe to surface
+            // as-is.
+            Log::warning('WaApiSendMessageController: blocked by package/quota guard', [
+                'api_key_id' => $apiKey->id,
+                'company_id' => $apiKey->company_id,
+                'device_id' => $apiKey->device_id,
+                'metric' => $e->metricKey(),
+                'reason' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'error' => $e->getMessage(),
+            ], $e->metricKey() === 'active_package' ? 403 : 429);
         } catch (Throwable $e) {
             $reason = $this->describeSendFailure($e);
 

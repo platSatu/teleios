@@ -87,8 +87,16 @@
             "description": "Header X-WA-Token / X-WA-Secret tidak ada atau tidak valid.",
             "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
           },
+          "403": {
+            "description": "Package company pemilik device ini sudah tidak aktif (habis masa berlaku, belum redeem voucher/beli paket baru). Ditambahkan 22 September 2026 sebagai bagian sentralisasi proteksi pengiriman WA (CLAUDE.md checklist #3) — sebelumnya endpoint ini tidak pernah mengecek status package sama sekali.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
           "422": {
             "description": "Body request tidak valid (field to/message kosong atau kepanjangan).",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "429": {
+            "description": "Kuota pengiriman broadcast paket company ini untuk periode berjalan sudah habis. Ditambahkan 22 September 2026, sama seperti 403 di atas.",
             "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
           },
           "500": {
