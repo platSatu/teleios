@@ -138,11 +138,29 @@ class PackageLimitService
     public function requireActivePackage(Company $company): void
     {
         if ($this->activePackage($company) === null) {
+            $this->recordBreach();
+
             throw new PackageLimitExceededException(
                 'Masa aktif package perusahaan ini sudah habis. Redeem voucher atau beli package baru untuk melanjutkan pengiriman WhatsApp.',
                 'active_package'
             );
         }
+    }
+
+    /**
+     * CLAUDE.md checklist #10 — increments App\Services\
+     * PlatformAlertService's rolling counter at the single choke point
+     * every PackageLimitExceededException passes through, rather than
+     * relying on each of this exception's ~8 scattered catch-site callers
+     * to log consistently (investigated first: several don't log at all
+     * today). Resolved via app() rather than constructor-injected — a
+     * constructor dependency here would be circular, since
+     * PlatformAlertService itself depends on InboxService, which depends
+     * on THIS class.
+     */
+    private function recordBreach(): void
+    {
+        app(\App\Services\PlatformAlertService::class)->recordPackageLimitBreach();
     }
 
     /**
@@ -303,6 +321,8 @@ class PackageLimitService
             $used = $liveCountResolver ? (int) $liveCountResolver() : 0;
 
             if ($used + $amount > $packageLimit->max_value) {
+                $this->recordBreach();
+
                 throw new PackageLimitExceededException(
                     "Batas {$metric->name} paket Anda sudah tercapai ({$packageLimit->max_value} {$metric->unit}). Hapus data lama atau upgrade paket untuk menambah kapasitas.",
                     $metricKey
@@ -317,6 +337,7 @@ class PackageLimitService
 
         if ($usage->used_value + $amount > $packageLimit->max_value) {
             $this->notifyExhausted($company, $metric, $usage, $packageLimit->max_value);
+            $this->recordBreach();
 
             throw new PackageLimitExceededException(
                 "Kuota {$metric->name} paket Anda untuk periode ini sudah habis ({$usage->used_value}/{$packageLimit->max_value} {$metric->unit}). Beli/upgrade paket untuk melanjutkan.",
@@ -408,6 +429,7 @@ class PackageLimitService
 
             if ($usage->used_value + $amount > $packageLimit->max_value) {
                 $this->notifyExhausted($company, $metric, $usage, $packageLimit->max_value);
+                $this->recordBreach();
 
                 throw new PackageLimitExceededException(
                     "Kuota {$metric->name} paket Anda untuk periode ini sudah habis ({$usage->used_value}/{$packageLimit->max_value} {$metric->unit}). Beli/upgrade paket untuk melanjutkan.",

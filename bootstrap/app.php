@@ -137,6 +137,18 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('crm:evaluate-automation-rules')
             ->dailyAt('07:00')
             ->withoutOverlapping();
+
+        // Platform health alert (CLAUDE.md checklist #10) — see
+        // App\Console\Commands\PlatformHealthAlert / App\Services\
+        // PlatformAlertService for the full design. Every minute so an
+        // incident is caught within ~1 minute of crossing the threshold,
+        // not just when the next 5/15-minute tick happens to land; the
+        // command itself is cheap (a handful of Cache::get() reads), and
+        // the 30-minute alert cooldown (inside the service, not here)
+        // is what actually stops this from being noisy.
+        $schedule->command('platform:health-alert')
+            ->everyMinute()
+            ->withoutOverlapping();
     })
      ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
@@ -223,5 +235,27 @@ return Application::configure(basePath: dirname(__DIR__))
             $response->headers->set('Expires', '0');
 
             return $response;
+        });
+
+        // Platform health alert (CLAUDE.md checklist #10) — counts every
+        // exception that would render as a 5xx response, across the whole
+        // app, into App\Services\PlatformAlertService's rolling counter
+        // (App\Console\Commands\PlatformHealthAlert reads it every
+        // minute). A plain `return;` (void) from a reportable() callback
+        // does NOT suppress Laravel's own default logging of the
+        // exception — this only ADDS the counter increment alongside
+        // whatever already happens, it changes no existing behavior.
+        // Client-error exceptions (validation, 404, auth, etc. — anything
+        // implementing HttpExceptionInterface with a sub-500 status) are
+        // deliberately excluded: those are expected, routine traffic, not
+        // signs of something systemically broken.
+        $exceptions->reportable(function (\Throwable $e) {
+            $statusCode = $e instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface
+                ? $e->getStatusCode()
+                : 500;
+
+            if ($statusCode >= 500) {
+                app(\App\Services\PlatformAlertService::class)->recordHttp500();
+            }
         });
     })->create();

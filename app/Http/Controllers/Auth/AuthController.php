@@ -389,6 +389,18 @@ class AuthController extends Controller
 
         $user->sendCustomVerificationEmail();
 
+        // CLAUDE.md checklist #10 — notify the platform owner in real
+        // time on every new signup (a discrete business event, not an
+        // anomaly, so unlike PlatformAlertService's health-alert side
+        // this has no threshold/cooldown). Registration is fully custom
+        // in this app (no Illuminate\Auth\Events\Registered ever fires —
+        // confirmed by grep), so this is a direct call rather than an
+        // event listener, matching how sendCustomVerificationEmail()
+        // above is also called directly. Wrapped internally by
+        // PlatformAlertService::send() so a WhatsApp hiccup can never
+        // fail someone's registration.
+        app(\App\Services\PlatformAlertService::class)->sendRegistrationAlert($user->name, $user->email);
+
         return redirect()->route('login')
             ->with('status', 'Registrasi berhasil! Silakan cek email Anda untuk mengaktifkan akun sebelum login.');
     }
