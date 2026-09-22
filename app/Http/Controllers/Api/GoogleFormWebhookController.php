@@ -11,6 +11,7 @@ use App\Services\Chat\SystemJwtService;
 use App\Support\PhoneNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
@@ -50,6 +51,11 @@ use Throwable;
  *      integration's detail page has real evidence of what happened,
  *      instead of the company having to guess from WhatsApp alone.
  *
+ * Idempotent per (integration, exact answers received) within a short
+ * window — see the Cache::add() lock right after $payload is built —
+ * so a duplicate delivery of the same submission never sends a second
+ * WhatsApp message for it (CLAUDE.md checklist item #4).
+ *
  * Always responds 200 with a small JSON body — Apps Script's
  * UrlFetchApp doesn't retry non-2xx responses on its own, and a failed
  * send is already visible via the submissions log, so there's no upside
@@ -77,6 +83,36 @@ class GoogleFormWebhookController extends Controller
         // that the field set is whatever the company's own form asks,
         // not something this app can know in advance.
         $payload = $request->all();
+
+        // Idempotency guard (CLAUDE.md checklist item #4) — same
+        // Cache::add()-based atomic lock pattern as
+        // WaIncomingMessageWebhookController, adapted for the fact that a
+        // Google Form submission has no guaranteed unique id in the
+        // payload (unlike an incoming WA message's message_id): Apps
+        // Script builds $payload purely from the company's own form
+        // question titles, which this app doesn't control and can't rely
+        // on containing anything unique. Keyed on the integration plus a
+        // hash of the exact answers received, so a genuinely duplicate
+        // delivery of the SAME submission (a flaky Apps Script re-run, a
+        // trigger somehow firing twice, or a WhatsApp integration
+        // retrying its own webhook call) within the TTL window is
+        // dropped before it can send a second WhatsApp message for it.
+        // Two DIFFERENT real submissions with identical answers (same
+        // person submitting the same thing again shortly after, or two
+        // people answering identically) are rare enough for a lead-gen/
+        // registration form, and merely delayed rather than lost if they
+        // do collide, so a 10-minute window trades a small chance of a
+        // legitimate resend being briefly held back for closing what was
+        // otherwise a complete gap.
+        $submissionLockKey = 'google-form-webhook:'.$integration->id.':'.md5(json_encode($payload));
+
+        if (! Cache::add($submissionLockKey, true, now()->addMinutes(10))) {
+            Log::info('GoogleFormWebhookController: duplicate submission ignored', [
+                'integration_id' => $integration->id,
+            ]);
+
+            return response()->json(['status' => 'duplicate, ignored']);
+        }
 
         $targetNumber = $this->extractTargetNumber($payload, $integration->target_number_field);
 
