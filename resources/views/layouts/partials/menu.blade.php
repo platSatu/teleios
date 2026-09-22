@@ -263,6 +263,13 @@
                                      (status/SLA/assignee), lintas device.
                                      See App\Http\Controllers\Chat\
                                      ConversationController::index(). --}}
+                            {{-- Dikomentari sementara atas permintaan user
+                                     (22 September 2026) -- BUKAN dihapus,
+                                     tinggal buka komentar ini lagi kalau
+                                     mau diaktifkan lagi. Route
+                                     chat.conversations.index & controller-nya
+                                     tetap ada/utuh, cuma link sidebar-nya
+                                     yang disembunyikan.
                             @if ($canSeeChatMenu('chat.conversations.index'))
                                 <li class="pe-slide-item">
                                     <a href="{{ route('chat.conversations.index') }}" class="pe-nav-link">
@@ -270,6 +277,7 @@
                                     </a>
                                 </li>
                             @endif
+                            --}}
 
                             {{-- CRM Roadmap Fase 2 "Task & Follow-up" —
                                      every open/overdue follow-up across all
@@ -277,6 +285,8 @@
                                      a daily CS queue, not filed under Buku
                                      Telepon. See App\Http\Controllers\Crm\
                                      CustomerTaskController::index(). --}}
+                            {{-- Dikomentari sementara atas permintaan user
+                                     (22 September 2026) -- BUKAN dihapus.
                             @if ($canSeeChatMenu('chat.tasks.index'))
                                 <li class="pe-slide-item">
                                     <a href="{{ route('chat.tasks.index') }}" class="pe-nav-link">
@@ -284,11 +294,14 @@
                                     </a>
                                 </li>
                             @endif
+                            --}}
 
                             {{-- CRM Roadmap Fase 3 "Sales Pipeline / Deal"
                                      — Kanban board of every open opportunity.
                                      See App\Http\Controllers\Crm\
                                      DealController::index(). --}}
+                            {{-- Dikomentari sementara atas permintaan user
+                                     (22 September 2026) -- BUKAN dihapus.
                             @if ($canSeeChatMenu('chat.deals.index'))
                                 <li class="pe-slide-item">
                                     <a href="{{ route('chat.deals.index') }}" class="pe-nav-link">
@@ -296,11 +309,14 @@
                                     </a>
                                 </li>
                             @endif
+                            --}}
 
                             {{-- CRM Roadmap Fase 4 "Segmentasi & Automation"
                                      — dynamic segments + tag catalog. See
                                      App\Http\Controllers\Crm\
                                      CustomerSegmentController::index(). --}}
+                            {{-- Dikomentari sementara atas permintaan user
+                                     (22 September 2026) -- BUKAN dihapus.
                             @if ($canSeeChatMenu('chat.segments.index'))
                                 <li class="pe-slide-item">
                                     <a href="{{ route('chat.segments.index') }}" class="pe-nav-link">
@@ -308,11 +324,14 @@
                                     </a>
                                 </li>
                             @endif
+                            --}}
 
                             {{-- CRM Roadmap Fase 4 — trigger-based
                                      follow-up automation rules. See
                                      App\Http\Controllers\Crm\
                                      CustomerAutomationRuleController::index(). --}}
+                            {{-- Dikomentari sementara atas permintaan user
+                                     (22 September 2026) -- BUKAN dihapus.
                             @if ($canSeeChatMenu('chat.automation-rules.index'))
                                 <li class="pe-slide-item">
                                     <a href="{{ route('chat.automation-rules.index') }}" class="pe-nav-link">
@@ -320,6 +339,7 @@
                                     </a>
                                 </li>
                             @endif
+                            --}}
 
                             {{-- Fitur #3 & #7 (respon/penyelesaian, performa
                                      agent, broadcast, dan CSAT) moved off
