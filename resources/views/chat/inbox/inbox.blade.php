@@ -201,24 +201,21 @@
                              renderDetail() below shows it (and sets its
                              href) only for a real 1:1 chat with a phone
                              number, never for a group/channel. --}}
-                        <a href="#" id="wa-detail-save-contact" class="wa-detail-save-contact-btn d-none" download>
-                            <i class="ri-user-add-line"></i> Simpan ke Kontak HP
-                        </a>
-
-                        {{-- "Simpan ke Buku Telepon" -- files this chat's
-                             contact into Konexa's own Chat > Buku Telepon
-                             (App\Models\WaPhoneBook), separate from the
-                             native-phone vCard button above. Asks which
-                             Kelompok (category) to file it under, but
-                             that choice is OPTIONAL — saves right away
-                             even with no Kelompok picked (23 September
-                             2026 request). Same visibility rule as the
-                             vCard button (hidden for group/channel or an
-                             unresolved number); toggled together in
-                             renderDetail() below. --}}
-                        <button type="button" id="wa-detail-save-phonebook-btn" class="wa-detail-save-contact-btn wa-detail-save-phonebook-btn d-none">
-                            <i class="ri-contacts-book-line"></i> Simpan ke Buku Telepon
-                        </button>
+                        {{-- Side-by-side, minimalist pair — was two
+                             full-width pill buttons stacked on top of each
+                             other with the full "Simpan ke ..." label,
+                             wrapping onto their own lines in the (narrow)
+                             detail panel. Shortened labels + a flex row
+                             keep both the same size and next to each
+                             other instead (23 September 2026 request). --}}
+                        <div class="wa-detail-save-actions">
+                            <a href="#" id="wa-detail-save-contact" class="wa-detail-save-contact-btn d-none" download>
+                                <i class="ri-user-add-line"></i> + Phone
+                            </a>
+                            <button type="button" id="wa-detail-save-phonebook-btn" class="wa-detail-save-contact-btn wa-detail-save-phonebook-btn d-none">
+                                <i class="ri-contacts-book-line"></i> Buku Telp
+                            </button>
+                        </div>
 
                         <div id="wa-save-phonebook-popover" class="wa-save-phonebook-popover d-none">
                             <div class="wa-save-phonebook-popover-title">Simpan ke Buku Telepon</div>
@@ -429,9 +426,9 @@
                  applyAvatar() sets width/height as inline style, which
                  plain specificity can't override. --}}
             .wa-thread-header { padding: 8px 10px; gap: 6px; }
-            .wa-thread-header #wa-thread-avatar { width: 36px !important; height: 36px !important; font-size: 0.85rem; }
-            #wa-thread-title { font-size: 0.92rem; }
-            #wa-thread-sub { font-size: 0.7rem; }
+            .wa-thread-header #wa-thread-avatar { width: 32px !important; height: 32px !important; font-size: 0.78rem; }
+            #wa-thread-title { font-size: 0.82rem; }
+            #wa-thread-sub { font-size: 0.64rem; }
             .wa-thread-header-right { gap: 2px; }
             .wa-thread-header-right .wa-presence-pill { padding: 2px 8px; font-size: 0.66rem; }
 
@@ -538,6 +535,12 @@
              shrink below its content's natural width so text-truncate can
              kick in instead. --}}
         .wa-thread-header-info { min-width: 0; flex: 1 1 auto; overflow: hidden; }
+        {{-- Base sizes for both desktop and mobile (the <=768px media
+             query further below shrinks these again for phones) — the
+             defaults inherited from Bootstrap's <h6>/<small> were still
+             visibly larger than the rest of this compact header row. --}}
+        #wa-thread-title { font-size: 0.9rem; }
+        #wa-thread-sub { font-size: 0.72rem; }
         .wa-thread-header-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
         .wa-thread-search-bar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: #fefce8; border-bottom: 1px solid #ece3d8; color: #6b7280; }
@@ -669,7 +672,13 @@
         /* --- right column --- */
         .wa-detail-empty { text-align: center; padding: 24px 8px; font-size: 0.85rem; }
         .wa-detail-header { text-align: center; padding-bottom: 16px; border-bottom: 1px solid #f0f0f0; margin-bottom: 16px; }
-        .wa-detail-save-contact-btn { display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; margin-right: 6px; font-size: 0.78rem; font-weight: 600; color: #16a34a; text-decoration: none; padding: 4px 10px; border: 1px solid #bbf7d0; border-radius: 999px; background: #f0fdf4; cursor: pointer; }
+        {{-- Side-by-side row instead of the two buttons' own inline-flex
+             stacking/wrapping — flex-wrap: nowrap plus the shortened
+             labels above keep them from ever breaking onto separate
+             lines even in the narrow detail panel. --}}
+        .wa-detail-save-actions { display: flex; flex-wrap: nowrap; justify-content: center; gap: 6px; margin-top: 8px; }
+        .wa-detail-save-contact-btn { display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; font-weight: 600; color: #16a34a; text-decoration: none; padding: 3px 9px; border: 1px solid #bbf7d0; border-radius: 999px; background: #f0fdf4; cursor: pointer; white-space: nowrap; }
+        .wa-detail-save-contact-btn i { font-size: 0.85rem; }
         .wa-detail-save-contact-btn:hover { background: #dcfce7; }
         .wa-detail-save-phonebook-btn { color: #2563eb; border-color: #bfdbfe; background: #eff6ff; }
         .wa-detail-save-phonebook-btn:hover { background: #dbeafe; }
