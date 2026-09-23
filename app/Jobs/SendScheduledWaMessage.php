@@ -43,10 +43,10 @@ use Throwable;
  * The Go backend only ever exposes two real send primitives — plain text
  * (WaInboxService::SendMessage) and a file attachment
  * (WaMediaService::SendMedia, used for image/document, same as the Inbox
- * paperclip button and a WA Template's own attachment). There's no native
- * WhatsApp location-pin or interactive-buttons message type built on the
- * Go side (see WaMessageTemplate::composedMessage()'s docblock for the
- * same limitation), so:
+ * paperclip button). There's no native WhatsApp location-pin or
+ * interactive-buttons message type built on the Go side (see
+ * WaMessageTemplate::composedMessage()'s docblock for the same
+ * limitation), so:
  *
  *   - category 'text'              → sent as plain text.
  *   - category 'location'          → composed as plain text too (name +
@@ -54,8 +54,14 @@ use Throwable;
  *     that's literally all a manual 'location' entry stores — there's no
  *     lat/lng column here to build a real pin from.
  *   - category 'image'/'document'  → sent as a file attachment via
- *     sendStoredMedia(), using the schedule's own attachment_* columns
- *     (same path a WA Template's attachment already went through).
+ *     sendStoredMedia(), using the schedule's own attachment_* columns.
+ *
+ * Fix 23 September 2026: attachment_* is now the ONLY source of an
+ * outgoing attachment, whether or not the schedule uses a WA Template —
+ * a template only ever supplies the message BODY (see resolveContent()
+ * below), never its own stored attachment_path, so a template that
+ * happens to have a file saved on it (from whenever it was built/edited)
+ * can no longer silently attach that file to an unrelated send.
  *
  * The one combination that's still genuinely unsupported is image/
  * document on a *drip step* — WaMessageScheduleStep has no attachment
@@ -331,31 +337,19 @@ class SendScheduledWaMessage implements ShouldQueue
         try {
             $token = $jwtService->mintFor($owner);
 
-            // Three ways this can go out:
-            //   1. A template with a stored image/document → sent as
-            //      media with the composed text as caption (previously
-            //      the attachment was never forwarded at all, only the
-            //      composed text).
-            //   2. A manual (non-template) 'image'/'document' schedule →
-            //      same media send, using the schedule's own
-            //      attachment_* columns instead of a template's.
-            //   3. Anything else ('text', or 'location' composed down to
+            // Two ways this can go out (fix 23 September 2026 — see
+            // resolveContent()'s docblock: attachment SELALU dari
+            // schedule->attachment_* sendiri sekarang, baik mode template
+            // maupun manual, tidak pernah lagi dari WaMessageTemplate::
+            // attachment_path):
+            //   1. Ada attachment_path (di-upload sendiri lewat form ini,
+            //      terlepas dari use_template) → sent as media with the
+            //      composed/manual text as caption.
+            //   2. Anything else ('text', or 'location' composed down to
             //      text above) → plain text.
-            $template = $content['template'];
             $body = $content['body'];
 
-            if ($template && $template->attachment_path && Storage::disk('public')->exists($template->attachment_path)) {
-                $sent = $inbox->sendStoredMedia(
-                    $token,
-                    $schedule->device_id,
-                    $chatJid,
-                    Storage::disk('public')->path($template->attachment_path),
-                    $template->attachment_original_name ?: basename($template->attachment_path),
-                    $this->realMimeType($template->attachment_path, $template->attachment_type),
-                    $body,
-                    $schedule->company
-                );
-            } elseif ($content['attachmentPath'] && Storage::disk('public')->exists($content['attachmentPath'])) {
+            if ($content['attachmentPath'] && Storage::disk('public')->exists($content['attachmentPath'])) {
                 $sent = $inbox->sendStoredMedia(
                     $token,
                     $schedule->device_id,
@@ -583,7 +577,24 @@ class SendScheduledWaMessage implements ShouldQueue
             $template = $schedule->waMessageTemplate;
             $body = $template?->composedMessage();
 
-            return $body ? array_merge($empty('text', $body), ['template' => $template]) : null;
+            if (! $body) {
+                return null;
+            }
+
+            // Fix 23 September 2026 (laporan user: attachment yang tidak
+            // di-upload ikut terkirim, ternyata file Excel yang tersimpan
+            // di WaMessageTemplate::attachment_path sejak lama):
+            // attachment SEKARANG SELALU dari upload sendiri di form
+            // jadwal ini (schedule->attachment_*, opsional — lihat
+            // MessageScheduleController::applyAttachment(), dipanggil
+            // unconditionally terlepas dari use_template), TIDAK PERNAH
+            // lagi otomatis dari attachment_path milik template. Template
+            // hanya menyumbang $body (isi pesan) di atas.
+            return array_merge($empty('text', $body), [
+                'attachmentPath' => $schedule->attachment_path,
+                'attachmentName' => $schedule->attachment_original_name,
+                'attachmentType' => $schedule->attachment_type,
+            ]);
         }
 
         $category = $schedule->category_schedule ?: 'text';

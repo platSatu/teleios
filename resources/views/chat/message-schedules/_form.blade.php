@@ -27,23 +27,22 @@
     // Pre-built here as plain PHP so the JS block below only ever has
     // to embed a single already-computed variable — keeps every raw
     // echo in this file to a simple one-liner instead of a multi-line
-    // expression. `recipients` travels along too — see the "Tujuan
-    // Pengiriman" section further down: when "Gunakan Template" is on,
-    // that section switches from the editable tri-tab to a read-only
-    // summary of whichever template is selected, since recipients now
-    // live on the template itself (Chat\MessageTemplateController).
+    // expression.
+    //
+    // Fix 23 September 2026 (laporan user: input 1 nomor tujuan malah
+    // terkirim ke 3 nomor, dan attachment yang tidak di-upload ikut
+    // terkirim): tujuan pengiriman & attachment SEKARANG SELALU dari
+    // apa yang diisi user di form ini (tri-tab Tujuan Pengiriman +
+    // Upload File), TIDAK PERNAH lagi otomatis diambil dari
+    // WaMessageTemplate::recipients/attachment_path milik template yang
+    // dipilih — lihat App\Http\Controllers\Chat\MessageScheduleController
+    // ::finalize() & App\Jobs\SendScheduledWaMessage::resolveContent().
+    // "recipients" makanya tidak lagi perlu ikut di sini.
     $templatesForJs = $templates->map(function ($t) {
-        $recipients = collect($t->recipients ?? []);
-
         return [
             'id' => $t->id,
             'name' => $t->name,
             'template' => $t->template,
-            'recipients' => [
-                'phone' => $recipients->where('type', 'phone')->count(),
-                'group' => $recipients->where('type', 'group')->count(),
-                'user' => $recipients->where('type', 'user')->count(),
-            ],
         ];
     })->values();
 
@@ -170,6 +169,37 @@
             <div class="border rounded-3 p-2 mt-2 bg-white small text-muted" id="templatePreview" style="min-height:44px;">
                 Pilih template untuk melihat isi pesannya di sini.
             </div>
+
+            {{-- Attachment untuk mode template -- opsional, dan SELALU
+                 attachment ini (bukan attachment_path milik template
+                 itu sendiri) yang ikut terkirim. Field terpisah dari
+                 Upload File di #manualFields tapi pakai `name` yang
+                 sama ("attachment"/"remove_attachment") -- syncTemplateToggle()
+                 di bawah men-disable salah satunya (bukan cuma
+                 menyembunyikan lewat CSS) supaya browser tidak ikut
+                 mengirim dua value untuk nama field yang sama (pola
+                 sama seperti fix duplicate-name form Setting Tagihan
+                 Denda, 23 September 2026). --}}
+            <div class="mb-0 mt-3" id="templateAttachmentWrapper">
+                <label class="form-label">Lampiran (opsional)</label>
+                @if ($schedule && $schedule->attachment_path)
+                    <div class="d-flex align-items-center gap-2 border rounded p-2 mb-2 bg-light-subtle">
+                        <i class="ri-file-3-line fs-4"></i>
+                        <div class="flex-grow-1 small">
+                            <a href="{{ asset('storage/'.$schedule->attachment_path) }}" target="_blank">{{ $schedule->attachment_original_name }}</a>
+                            <div class="text-muted">{{ number_format(($schedule->attachment_size ?? 0) / 1024, 0) }} KB</div>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="remove_attachment" value="1" id="templateRemoveAttachment">
+                            <label class="form-check-label small text-danger" for="templateRemoveAttachment">Hapus</label>
+                        </div>
+                    </div>
+                @endif
+                <input type="file" name="attachment" id="templateAttachmentInput" accept=".jpg,.jpeg,.png,.xlsx,.xls,.docx,.doc,.pdf"
+                    class="form-control @error('attachment') is-invalid @enderror">
+                <div class="form-text">Opsional — lampirkan gambar/dokumen untuk dikirim bersama pesan template ini. Format: JPG, JPEG, PNG, XLSX, XLS, DOCX, DOC, PDF. Maks. 10MB.</div>
+                @error('attachment')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
+            </div>
         </div>
 
         <div id="manualFields">
@@ -278,21 +308,20 @@
 </div>
 
 {{-- ============================================================
-     Tujuan Pengiriman: 3 tab (nomor / grup WA / user company) — hanya
-     untuk 'drip' atau saat "Gunakan Template" OFF. Saat template
-     dipakai, tujuan sudah ikut tersimpan di template itu sendiri (lihat
-     Chat\MessageTemplateController), jadi bagian ini diganti ringkasan
-     read-only supaya tidak terlihat seperti input yang harus diisi
-     ulang.
+     Tujuan Pengiriman: 3 tab (nomor / grup WA / user company) — SELALU
+     tampil & jadi satu-satunya sumber tujuan pengiriman, baik "Gunakan
+     Template" ON maupun OFF. Fix 23 September 2026 (laporan user:
+     input 1 nomor tujuan malah terkirim ke 3 nomor): sebelumnya, saat
+     template dipakai, bagian ini disembunyikan & diganti ringkasan
+     read-only, dan tujuan otomatis diambil dari
+     WaMessageTemplate::recipients milik template yang dipilih —
+     akibatnya nomor yang diketik di sini tidak pernah benar-benar
+     dipakai. Sekarang tujuan SELALU dari tri-tab ini, template cuma
+     menyumbang ISI pesannya saja. Lihat
+     App\Http\Controllers\Chat\MessageScheduleController::finalize().
 ============================================================ --}}
 <div class="card border mb-3">
     <div class="card-body">
-        <div class="alert alert-light border d-none mb-3" id="recipientFromTemplateNotice">
-            <div class="fw-semibold mb-1"><i class="ri-file-list-3-line"></i> Tujuan dari Template</div>
-            <div id="recipientFromTemplateSummary" class="small text-muted">Pilih template di atas untuk melihat tujuannya.</div>
-            <div class="small mt-1">Mau ubah tujuan? <a href="{{ route('chat.message-templates.index') }}" target="_blank">Edit di halaman WA Template</a>.</div>
-        </div>
-
         <div id="recipientSection">
             <label class="form-label d-block">Tujuan Pengiriman</label>
             @error('recipients')<div class="text-danger small mb-2">{{ $message }}</div>@enderror
@@ -575,46 +604,38 @@
     var manualFields = document.getElementById('manualFields');
     var templateSelect = templateFields.querySelector('select[name="wa_message_template_id"]');
     var templatePreview = document.getElementById('templatePreview');
-    var recipientSection = document.getElementById('recipientSection');
-    var recipientFromTemplateNotice = document.getElementById('recipientFromTemplateNotice');
-    var recipientFromTemplateSummary = document.getElementById('recipientFromTemplateSummary');
-    var templatesData = @json($templatesForJs);
+    var categoryAttachmentInput = document.getElementById('categoryAttachmentInput');
+    var scheduleRemoveAttachment = document.getElementById('scheduleRemoveAttachment');
+    var templateAttachmentInput = document.getElementById('templateAttachmentInput');
+    var templateRemoveAttachment = document.getElementById('templateRemoveAttachment');
 
     function syncTemplateToggle() {
         var on = useTemplateToggle.checked;
         templateFields.style.display = on ? '' : 'none';
         manualFields.style.display = on ? 'none' : '';
 
-        // Recipients only come from the tri-tab below for 'drip' or a
-        // manual (non-template) once/recurring message — a template in
-        // use already carries its own recipients (see
-        // Chat\MessageTemplateController), so showing an empty tri-tab
-        // here on top of that would just be confusing/redundant.
-        var usesTemplateRecipients = on && getType() !== 'drip';
-        recipientSection.classList.toggle('d-none', usesTemplateRecipients);
-        recipientFromTemplateNotice.classList.toggle('d-none', !usesTemplateRecipients);
-    }
+        // Fix 23 September 2026: tujuan pengiriman (tri-tab di bawah)
+        // SELALU aktif sekarang, baik mode template maupun manual —
+        // tidak lagi disembunyikan/diganti ringkasan saat template
+        // dipakai. Lihat komentar di atas section "Tujuan Pengiriman".
 
-    function syncTemplateRecipientsSummary() {
-        var tpl = templatesData.filter(function (t) { return t.id === templateSelect.value; })[0];
-        if (!tpl) {
-            recipientFromTemplateSummary.textContent = 'Pilih template di atas untuk melihat tujuannya.';
-            return;
-        }
-        var r = tpl.recipients || { phone: 0, group: 0, user: 0 };
-        var parts = [];
-        if (r.phone) parts.push(r.phone + ' nomor');
-        if (r.group) parts.push(r.group + ' grup');
-        if (r.user) parts.push(r.user + ' user company');
-        recipientFromTemplateSummary.textContent = parts.length
-            ? 'Terkirim ke: ' + parts.join(', ') + '.'
-            : 'Template ini belum punya tujuan tersimpan — atur dulu di halaman WA Template.';
+        // categoryAttachmentInput (mode manual) dan templateAttachmentInput
+        // (mode template) sengaja pakai name="attachment" yang sama —
+        // salah satunya HARUS di-disable (bukan cuma disembunyikan lewat
+        // CSS oleh manualFields.style.display di atas), supaya browser
+        // tidak ikut mengirim value dari field yang sedang tidak aktif.
+        // remove_attachment (checkbox hapus attachment lama) sama
+        // perlakuannya. Pola sama seperti fix duplicate-name form
+        // Setting Tagihan Denda (23 September 2026).
+        if (categoryAttachmentInput) categoryAttachmentInput.disabled = on;
+        if (scheduleRemoveAttachment) scheduleRemoveAttachment.disabled = on;
+        if (templateAttachmentInput) templateAttachmentInput.disabled = !on;
+        if (templateRemoveAttachment) templateRemoveAttachment.disabled = !on;
     }
 
     function syncTemplatePreview() {
         var opt = templateSelect.options[templateSelect.selectedIndex];
         templatePreview.textContent = (opt && opt.getAttribute('data-preview')) || 'Pilih template untuk melihat isi pesannya di sini.';
-        syncTemplateRecipientsSummary();
     }
 
     useTemplateToggle.addEventListener('change', syncTemplateToggle);

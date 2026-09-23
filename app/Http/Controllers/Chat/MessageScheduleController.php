@@ -452,22 +452,21 @@ class MessageScheduleController extends Controller
                 }
             }
 
-            // Recipients: for 'drip' and manual (non-template) once/
-            // recurring, the tri-tab below is the only source of
-            // recipients, so at least one is required. When a template
-            // is in use, recipients are pulled from the template itself
-            // instead (see finalize()) — the tri-tab isn't even shown on
-            // the form in that case, so requiring it here would block
-            // submission on fields the user can't see.
-            if ($type === 'drip' || ! $useTemplate) {
-                $hasPhone = trim((string) $request->input('phone_numbers')) !== '';
-                $hasGroup = ! empty(array_filter((array) $request->input('group_jids', [])));
-                $hasUser = ! empty(array_filter((array) $request->input('user_ids', [])));
-                $hasPhonebook = ! empty(array_filter((array) $request->input('phonebook_ids', [])));
+            // Recipients: the tri-tab below is now ALWAYS the only source
+            // of recipients, for every type — including when a template
+            // is in use. Fix 23 September 2026 (laporan user: input 1
+            // nomor tujuan malah terkirim ke 3 nomor): sebelumnya, saat
+            // template dipakai, ini di-skip karena recipients otomatis
+            // diambil dari template itu sendiri (lihat finalize()) — jadi
+            // apa pun yang diketik di tri-tab tidak pernah benar-benar
+            // divalidasi/dipakai. $useTemplate tidak lagi relevan di sini.
+            $hasPhone = trim((string) $request->input('phone_numbers')) !== '';
+            $hasGroup = ! empty(array_filter((array) $request->input('group_jids', [])));
+            $hasUser = ! empty(array_filter((array) $request->input('user_ids', [])));
+            $hasPhonebook = ! empty(array_filter((array) $request->input('phonebook_ids', [])));
 
-                if (! $hasPhone && ! $hasGroup && ! $hasUser && ! $hasPhonebook) {
-                    $validator->errors()->add('recipients', 'Pilih minimal satu tujuan: nomor WhatsApp, grup, user company, atau kontak buku telepon.');
-                }
+            if (! $hasPhone && ! $hasGroup && ! $hasUser && ! $hasPhonebook) {
+                $validator->errors()->add('recipients', 'Pilih minimal satu tujuan: nomor WhatsApp, grup, user company, atau kontak buku telepon.');
             }
 
             // A plain `exists` rule can't scope by company — this makes
@@ -543,22 +542,16 @@ class MessageScheduleController extends Controller
             ? ($validated['date_end'] ?: $validated['date_start'])
             : $validated['date_start'];
 
-        // Recipients: a template (when in use) now carries its own
-        // recipients — see Chat\MessageTemplateController — so a
-        // schedule that uses one just takes a snapshot of whatever the
-        // template currently has, rather than reading the (hidden, in
-        // this case) tri-tab. `drip` never has a single top-level
-        // template, so it always falls through to the tri-tab like
-        // before.
-        if ($useTemplate) {
-            $template = WaMessageTemplate::where('company_id', $company->id)
-                ->where('id', $validated['wa_message_template_id'])
-                ->first();
-
-            $validated['recipients'] = $template->recipients ?? [];
-        } else {
-            $validated['recipients'] = $this->collectRecipients($request, $company);
-        }
+        // Recipients: ALWAYS collected from the tri-tab, regardless of
+        // use_template. Fix 23 September 2026 (laporan user: input 1
+        // nomor tujuan malah terkirim ke 3 nomor) — sebelumnya, saat
+        // template dipakai, recipients diambil dari
+        // WaMessageTemplate::recipients (snapshot tersimpan di template
+        // itu sendiri, bisa jadi sudah lama/tidak relevan lagi), bukan
+        // dari apa yang user isi di form ini. Template sekarang HANYA
+        // menyumbang isi pesan (lihat App\Jobs\SendScheduledWaMessage::
+        // resolveContent()), tidak lagi menyumbang tujuan pengiriman.
+        $validated['recipients'] = $this->collectRecipients($request, $company);
 
         unset($validated['steps']);
 
@@ -566,11 +559,17 @@ class MessageScheduleController extends Controller
     }
 
     /**
-     * Handles the `attachment` upload for category_schedule = image/
-     * document on a manual (non-template) message — identical shape to
+     * Handles the `attachment` upload — for category_schedule = image/
+     * document on a manual (non-template) message, OR as the optional
+     * attachment on a template-based message (fix 23 September 2026,
+     * see finalize()'s docblock: attachment is now always the schedule's
+     * own upload, never a WA Template's). Identical shape to
      * MessageTemplateController::applyAttachment(), just pointed at
      * WaMessageSchedule's own attachment_* columns and the narrower
-     * SCHEDULE_ATTACHMENT_RULES whitelist.
+     * SCHEDULE_ATTACHMENT_RULES whitelist. Called unconditionally by
+     * store()/update() regardless of use_template — see the blade form's
+     * two file inputs (#categoryAttachmentInput / #templateAttachmentInput,
+     * both name="attachment") for how only one is ever actually submitted.
      */
     private function applyAttachment(Request $request, array &$validated, ?WaMessageSchedule $existing): void
     {
