@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Chat;
 
 use App\Http\Controllers\Concerns\ResolvesCompanyContext;
 use App\Http\Controllers\Controller;
+use App\Models\WaCategoryPhoneBook;
 use App\Models\WaChatLabel;
 use App\Models\WaChatLabelAssignment;
 use App\Models\WaChatNote;
 use App\Models\WaContact;
 use App\Models\WaMessageQuickReply;
 use App\Models\WaMessageTemplate;
+use App\Models\WaPhoneBook;
 use App\Services\Chat\ConversationService;
 use App\Services\Chat\InboxService;
 use App\Services\Crm\CustomerIdentityService;
@@ -19,6 +21,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\View\View;
 use Throwable;
 
@@ -43,6 +46,7 @@ class InboxController extends Controller
         protected InboxService $inboxService,
         protected ConversationService $conversations,
         protected CustomerIdentityService $customerIdentity,
+        protected \App\Services\PackageLimitService $packageLimits,
     ) {}
 
     public function index(string $device): View|RedirectResponse
@@ -327,6 +331,143 @@ class InboxController extends Controller
     private function escapeVCardValue(string $value): string
     {
         return str_replace(['\\', ',', ';'], ['\\\\', '\\,', '\\;'], $value);
+    }
+
+    /**
+     * AJAX: every Kelompok (App\Models\WaCategoryPhoneBook) the company
+     * has, for the "Simpan ke Buku Telepon" dropdown in the Inbox detail
+     * panel — same branch-visibility rule as
+     * Chat\PhoneBookController::categoriesFor() (a branch-locked member
+     * only sees their own branch's Kelompok plus unassigned ones).
+     */
+    public function phoneBookCategories(Request $request, string $device): JsonResponse
+    {
+        $context = $this->companyContext($request);
+
+        $query = WaCategoryPhoneBook::where('company_id', $context->company->id);
+
+        if ($context->isLockedToBranch()) {
+            $query->where(function ($q) use ($context) {
+                $q->where('branch_office_id', $context->branchOffice?->id)
+                    ->orWhereNull('branch_office_id');
+            });
+        }
+
+        return response()->json([
+            'categories' => $query->orderBy('name')->get(['id', 'name']),
+        ]);
+    }
+
+    /**
+     * "Simpan ke Buku Telepon" — a lighter-weight cousin of
+     * Chat\PhoneBookController::store() for saving the currently-open
+     * chat straight from the Inbox detail panel (23 September 2026
+     * request), rather than sending the person to the full Buku Telepon
+     * form. Two real differences from that form:
+     *
+     *  - Kelompok (wa_category_phone_book_id) is OPTIONAL here — the
+     *    person asked for "ditanya dulu mau disimpan ke grup yang mana
+     *    nullable tapi terus lnsng save meskipun hanya no handphone dan
+     *    nama" (asked which Kelompok, but nullable, saves right away
+     *    with just phone+name regardless). See this migration's
+     *    docblock for the schema-level change that makes this possible:
+     *    2026_09_23_010000_make_wa_category_phone_book_id_nullable_on_wa_phone_book_table.php.
+     *  - JSON in/out (AJAX from a panel that stays open), not a
+     *    redirect — the full Buku Telepon page reload PhoneBookController
+     *    ::store() does would be jarring here, it'd blow away the open
+     *    chat thread.
+     *
+     * Same duplicate-phone guard, same package quota guard
+     * (contact_count) as the full form — a shortcut UI is still bound by
+     * the same company-level rules.
+     */
+    public function saveToPhoneBook(Request $request, string $device, string $jid): JsonResponse
+    {
+        $context = $this->companyContext($request);
+        $company = $context->company;
+
+        $branchOfficeId = $context->isLockedToBranch() ? $context->branchOffice?->id : null;
+
+        $validator = Validator::make($request->all(), [
+            'name' => ['required', 'string', 'max:255'],
+            'phone' => [
+                'required',
+                'string',
+                'max:32',
+                function ($attribute, $value, $fail) use ($company) {
+                    $normalized = WaPhoneBook::normalizePhone($value);
+
+                    if ($normalized === '') {
+                        $fail('Nomor telepon tidak valid.');
+
+                        return;
+                    }
+
+                    $exists = WaPhoneBook::where('company_id', $company->id)
+                        ->where('phone', $normalized)
+                        ->exists();
+
+                    if ($exists) {
+                        $fail('Nomor ini sudah ada di Buku Telepon.');
+                    }
+                },
+            ],
+            // Nullable — see this method's docblock for why, unlike
+            // PhoneBookController::validator()'s 'required' rule.
+            'wa_category_phone_book_id' => [
+                'nullable', 'uuid',
+                function ($attribute, $value, $fail) use ($company) {
+                    if ($value && ! WaCategoryPhoneBook::where('company_id', $company->id)->where('id', $value)->exists()) {
+                        $fail('Kelompok tidak valid.');
+                    }
+                },
+            ],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()->first()], 422);
+        }
+
+        try {
+            $this->packageLimits->assertWithinLimit(
+                $company,
+                'contact_count',
+                1,
+                null,
+                fn () => WaPhoneBook::where('company_id', $company->id)->count(),
+            );
+        } catch (\App\Exceptions\PackageLimitExceededException $e) {
+            return response()->json(['error' => $e->getMessage()], 422);
+        }
+
+        $validated = $validator->validated();
+        $phone = WaPhoneBook::normalizePhone($validated['phone']);
+
+        $customer = $this->customerIdentity->resolve($company->id, $phone, [
+            'name' => $validated['name'],
+            'branch_office_id' => $branchOfficeId,
+            'created_by' => $request->user()?->id,
+        ]);
+        $this->customerIdentity->touchContacted($customer);
+
+        $phoneBook = WaPhoneBook::create([
+            'wa_customer_id' => $customer->id,
+            'company_id' => $company->id,
+            'branch_office_id' => $branchOfficeId,
+            'wa_category_phone_book_id' => $validated['wa_category_phone_book_id'] ?? null,
+            'created_by' => $request->user()?->id,
+            'name' => $validated['name'],
+            'phone' => $phone,
+            'status' => 'active',
+        ]);
+
+        return response()->json([
+            'phone_book' => [
+                'id' => $phoneBook->id,
+                'name' => $phoneBook->name,
+                'phone' => $phoneBook->phone,
+            ],
+        ]);
     }
 
     /**

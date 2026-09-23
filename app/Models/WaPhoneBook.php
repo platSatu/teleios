@@ -9,8 +9,13 @@ use Illuminate\Database\Eloquent\Model;
 /**
  * A company's phone book entry (Chat > Buku Telepon) — see the
  * migration's docblock for how this differs from App\Models\WaContact
- * and for the `is_blacklisted` design. Always belongs to exactly one
- * App\Models\WaCategoryPhoneBook "Kelompok".
+ * and for the `is_blacklisted` design. Usually filed under one
+ * App\Models\WaCategoryPhoneBook "Kelompok", but wa_category_phone_book_id
+ * is nullable — the Inbox's quick "Simpan ke Buku Telepon" shortcut
+ * (InboxController::saveToPhoneBook()) deliberately lets Kelompok be
+ * skipped, unlike the full Buku Telepon form (PhoneBookController),
+ * which still requires one. See
+ * 2026_09_23_010000_make_wa_category_phone_book_id_nullable_on_wa_phone_book_table.php.
  *
  * wa_customer_id links this to the CRM Roadmap Fase 0 customer identity
  * (App\Models\WaCustomer) — see that model's docblock. Set by

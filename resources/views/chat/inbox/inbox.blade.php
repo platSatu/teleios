@@ -196,6 +196,34 @@
                         <a href="#" id="wa-detail-save-contact" class="wa-detail-save-contact-btn d-none" download>
                             <i class="ri-user-add-line"></i> Simpan ke Kontak HP
                         </a>
+
+                        {{-- "Simpan ke Buku Telepon" -- files this chat's
+                             contact into Konexa's own Chat > Buku Telepon
+                             (App\Models\WaPhoneBook), separate from the
+                             native-phone vCard button above. Asks which
+                             Kelompok (category) to file it under, but
+                             that choice is OPTIONAL — saves right away
+                             even with no Kelompok picked (23 September
+                             2026 request). Same visibility rule as the
+                             vCard button (hidden for group/channel or an
+                             unresolved number); toggled together in
+                             renderDetail() below. --}}
+                        <button type="button" id="wa-detail-save-phonebook-btn" class="wa-detail-save-contact-btn wa-detail-save-phonebook-btn d-none">
+                            <i class="ri-contacts-book-line"></i> Simpan ke Buku Telepon
+                        </button>
+
+                        <div id="wa-save-phonebook-popover" class="wa-save-phonebook-popover d-none">
+                            <div class="wa-save-phonebook-popover-title">Simpan ke Buku Telepon</div>
+                            <label class="wa-save-phonebook-label" for="wa-save-phonebook-category">Kelompok (opsional)</label>
+                            <select id="wa-save-phonebook-category" class="wa-save-phonebook-select">
+                                <option value="">Tanpa kelompok</option>
+                            </select>
+                            <div class="text-danger small d-none" id="wa-save-phonebook-error"></div>
+                            <div class="wa-save-phonebook-popover-actions">
+                                <button type="button" id="wa-save-phonebook-cancel-btn" class="btn btn-sm btn-light">Batal</button>
+                                <button type="button" id="wa-save-phonebook-confirm-btn" class="btn btn-sm btn-success">Simpan</button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="wa-detail-section">
@@ -609,8 +637,15 @@
         /* --- right column --- */
         .wa-detail-empty { text-align: center; padding: 24px 8px; font-size: 0.85rem; }
         .wa-detail-header { text-align: center; padding-bottom: 16px; border-bottom: 1px solid #f0f0f0; margin-bottom: 16px; }
-        .wa-detail-save-contact-btn { display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; font-size: 0.78rem; font-weight: 600; color: #16a34a; text-decoration: none; padding: 4px 10px; border: 1px solid #bbf7d0; border-radius: 999px; background: #f0fdf4; }
+        .wa-detail-save-contact-btn { display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; margin-right: 6px; font-size: 0.78rem; font-weight: 600; color: #16a34a; text-decoration: none; padding: 4px 10px; border: 1px solid #bbf7d0; border-radius: 999px; background: #f0fdf4; cursor: pointer; }
         .wa-detail-save-contact-btn:hover { background: #dcfce7; }
+        .wa-detail-save-phonebook-btn { color: #2563eb; border-color: #bfdbfe; background: #eff6ff; }
+        .wa-detail-save-phonebook-btn:hover { background: #dbeafe; }
+        .wa-save-phonebook-popover { position: relative; z-index: 5; margin-top: 10px; padding: 12px; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; box-shadow: 0 4px 14px rgba(0,0,0,0.08); text-align: left; }
+        .wa-save-phonebook-popover-title { font-size: 0.8rem; font-weight: 700; color: #1f2937; margin-bottom: 8px; }
+        .wa-save-phonebook-label { display: block; font-size: 0.72rem; color: #6b7280; margin-bottom: 4px; }
+        .wa-save-phonebook-select { width: 100%; font-size: 0.82rem; padding: 6px 8px; border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 8px; }
+        .wa-save-phonebook-popover-actions { display: flex; justify-content: flex-end; gap: 6px; }
         .wa-detail-section { padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid #f5f5f5; }
         .wa-detail-section:last-child { border-bottom: none; }
         .wa-detail-section-title { display: flex; align-items: center; justify-content: space-between; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; color: #6b7280; text-transform: uppercase; margin-bottom: 10px; }
@@ -674,6 +709,8 @@
             const mediaUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.media', ['device' => $deviceId, 'messageId' => '__MSGID__'])) }};
             const avatarUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.avatar', ['device' => $deviceId, 'jid' => '__JID__'])) }};
             const vcardUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.vcard', ['device' => $deviceId, 'jid' => '__JID__'])) }};
+            const phoneBookCategoriesUrl = {{ \Illuminate\Support\Js::from(route('inbox.phone-book-categories', ['device' => $deviceId])) }};
+            const saveToPhoneBookUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.save-to-phonebook', ['device' => $deviceId, 'jid' => '__JID__'])) }};
             const presenceUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.presence', ['device' => $deviceId, 'jid' => '__JID__'])) }};
             const labelsUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.labels', ['device' => $deviceId, 'jid' => '__JID__'])) }};
             const labelAttachUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.labels.attach', ['device' => $deviceId, 'jid' => '__JID__'])) }};
@@ -793,6 +830,12 @@
             const detailNameEl = document.getElementById('wa-detail-name');
             const detailPhoneEl = document.getElementById('wa-detail-phone');
             const detailSaveContactEl = document.getElementById('wa-detail-save-contact');
+            const detailSavePhoneBookBtnEl = document.getElementById('wa-detail-save-phonebook-btn');
+            const savePhoneBookPopoverEl = document.getElementById('wa-save-phonebook-popover');
+            const savePhoneBookCategorySelectEl = document.getElementById('wa-save-phonebook-category');
+            const savePhoneBookErrorEl = document.getElementById('wa-save-phonebook-error');
+            const savePhoneBookCancelBtnEl = document.getElementById('wa-save-phonebook-cancel-btn');
+            const savePhoneBookConfirmBtnEl = document.getElementById('wa-save-phonebook-confirm-btn');
             const contactAssignSelectEl = document.getElementById('wa-contact-assign-select');
             const contactBranchEl = document.getElementById('wa-contact-branch');
             const toggleDetailBtnEl = document.getElementById('wa-toggle-detail-btn');
@@ -1939,11 +1982,97 @@
                         + '&name=' + encodeURIComponent(chat.name || '');
                     detailSaveContactEl.href = vcardUrl;
                     detailSaveContactEl.classList.remove('d-none');
+
+                    detailSavePhoneBookBtnEl.classList.remove('d-none');
+                    detailSavePhoneBookBtnEl.dataset.chatJid = chat.chat_jid;
+                    detailSavePhoneBookBtnEl.dataset.phone = resolvedPhone;
+                    detailSavePhoneBookBtnEl.dataset.name = chat.name || '';
                 } else {
                     detailSaveContactEl.classList.add('d-none');
                     detailSaveContactEl.removeAttribute('href');
+
+                    detailSavePhoneBookBtnEl.classList.add('d-none');
+                    savePhoneBookPopoverEl.classList.add('d-none');
                 }
             }
+
+            // --- "Simpan ke Buku Telepon" popover ---
+            // Kelompok list is fetched once and cached — it rarely
+            // changes within one Inbox session, so there's no reason to
+            // re-fetch it every time the popover opens.
+            let phoneBookCategoriesLoaded = false;
+
+            function ensurePhoneBookCategoriesLoaded() {
+                if (phoneBookCategoriesLoaded) return;
+                phoneBookCategoriesLoaded = true;
+
+                fetchJson(phoneBookCategoriesUrl).then(function (data) {
+                    (data.categories || []).forEach(function (category) {
+                        const option = document.createElement('option');
+                        option.value = category.id;
+                        option.textContent = category.name;
+                        savePhoneBookCategorySelectEl.appendChild(option);
+                    });
+                }).catch(function () {
+                    // Silent — the "Tanpa kelompok" option alone still
+                    // lets the person save without a Kelompok, which is
+                    // the whole point of this being optional.
+                });
+            }
+
+            detailSavePhoneBookBtnEl.addEventListener('click', function () {
+                ensurePhoneBookCategoriesLoaded();
+                savePhoneBookErrorEl.classList.add('d-none');
+                savePhoneBookCategorySelectEl.value = '';
+                savePhoneBookPopoverEl.classList.toggle('d-none');
+            });
+
+            savePhoneBookCancelBtnEl.addEventListener('click', function () {
+                savePhoneBookPopoverEl.classList.add('d-none');
+            });
+
+            savePhoneBookConfirmBtnEl.addEventListener('click', function () {
+                const chatJid = detailSavePhoneBookBtnEl.dataset.chatJid;
+                const phone = detailSavePhoneBookBtnEl.dataset.phone;
+                const name = detailSavePhoneBookBtnEl.dataset.name;
+
+                if (!chatJid || !phone) return;
+
+                savePhoneBookErrorEl.classList.add('d-none');
+                savePhoneBookConfirmBtnEl.disabled = true;
+                savePhoneBookConfirmBtnEl.textContent = 'Menyimpan...';
+
+                fetchJson(urlFor(saveToPhoneBookUrlTemplate, chatJid), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+                    body: JSON.stringify({
+                        name: name || phone,
+                        phone: phone,
+                        wa_category_phone_book_id: savePhoneBookCategorySelectEl.value || null,
+                    }),
+                }).then(function (data) {
+                    // fetchJson() (see its own docblock) resolves with
+                    // whatever JSON body came back regardless of HTTP
+                    // status — a 422 validation failure lands here too,
+                    // as { error: "..." }, not in a .catch(). Same
+                    // pattern every other AJAX handler in this file uses.
+                    if (data && data.error) {
+                        savePhoneBookErrorEl.textContent = data.error;
+                        savePhoneBookErrorEl.classList.remove('d-none');
+                        return;
+                    }
+
+                    savePhoneBookPopoverEl.classList.add('d-none');
+                    detailSavePhoneBookBtnEl.innerHTML = '<i class="ri-check-line"></i> Tersimpan di Buku Telepon';
+                    detailSavePhoneBookBtnEl.disabled = true;
+                }).catch(function () {
+                    savePhoneBookErrorEl.textContent = 'Gagal menyimpan ke Buku Telepon.';
+                    savePhoneBookErrorEl.classList.remove('d-none');
+                }).finally(function () {
+                    savePhoneBookConfirmBtnEl.disabled = false;
+                    savePhoneBookConfirmBtnEl.textContent = 'Simpan';
+                });
+            });
 
             // --- contact assignment ---
             // A group/channel isn't a "contact" (no single phone number to
