@@ -2031,11 +2031,22 @@ require __DIR__ . '/auth.php';
 // sebenarnya adalah {token} (App\Models\TagihanPenerima::public_token),
 // {branch-slug} cuma kosmetik/URL yang enak dibaca -- lihat
 // App\Http\Controllers\Tagihan\Public\TagihanPublicController.
+// Rate limit (23 September 2026, audit kesiapan launch): halaman ini
+// TANPA auth dan `{token}` adalah satu-satunya kunci akses (lihat
+// docblock di atas), jadi tanpa pembatasan ini rawan brute-force nebak
+// token ATAU spam bikin invoice Duitku baru berulang-ulang lewat
+// /checkout (yang memanggil API Duitku sungguhan, ada biaya/kuota).
+// Pola throttle:N,1 sama seperti routes/auth.php's login/register.
+// 30/menit per IP untuk lihat halaman (show/return, wajar dibuka
+// berkali-kali kalau pelanggan refresh/cek status), 6/menit khusus
+// /checkout (ditumpuk di atas throttle grup, bukan menggantikannya)
+// karena itu yang benar-benar memicu pembuatan invoice baru ke Duitku.
 Route::prefix('tagihan/{branchSlug}/{token}')
     ->controller(TagihanPublicController::class)
+    ->middleware('throttle:30,1')
     ->group(function () {
         Route::get('/', 'show')->name('tagihan.public.show');
-        Route::post('/checkout', 'proceedToDuitku')->name('tagihan.public.checkout');
+        Route::post('/checkout', 'proceedToDuitku')->name('tagihan.public.checkout')->middleware('throttle:6,1');
         Route::get('/return', 'returnFromDuitku')->name('tagihan.public.return');
     });
 
