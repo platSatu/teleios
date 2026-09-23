@@ -22,10 +22,11 @@ use Throwable;
  * "segera bayar" untuk invoice yang SEDANG diproses Duitku).
  * App\Models\TagihanReminderRule/TagihanReminderLog adalah pengingat
  * yang BEDA KONSEP (H-7/H-3/H-1/Hari-H dari due_date Tagihan, sebelum
- * invoice Duitku bahkan pernah dibuat) dan sengaja belum ada job yang
- * menulisnya -- disiapkan untuk nanti begitu bagian WhatsApp-nya
- * digarap, sesuai instruksi "jangan sambungkan dulu ya dengan
- * whatsapp".
+ * invoice Duitku bahkan pernah dibuat) -- sekarang ditangani command
+ * terpisah App\Console\Commands\DispatchDueTagihanReminders + App\Jobs\
+ * SendTagihanReminder (23 September 2026, audit kesiapan launch;
+ * sebelumnya sengaja ditahan per instruksi "jangan sambungkan dulu ya
+ * dengan whatsapp", sudah dicabut user).
  */
 class ProcessTagihanExpiry extends Command
 {

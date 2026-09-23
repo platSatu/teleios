@@ -112,6 +112,22 @@ return Application::configure(basePath: dirname(__DIR__))
             ->everyMinute()
             ->withoutOverlapping();
 
+        // Pengingat WA Tagihan (H-7/H-3/H-1/dst sebelum due_date) --
+        // lihat App\Console\Commands\DispatchDueTagihanReminders. Sengaja
+        // terpisah total dari tagihan:process-expiry di atas (beda
+        // tabel, beda job, beda tujuan -- itu MENGUBAH status invoice
+        // yang jendelanya lewat, ini cuma MENGINGATKAN sebelum jatuh
+        // tempo) supaya kalau ada masalah di salah satu, yang lain tidak
+        // ikut terdampak. Setiap 5 menit sama seperti
+        // jadwal:dispatch-due-reminders di atas -- jendela pengingat
+        // Tagihan (App\Models\TagihanReminderRule per Tagihan) juga
+        // dalam hitungan jam/hari, bukan presisi per menit. 23 September
+        // 2026 (audit kesiapan launch): melengkapi tabel yang sebelumnya
+        // sengaja dibiarkan kosong, lihat docblock command-nya.
+        $schedule->command('tagihan:dispatch-due-reminders')
+            ->everyFiveMinutes()
+            ->withoutOverlapping();
+
         // Flags WhatsApp conversations whose first-response/resolution
         // SLA due date has passed — see
         // App\Console\Commands\EvaluateChatSlaBreaches. Minute-granular

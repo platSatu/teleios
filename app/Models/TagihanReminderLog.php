@@ -12,8 +12,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * create_tagihan_reminder_log_table.php's docblock. Struktur disamakan
  * persis dengan App\Models\JadwalKelasReminderLog.
  *
- * Belum ada job yang menulis baris ke sini sekarang -- disiapkan lebih
- * dulu supaya siap dipakai begitu bagian WhatsApp-nya digarap.
+ * Diisi oleh App\Console\Commands\DispatchDueTagihanReminders (klaim,
+ * status 'pending') lalu App\Jobs\SendTagihanReminder (kirim beneran,
+ * naik ke 'sent'/'skipped'/'failed') -- 23 September 2026, menyusul
+ * instruksi sebelumnya "jangan sambungkan dulu ya dengan whatsapp" kini
+ * sudah dicabut oleh user (audit kesiapan launch).
  */
 class TagihanReminderLog extends Model
 {
@@ -26,6 +29,15 @@ class TagihanReminderLog extends Model
     public const STATUS_SENT = 'sent';
 
     public const STATUS_FAILED = 'failed';
+
+    /**
+     * "Seharusnya dikirim, tapi sengaja dilewati" -- device belum
+     * terhubung, pelanggan sudah lunas/dibatalkan sebelum sempat
+     * terkirim, nomor HP tidak valid, dst. BEDA dari 'failed' (yang
+     * berarti benar-benar dicoba kirim dan gagal) -- sama pembedaannya
+     * dengan App\Models\JadwalKelasReminderLog::STATUS_SKIPPED.
+     */
+    public const STATUS_SKIPPED = 'skipped';
 
     protected $fillable = [
         'tagihan_penerima_id',
