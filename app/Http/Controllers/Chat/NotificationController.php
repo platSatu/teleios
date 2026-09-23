@@ -62,6 +62,25 @@ class NotificationController extends Controller
             }
 
             foreach ($chats as $chat) {
+                $chatJid = $chat['chat_jid'] ?? '';
+
+                // A WhatsApp Channel (e.g. "Tribunnews.com", "BMKG")
+                // broadcasts to everyone following it, not a real
+                // conversation with this company — Inbox already hides
+                // these from the chat list itself (inbox.blade.php's
+                // classifyChat()/'channel' filter), but that's a
+                // client-side-only filter, so this endpoint (which reads
+                // the same raw chats($jwt, $deviceId) list) was showing
+                // them here regardless. Same str_ends_with('@newsletter')
+                // check InboxController::contact() already uses, so a
+                // channel can never surface an unread "message" that
+                // isn't really a 1:1/group conversation (23 September
+                // 2026 request — the bell should track real incoming
+                // chats the same way Inbox does).
+                if (str_ends_with($chatJid, '@newsletter')) {
+                    continue;
+                }
+
                 $unreadCount = (int) ($chat['unread_count'] ?? 0);
 
                 if ($unreadCount < 1) {
@@ -70,8 +89,8 @@ class NotificationController extends Controller
 
                 $notifications[] = [
                     'device_id' => $deviceId,
-                    'chat_jid' => $chat['chat_jid'] ?? '',
-                    'name' => $chat['name'] ?: ($chat['chat_jid'] ?? 'Kontak'),
+                    'chat_jid' => $chatJid,
+                    'name' => $chat['name'] ?: ($chatJid ?: 'Kontak'),
                     'avatar_url' => $chat['avatar_url'] ?? null,
                     'last_message' => Str::limit((string) ($chat['last_message'] ?? ''), 80),
                     'last_message_at' => $chat['last_message_at'] ?? null,
