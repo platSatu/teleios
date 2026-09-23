@@ -42,9 +42,17 @@
                             <i class="ri-arrow-left-line"></i>
                         </button>
                         <div id="wa-thread-avatar" class="wa-avatar-circle"></div>
-                        <div class="overflow-hidden">
+                        <div class="wa-thread-header-info">
                             <h6 id="wa-thread-title" class="mb-0 text-truncate"></h6>
-                            <small id="wa-thread-sub" class="text-muted"></small>
+                            {{-- text-truncate here needs d-block since <small>
+                                 is inline by default and text-overflow only
+                                 applies to block/inline-block boxes — without
+                                 it this wrapped onto a 2nd line instead of
+                                 eliding, which is what pushed the "Offline"
+                                 pill down and made the header look stacked/
+                                 overlapping (reported by user with a mobile
+                                 screenshot, 23 September 2026). --}}
+                            <small id="wa-thread-sub" class="text-muted text-truncate d-block"></small>
                         </div>
                     </div>
                     <div class="wa-thread-header-right">
@@ -412,6 +420,21 @@
 
             .wa-thread-back-btn { display: inline-flex; }
 
+            {{-- Compact header on phones: smaller avatar/name/last-seen
+                 text and tighter padding/gaps, so the name+"Offline" pill
+                 row fits comfortably instead of crowding into a second
+                 line (see .wa-thread-header-info's comment above for the
+                 truncation half of this same fix). !important on the
+                 avatar matches .wa-avatar-lg's existing pattern —
+                 applyAvatar() sets width/height as inline style, which
+                 plain specificity can't override. --}}
+            .wa-thread-header { padding: 8px 10px; gap: 6px; }
+            .wa-thread-header #wa-thread-avatar { width: 36px !important; height: 36px !important; font-size: 0.85rem; }
+            #wa-thread-title { font-size: 0.92rem; }
+            #wa-thread-sub { font-size: 0.7rem; }
+            .wa-thread-header-right { gap: 2px; }
+            .wa-thread-header-right .wa-presence-pill { padding: 2px 8px; font-size: 0.66rem; }
+
             .wa-thread-body { padding: 12px; }
             .wa-msg-bubble { max-width: 86%; }
             .wa-send-form { padding: 8px 10px; }
@@ -505,7 +528,16 @@
         /* --- middle column --- */
         .wa-thread-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; background: #fff; border-bottom: 1px solid #ece3d8; }
         .wa-thread-header.d-flex-visible { display: flex; }
-        .wa-thread-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .wa-thread-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 auto; }
+        {{-- Own class instead of Bootstrap's bare .overflow-hidden utility
+             — that only sets overflow:hidden, with no flex/min-width of its
+             own, so inside the flex row above it could still be pushed
+             wider than the row actually had room for, forcing the "Offline"
+             pill (and the icon buttons next to it) onto a second line on
+             narrow screens. min-width: 0 is what lets this box actually
+             shrink below its content's natural width so text-truncate can
+             kick in instead. --}}
+        .wa-thread-header-info { min-width: 0; flex: 1 1 auto; overflow: hidden; }
         .wa-thread-header-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
         .wa-thread-search-bar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: #fefce8; border-bottom: 1px solid #ece3d8; color: #6b7280; }
