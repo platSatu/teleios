@@ -68,9 +68,23 @@
                                     </td>
                                     <td>
                                         @if($tagihan->branchOffice?->slug)
-                                            <a href="{{ route('tagihan.public.show', ['branchSlug' => $tagihan->branchOffice->slug, 'token' => $p->public_token]) }}" target="_blank" class="small">
-                                                Buka Link <i class="ri-external-link-line"></i>
-                                            </a>
+                                            @php
+                                                $payLink = route('tagihan.public.show', ['branchSlug' => $tagihan->branchOffice->slug, 'token' => $p->public_token]);
+                                            @endphp
+                                            {{-- "Buka Link" alone only ever opened it in a new tab here — no
+                                                 way to actually hand the URL to the pelanggan (they pay from
+                                                 their own phone, not this admin's browser). "Salin Link" copies
+                                                 it to the clipboard so it can be pasted straight into a WhatsApp
+                                                 chat/email/SMS (23 September 2026 request: "mau share link nya
+                                                 ke user bagaimana caranya"). --}}
+                                            <div class="d-flex align-items-center gap-2">
+                                                <a href="{{ $payLink }}" target="_blank" class="small">
+                                                    Buka <i class="ri-external-link-line"></i>
+                                                </a>
+                                                <button type="button" class="btn btn-sm btn-light py-0 px-2" data-copy-link="{{ $payLink }}" onclick="copyTagihanLink(this)" title="Salin link untuk dikirim ke pelanggan">
+                                                    <i class="ri-file-copy-line"></i> Salin
+                                                </button>
+                                            </div>
                                         @endif
                                     </td>
                                     <td class="text-end">
@@ -167,4 +181,34 @@
         </div>
     </div>
 </div>
+
+<script>
+    // Clipboard API needs a secure context (https, which app.konexa.id
+    // already is) — the execCommand('copy') fallback covers the rare
+    // browser/embedded-webview combo where navigator.clipboard isn't
+    // available at all.
+    function copyTagihanLink(btn) {
+        const link = btn.getAttribute('data-copy-link');
+        const showCopied = function () {
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="ri-check-line"></i> Tersalin';
+            setTimeout(function () { btn.innerHTML = original; }, 1500);
+        };
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(link).then(showCopied);
+            return;
+        }
+
+        const tmp = document.createElement('textarea');
+        tmp.value = link;
+        tmp.style.position = 'fixed';
+        tmp.style.opacity = '0';
+        document.body.appendChild(tmp);
+        tmp.select();
+        document.execCommand('copy');
+        document.body.removeChild(tmp);
+        showCopied();
+    }
+</script>
 @endsection
