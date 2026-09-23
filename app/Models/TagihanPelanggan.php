@@ -26,6 +26,11 @@ class TagihanPelanggan extends Model
         'phone_number',
         'email',
         'status',
+        'kirim_link_otomatis',
+    ];
+
+    protected $casts = [
+        'kirim_link_otomatis' => 'boolean',
     ];
 
     public function company(): BelongsTo

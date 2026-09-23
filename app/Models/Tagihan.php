@@ -32,8 +32,12 @@ class Tagihan extends Model
         'amount',
         'due_date',
         'pakai_denda',
+        'wa_template_message',
         'status',
     ];
+
+    /** Dipakai App\Models\Tagihan::renderWaTemplate() kalau wa_template_message kosong. */
+    public const DEFAULT_WA_TEMPLATE = "Halo {nama}, tagihan *{nama_tagihan}* sebesar Rp{nominal} jatuh tempo {jatuh_tempo}. Silakan bayar lewat link berikut:\n{link}";
 
     protected $casts = [
         'amount' => 'decimal:2',
@@ -66,5 +70,25 @@ class Tagihan extends Model
     public function reminderRules(): HasMany
     {
         return $this->hasMany(TagihanReminderRule::class);
+    }
+
+    /**
+     * Isi placeholder {nama}/{nama_tagihan}/{nominal}/{jatuh_tempo}/{link}
+     * di wa_template_message (atau DEFAULT_WA_TEMPLATE kalau admin tidak
+     * mengisi template sendiri di form "Buat Tagihan") -- dipakai
+     * App\Jobs\SendTagihanLinkWaMessage saat mengirim link bayar otomatis
+     * ke satu App\Models\TagihanPenerima.
+     */
+    public function renderWaTemplate(string $namaPelanggan, string $link): string
+    {
+        $template = $this->wa_template_message ?: self::DEFAULT_WA_TEMPLATE;
+
+        return strtr($template, [
+            '{nama}' => $namaPelanggan,
+            '{nama_tagihan}' => $this->name,
+            '{nominal}' => number_format((float) $this->amount, 0, ',', '.'),
+            '{jatuh_tempo}' => $this->due_date->format('d M Y'),
+            '{link}' => $link,
+        ]);
     }
 }

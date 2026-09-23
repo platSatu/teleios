@@ -15,11 +15,13 @@ use Illuminate\View\View;
 /**
  * CRUD Tagihan Category (jenis tagihan per branch, mis. "Uang Sekolah",
  * "Uang Pangkal") -- pola company/branch-scoping disamakan persis
- * dengan App\Http\Controllers\Form\FormCategoryController. Aturan denda
- * bertingkat (tagihan_denda_tier) dikelola di halaman edit category ini
- * lewat App\Http\Controllers\Tagihan\TagihanDendaTierController, bukan
- * di controller ini -- category cuma menyimpan `denda_enabled` (on/off
- * secara default untuk Tagihan baru di bawahnya).
+ * dengan App\Http\Controllers\Form\FormCategoryController. Cuma
+ * nama/branch/deskripsi/status di sini -- nominal selalu diisi manual
+ * per Tagihan, dan denda/pengingat/nomor-invoice dikonfigurasi lewat
+ * halaman terpisah "Setting Tagihan" (lihat
+ * App\Http\Controllers\Tagihan\TagihanCategorySettingController),
+ * bukan form create/edit ini (23 September 2026 redesign -- lihat
+ * migration 2026_09_23_..._simplify_tagihan_category_table.php).
  */
 class TagihanCategoryController extends Controller
 {
@@ -86,9 +88,7 @@ class TagihanCategoryController extends Controller
             'company_id' => $company->id,
             'branch_office_id' => $validated['branch_office_id'],
             'name' => $validated['name'],
-            'is_recurring' => $request->boolean('is_recurring'),
-            'default_amount' => $validated['default_amount'] ?? null,
-            'denda_enabled' => $request->boolean('denda_enabled'),
+            'deskripsi' => $validated['deskripsi'] ?? null,
             'status' => $validated['status'] ?? 'active',
         ]);
 
@@ -102,7 +102,6 @@ class TagihanCategoryController extends Controller
         $context = $this->companyContext($request);
 
         $category = $this->findOrFail($context, $id);
-        $category->load('dendaTiers');
 
         return view('tagihan.category.edit', [
             'category' => $category,
@@ -135,9 +134,7 @@ class TagihanCategoryController extends Controller
         $category->update([
             'branch_office_id' => $validated['branch_office_id'],
             'name' => $validated['name'],
-            'is_recurring' => $request->boolean('is_recurring'),
-            'default_amount' => $validated['default_amount'] ?? null,
-            'denda_enabled' => $request->boolean('denda_enabled'),
+            'deskripsi' => $validated['deskripsi'] ?? null,
             'status' => $validated['status'] ?? 'active',
         ]);
 
@@ -221,7 +218,7 @@ class TagihanCategoryController extends Controller
                     }
                 },
             ],
-            'default_amount' => ['nullable', 'numeric', 'min:0'],
+            'deskripsi' => ['nullable', 'string', 'max:2000'],
             'status' => ['nullable', 'in:active,inactive'],
         ]);
     }

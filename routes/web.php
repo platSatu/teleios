@@ -127,6 +127,7 @@ use App\Http\Controllers\Crm\DealController;
 use App\Http\Controllers\Form\FormBranchController;
 use App\Http\Controllers\Form\FormCategoryController;
 use App\Http\Controllers\Tagihan\TagihanCategoryController;
+use App\Http\Controllers\Tagihan\TagihanCategorySettingController;
 use App\Http\Controllers\Tagihan\TagihanDendaTierController;
 use App\Http\Controllers\Tagihan\TagihanPelangganController;
 use App\Http\Controllers\Tagihan\TagihanController;
@@ -545,15 +546,30 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::delete('/{id}', 'destroy')->name('tagihan.category.destroy');
             });
 
-        // Aturan denda bertingkat milik satu category -- nested di
-        // bawah category karena tidak pernah berdiri sendiri (selalu
-        // punya tagihan_category_id), lihat App\Models\TagihanDendaTier.
+        // Aturan denda bertingkat milik satu category -- PENINGGALAN,
+        // tidak dipakai lagi jalur baru (lihat TagihanCategorySettingController
+        // & migration 2026_09_23_..._simplify_tagihan_category_table.php),
+        // disisakan supaya data lama di tagihan_denda_tier tidak yatim
+        // piatu rute-nya kalau suatu saat perlu diaudit manual.
         Route::prefix('category/{tagihanCategory}/denda-tier')
             ->controller(TagihanDendaTierController::class)
             ->group(function () {
                 Route::post('/', 'store')->name('tagihan.denda-tier.store');
                 Route::put('/{id}', 'update')->name('tagihan.denda-tier.update');
                 Route::delete('/{id}', 'destroy')->name('tagihan.denda-tier.destroy');
+            });
+
+        // Setting Tagihan (23 September 2026 redesign) -- 3 tab per
+        // category: denda (tab 1), pengingat (tab 2), invoice & email
+        // (tab 3). Lihat App\Http\Controllers\Tagihan\TagihanCategorySettingController.
+        Route::prefix('category/{tagihanCategory}/setting')
+            ->controller(TagihanCategorySettingController::class)
+            ->group(function () {
+                Route::get('/', 'edit')->name('tagihan.category.setting');
+                Route::put('/denda', 'updateDenda')->name('tagihan.category.setting.denda');
+                Route::post('/reminder-rule', 'addReminderRule')->name('tagihan.category.setting.reminder-rule.add');
+                Route::delete('/reminder-rule/{ruleId}', 'removeReminderRule')->name('tagihan.category.setting.reminder-rule.remove');
+                Route::put('/invoice', 'updateInvoice')->name('tagihan.category.setting.invoice');
             });
 
         Route::prefix('pelanggan')
@@ -586,6 +602,7 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 // tagihan_category_pelanggan) -- checklist pelanggan mana
                 // saja yang ditagih untuk periode ini.
                 Route::post('/{id}/penerima', 'addPenerima')->name('tagihan.penerima.add');
+                Route::post('/{id}/penerima/bulk', 'addPenerimaBulk')->name('tagihan.penerima.add-bulk');
                 Route::delete('/{id}/penerima/{penerimaId}', 'removePenerima')->name('tagihan.penerima.remove');
                 // Aturan pengingat (H-7/H-3/dst) khusus tagihan ini.
                 Route::post('/{id}/reminder-rule', 'addReminderRule')->name('tagihan.reminder-rule.add');

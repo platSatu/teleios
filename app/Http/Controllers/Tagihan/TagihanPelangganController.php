@@ -92,6 +92,7 @@ class TagihanPelangganController extends Controller
             'phone_number' => $validated['phone_number'] ?? null,
             'email' => $validated['email'] ?? null,
             'status' => $validated['status'] ?? 'active',
+            'kirim_link_otomatis' => $request->boolean('kirim_link_otomatis'),
         ]);
 
         return redirect()
@@ -150,6 +151,7 @@ class TagihanPelangganController extends Controller
             'phone_number' => $validated['phone_number'] ?? null,
             'email' => $validated['email'] ?? null,
             'status' => $validated['status'] ?? 'active',
+            'kirim_link_otomatis' => $request->boolean('kirim_link_otomatis'),
         ]);
 
         return redirect()

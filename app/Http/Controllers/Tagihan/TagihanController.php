@@ -10,6 +10,7 @@ use App\Models\TagihanCategory;
 use App\Models\TagihanPelanggan;
 use App\Models\TagihanPenerima;
 use App\Models\TagihanReminderRule;
+use App\Jobs\SendTagihanLinkWaMessage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -85,7 +86,7 @@ class TagihanController extends Controller
             abort(403);
         }
 
-        $tagihan = DB::transaction(function () use ($validated, $category, $company, $request) {
+        $tagihan = DB::transaction(function () use ($validated, $category, $company) {
             $tagihan = Tagihan::create([
                 'company_id' => $company->id,
                 'branch_office_id' => $category->branch_office_id,
@@ -93,18 +94,42 @@ class TagihanController extends Controller
                 'name' => $validated['name'],
                 'amount' => $validated['amount'],
                 'due_date' => $validated['due_date'],
-                // Toggle per-tagihan, nullable secara desain (lihat
-                // docblock App\Models\Tagihan) -- default mengikuti
-                // denda_enabled category, tapi admin boleh override
-                // lewat checkbox di form create.
-                'pakai_denda' => $request->boolean('pakai_denda', $category->denda_enabled),
+                // Denda sekarang murni ditentukan category (denda_mode di
+                // Setting Tagihan, lihat TagihanCategorySettingController)
+                // -- checkbox "pakai denda" per-Tagihan sudah dihapus dari
+                // form create (23 September 2026 redesign poin 4), jadi
+                // ini cuma menyalin ada/tidaknya mode denda category saat
+                // Tagihan ini dibuat.
+                'pakai_denda' => (bool) $category->denda_mode,
+                'wa_template_message' => $validated['wa_template_message'] ?? null,
                 'status' => Tagihan::STATUS_ACTIVE,
             ]);
+
+            // Salin template pengingat category ini (App\Models\
+            // TagihanCategoryReminderRule) jadi baris TagihanReminderRule
+            // milik Tagihan baru -- lihat docblock migration
+            // create_tagihan_category_reminder_rule_table.php.
+            foreach ($category->reminderRuleTemplates as $template) {
+                $tagihan->reminderRules()->create([
+                    'remind_value' => $template->remind_value,
+                    'remind_unit' => $template->remind_unit,
+                ]);
+            }
 
             $this->generatePenerimaFromLangganan($tagihan, $category);
 
             return $tagihan;
         });
+
+        // Kirim link bayar otomatis ke tiap penerima yang pelanggan-nya
+        // ceklis "kirim_link_otomatis" -- lihat App\Jobs\SendTagihanLinkWaMessage's
+        // docblock kenapa ini queued, bukan inline di sini.
+        $tagihan->load('penerima.pelanggan');
+        foreach ($tagihan->penerima as $penerima) {
+            if ($penerima->pelanggan?->kirim_link_otomatis) {
+                SendTagihanLinkWaMessage::dispatch($penerima->id);
+            }
+        }
 
         return redirect()
             ->route('tagihan.show', $tagihan->id)
@@ -233,6 +258,55 @@ class TagihanController extends Controller
     }
 
     /**
+     * Tambah BANYAK baris TagihanPenerima sekaligus -- versi multi-select
+     * dari addPenerima() di atas, dipakai halaman "Setting User"
+     * (resources/views/tagihan/tagihan/show.blade.php, 23 September 2026
+     * redesign poin 5: index Tagihan yang tadinya "Lihat" jadi "Setting
+     * User", dengan pencarian & pilih-semua). Baris yang sudah jadi
+     * penerima dilewati diam-diam (bukan error), supaya submit ulang
+     * checklist yang sebagian sudah tercentang sebelumnya tetap aman.
+     */
+    public function addPenerimaBulk(Request $request, string $id): RedirectResponse
+    {
+        $context = $this->companyContext($request);
+        $tagihan = $this->findOrFail($context, $id);
+
+        $validated = Validator::make($request->all(), [
+            'tagihan_pelanggan_ids' => ['required', 'array', 'min:1'],
+            'tagihan_pelanggan_ids.*' => ['uuid'],
+        ])->validate();
+
+        $pelangganList = TagihanPelanggan::where('company_id', $context->company->id)
+            ->where('branch_office_id', $tagihan->branch_office_id)
+            ->whereIn('id', $validated['tagihan_pelanggan_ids'])
+            ->get();
+
+        $existingIds = $tagihan->penerima()->pluck('tagihan_pelanggan_id')->all();
+        $added = 0;
+
+        foreach ($pelangganList as $pelanggan) {
+            if (in_array($pelanggan->id, $existingIds, true)) {
+                continue;
+            }
+
+            TagihanPenerima::create([
+                'tagihan_id' => $tagihan->id,
+                'tagihan_pelanggan_id' => $pelanggan->id,
+                'company_id' => $tagihan->company_id,
+                'branch_office_id' => $tagihan->branch_office_id,
+                'amount' => $tagihan->amount,
+                'status' => TagihanPenerima::STATUS_BELUM_BAYAR,
+            ]);
+
+            $added++;
+        }
+
+        return redirect()
+            ->route('tagihan.show', $tagihan->id)
+            ->with('success', "{$added} penerima berhasil ditambahkan.");
+    }
+
+    /**
      * Penerima yang sudah LUNAS tidak boleh dihapus dari sini -- itu
      * histori pembayaran riil, bukan sekadar checklist. Batalkan lewat
      * App\Http\Controllers\Tagihan\TagihanPenerimaController::cancel()
@@ -341,6 +415,7 @@ class TagihanController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'amount' => ['required', 'numeric', 'min:0'],
             'due_date' => ['required', 'date'],
+            'wa_template_message' => ['nullable', 'string', 'max:2000'],
         ]);
     }
 }

@@ -57,3 +57,10 @@
         <option value="inactive" @selected(old('status', $pelanggan->status ?? 'active') === 'inactive')>Inactive</option>
     </select>
 </div>
+
+<div class="form-check form-switch mb-3">
+    <input class="form-check-input" type="checkbox" role="switch" id="kirim_link_otomatis" name="kirim_link_otomatis" value="1"
+        {{ old('kirim_link_otomatis', $pelanggan->kirim_link_otomatis ?? false) ? 'checked' : '' }}>
+    <label class="form-check-label" for="kirim_link_otomatis">Kirim link tagihan otomatis ke pelanggan ini (WhatsApp)</label>
+    <div class="form-text">Begitu Tagihan baru dibuat di kategori yang dia langgani, link bayar otomatis dikirim lewat device WhatsApp yang sedang terhubung di branch ini.</div>
+</div>

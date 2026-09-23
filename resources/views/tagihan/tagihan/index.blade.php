@@ -59,7 +59,7 @@
                                         <span class="badge {{ $t->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $t->status }}</span>
                                     </td>
                                     <td class="text-end">
-                                        <a href="{{ route('tagihan.show', $t->id) }}" class="btn btn-sm btn-outline-primary">Lihat</a>
+                                        <a href="{{ route('tagihan.show', $t->id) }}" class="btn btn-sm btn-outline-primary">Setting User</a>
                                     </td>
                                 </tr>
                             @empty

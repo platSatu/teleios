@@ -32,26 +32,20 @@
     @endif
 </div>
 
+{{-- Nominal Default/Berulang tiap bulan/Aktifkan denda dipindah keluar dari
+     form ini (23 September 2026 redesign): nominal selalu diisi manual per
+     Tagihan (tidak pernah benar-benar dipakai sebagai default), "berulang"
+     cuma label tanpa efek nyata, dan denda sekarang wajib dikonfigurasi
+     lewat halaman "Setting Tagihan" (3 mode: Flat/Persentase/Persentase+
+     Flat -- lihat TagihanCategorySettingController) begitu kategori ini
+     tersimpan, bukan sekadar on/off di sini. --}}
 <div class="mb-3">
-    <label class="form-label">Nominal Default (opsional)</label>
-    <input type="number" step="0.01" min="0" name="default_amount" class="form-control @error('default_amount') is-invalid @enderror"
-        value="{{ old('default_amount', $category->default_amount ?? '') }}" placeholder="Cuma acuan awal -- tiap Tagihan boleh isi nominal beda">
-    @error('default_amount')
+    <label class="form-label">Deskripsi (opsional)</label>
+    <textarea name="deskripsi" rows="3" class="form-control @error('deskripsi') is-invalid @enderror"
+        placeholder="Catatan singkat soal kategori ini, ditampilkan buat admin lain">{{ old('deskripsi', $category->deskripsi ?? '') }}</textarea>
+    @error('deskripsi')
         <div class="invalid-feedback">{{ $message }}</div>
     @enderror
-</div>
-
-<div class="form-check mb-2">
-    <input type="checkbox" name="is_recurring" id="is_recurring" class="form-check-input" value="1"
-        @checked(old('is_recurring', $category->is_recurring ?? false))>
-    <label class="form-check-label" for="is_recurring">Berulang tiap bulan (label saja -- Tagihan baru tetap dibuat manual tiap periode)</label>
-</div>
-
-<div class="form-check mb-3">
-    <input type="checkbox" name="denda_enabled" id="denda_enabled" class="form-check-input" value="1"
-        @checked(old('denda_enabled', $category->denda_enabled ?? false))>
-    <label class="form-check-label" for="denda_enabled">Aktifkan denda keterlambatan secara default untuk kategori ini</label>
-    <div class="form-text">Bisa dikelola lebih detail (aturan bertingkat) di bawah setelah kategori disimpan. Tiap Tagihan tetap bisa override on/off sendiri.</div>
 </div>
 
 <div class="mb-3">

@@ -145,17 +145,22 @@ class TagihanPenerima extends Model
     }
 
     /**
-     * Hitung nominal denda per tanggal $asOf berdasarkan tier-tier
-     * App\Models\TagihanDendaTier milik category tagihan ini -- TIDAK
-     * menulis ke `denda_amount` (caller yang memutuskan kapan
-     * menyimpannya, misal saat invoice Duitku dibuat atau lewat job
-     * terjadwal), supaya nilai yang sudah tersimpan tidak berubah
-     * diam-diam tiap kali baris ini sekadar dibaca.
+     * Hitung nominal denda per tanggal $asOf berdasarkan `denda_mode`
+     * category tagihan ini -- TIDAK menulis ke `denda_amount` (caller
+     * yang memutuskan kapan menyimpannya, misal saat invoice Duitku
+     * dibuat atau lewat job terjadwal), supaya nilai yang sudah
+     * tersimpan tidak berubah diam-diam tiap kali baris ini sekadar
+     * dibaca.
      *
      * Fail-safe ke 0 kalau tagihan.pakai_denda mati, category tidak
-     * mengaktifkan denda, atau belum jatuh tempo sama sekali -- sama
+     * punya denda_mode, atau belum jatuh tempo sama sekali -- sama
      * prinsipnya dengan App\Services\PackageLimitService yang fail-open
      * saat aturan belum/tidak dikonfigurasi.
+     *
+     * 23 September 2026: diganti dari sistem tier bebas
+     * (App\Models\TagihanDendaTier) ke 3 mode tetap milik category
+     * (App\Models\TagihanCategory::DENDA_MODE_*), lebih gampang
+     * dimengerti admin daripada bikin tier sendiri.
      */
     public function hitungDenda(?Carbon $asOf = null): string
     {
@@ -169,28 +174,64 @@ class TagihanPenerima extends Model
             return '0.00';
         }
 
-        $tier = $this->tagihan->category?->dendaTiers
-            ->first(fn (TagihanDendaTier $t) => $t->berlakuUntuk($hariTelat));
+        $category = $this->tagihan->category;
 
-        if (! $tier) {
-            return '0.00';
+        return match ($category?->denda_mode) {
+            \App\Models\TagihanCategory::DENDA_MODE_FLAT => $this->hitungDendaFlat($category),
+            \App\Models\TagihanCategory::DENDA_MODE_PERSENTASE => $this->hitungDendaPersentase($category, $hariTelat),
+            \App\Models\TagihanCategory::DENDA_MODE_PERSENTASE_FLAT => $this->hitungDendaPersentaseFlat($category, $hariTelat),
+            default => '0.00',
+        };
+    }
+
+    /** Nominal tetap, berapa pun lama telatnya. */
+    private function hitungDendaFlat(TagihanCategory $category): string
+    {
+        return number_format((float) $category->denda_flat_amount, 2, '.', '');
+    }
+
+    /**
+     * Persentase dari amount, dikalikan jumlah hari (denda_persen_
+     * frekuensi = per_hari) atau bulan telat (per_bulan -- dibulatkan
+     * ke atas, jadi 1 hari telat sudah kena 1 bulan penuh, sama
+     * seperti cara denda bulanan pada umumnya dihitung).
+     */
+    private function hitungDendaPersentase(TagihanCategory $category, int $hariTelat): string
+    {
+        $satuanTelat = $category->denda_persen_frekuensi === TagihanCategory::PERSEN_FREKUENSI_PER_BULAN
+            ? (int) ceil($hariTelat / 30)
+            : $hariTelat;
+
+        $dendaPerSatuan = bcmul((string) $this->amount, bcdiv((string) $category->denda_persen, '100', 6), 2);
+
+        return bcmul($dendaPerSatuan, (string) $satuanTelat, 2);
+    }
+
+    /**
+     * Persentase per hari untuk `denda_persen_sampai_hari` hari
+     * pertama keterlambatan, lalu SETELAH itu ditambah flat per hari
+     * di atas persentase yang sudah terkumpul (akumulatif, bukan
+     * ganti mode) -- contoh dari user: jatuh tempo tanggal 10, mulai
+     * tanggal 11 kena persentase per hari, begitu lewat batas hari
+     * yang diatur (mis. tanggal 25) kena persentase (dihitung sampai
+     * batas itu saja) + flat per hari sejak batas itu, terus sampai
+     * pelanggan bayar.
+     */
+    private function hitungDendaPersentaseFlat(TagihanCategory $category, int $hariTelat): string
+    {
+        $batasHari = (int) $category->denda_persen_sampai_hari;
+        $hariPersen = min($hariTelat, $batasHari);
+
+        $dendaPerHariPersen = bcmul((string) $this->amount, bcdiv((string) $category->denda_persen, '100', 6), 2);
+        $totalPersen = bcmul($dendaPerHariPersen, (string) $hariPersen, 2);
+
+        if ($hariTelat <= $batasHari) {
+            return $totalPersen;
         }
 
-        if ($tier->isPersenPerHari()) {
-            $denda = bcmul((string) $this->amount, bcdiv((string) $tier->nilai, '100', 6), 2);
+        $hariFlat = $hariTelat - $batasHari;
+        $totalFlat = bcmul((string) $category->denda_flat_amount, (string) $hariFlat, 2);
 
-            return bcmul($denda, (string) $hariTelat, 2);
-        }
-
-        // Flat -- 'sekali' berapa pun lama telatnya, atau 'per_hari'
-        // dikalikan sejak tier ini mulai berlaku (bukan sejak due_date,
-        // supaya tidak dobel hitung dengan tier sebelumnya).
-        if ($tier->frekuensi_flat === TagihanDendaTier::FREKUENSI_SEKALI) {
-            return number_format((float) $tier->nilai, 2, '.', '');
-        }
-
-        $hariDalamTier = $hariTelat - $tier->mulai_hari_ke + 1;
-
-        return bcmul((string) $tier->nilai, (string) max(1, $hariDalamTier), 2);
+        return bcadd($totalPersen, $totalFlat, 2);
     }
 }

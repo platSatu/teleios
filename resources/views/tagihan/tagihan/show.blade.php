@@ -108,16 +108,33 @@
                 </div>
 
                 @if($availablePelanggan->isNotEmpty())
-                    <form action="{{ route('tagihan.penerima.add', $tagihan->id) }}" method="POST" class="d-flex gap-2">
-                        @csrf
-                        <select name="tagihan_pelanggan_id" class="form-select" required>
-                            <option value="">- Tambah Penerima Manual -</option>
-                            @foreach($availablePelanggan as $ap)
-                                <option value="{{ $ap->id }}">{{ $ap->name }}</option>
-                            @endforeach
-                        </select>
-                        <button type="submit" class="btn btn-outline-primary text-nowrap">Tambah</button>
-                    </form>
+                    <div class="border rounded p-3" id="settingUserPicker">
+                        <h6 class="mb-2">Setting User -- Tambah Penerima</h6>
+                        <p class="text-muted small mb-2">Pilih pelanggan yang mau ditagih untuk periode ini (tidak mengubah daftar langganan kategori).</p>
+
+                        <input type="text" id="settingUserSearch" class="form-control form-control-sm mb-2" placeholder="Cari nama atau nomor telepon...">
+
+                        <div class="form-check mb-2">
+                            <input type="checkbox" class="form-check-input" id="settingUserSelectAll">
+                            <label class="form-check-label small" for="settingUserSelectAll">Pilih semua</label>
+                        </div>
+
+                        <form action="{{ route('tagihan.penerima.add-bulk', $tagihan->id) }}" method="POST">
+                            @csrf
+                            <div class="list-group mb-2" style="max-height: 260px; overflow-y: auto;">
+                                @foreach($availablePelanggan as $ap)
+                                    <label class="list-group-item d-flex align-items-center gap-2 setting-user-row" data-name="{{ strtolower($ap->name) }}" data-phone="{{ strtolower($ap->phone_number ?? '') }}">
+                                        <input type="checkbox" class="form-check-input setting-user-checkbox" name="tagihan_pelanggan_ids[]" value="{{ $ap->id }}">
+                                        <span>{{ $ap->name }}</span>
+                                        @if($ap->phone_number)
+                                            <span class="text-muted small">({{ $ap->phone_number }})</span>
+                                        @endif
+                                    </label>
+                                @endforeach
+                            </div>
+                            <button type="submit" class="btn btn-outline-primary btn-sm">Tambah Penerima Terpilih</button>
+                        </form>
+                    </div>
                 @endif
             </div>
         </div>
@@ -210,5 +227,31 @@
         document.body.removeChild(tmp);
         showCopied();
     }
+
+    (function () {
+        var search = document.getElementById('settingUserSearch');
+        var selectAll = document.getElementById('settingUserSelectAll');
+        var rows = document.querySelectorAll('.setting-user-row');
+
+        if (search) {
+            search.addEventListener('input', function () {
+                var term = search.value.trim().toLowerCase();
+                rows.forEach(function (row) {
+                    var match = row.dataset.name.indexOf(term) !== -1 || row.dataset.phone.indexOf(term) !== -1;
+                    row.style.display = match ? '' : 'none';
+                });
+            });
+        }
+
+        if (selectAll) {
+            selectAll.addEventListener('change', function () {
+                rows.forEach(function (row) {
+                    if (row.style.display === 'none') return;
+                    var checkbox = row.querySelector('.setting-user-checkbox');
+                    if (checkbox) checkbox.checked = selectAll.checked;
+                });
+            });
+        }
+    })();
 </script>
 @endsection
