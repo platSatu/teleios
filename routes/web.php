@@ -684,6 +684,7 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::post('/chats/{jid}/polls', 'sendPoll')->name('inbox.send-poll');
                 Route::get('/chats/{jid}/polls/{messageId}/results', 'pollResults')->name('inbox.poll-results');
                 Route::get('/media/{messageId}', 'media')->name('inbox.media');
+                Route::get('/chats/{jid}/avatar', 'avatar')->name('inbox.avatar');
                 Route::get('/chats/{jid}/presence', 'presence')->name('inbox.presence');
                 Route::get('/chats/{jid}/labels', 'labels')->name('inbox.labels');
                 Route::post('/chats/{jid}/labels', 'attachLabel')->name('inbox.labels.attach');

@@ -246,6 +246,42 @@ class InboxService
     }
 
     /**
+     * Fetches one chat contact's downloaded profile-picture bytes from
+     * the Go backend, to be streamed back to the browser by
+     * InboxController::avatar() — same buffered-in-memory approach as
+     * media() just above (a profile picture is tiny compared to the
+     * 32MB media cap, so this is never a real memory concern).
+     *
+     * Returns null (not an exception) when the contact simply has no
+     * avatar on file yet — this is the ordinary case for most contacts
+     * at any given moment (WaInboxService.backfillAvatars on the Go side
+     * fills them in gradually, a handful at a time), not an error worth
+     * logging every single time the sidebar polls for one.
+     *
+     * @return array{body: string, content_type: string}|null
+     */
+    public function avatar(string $jwt, string $deviceId, string $chatJid): ?array
+    {
+        $response = Http::withHeaders([
+            'X-API-KEY' => $this->apiKey,
+            'Authorization' => 'Bearer '.trim($jwt),
+        ])->get("{$this->baseUrl}/api/wa/devices/{$deviceId}/chats/".rawurlencode($chatJid).'/avatar');
+
+        if ($response->status() === 404) {
+            return null;
+        }
+
+        if ($response->failed()) {
+            throw new RuntimeException("Golang avatar fetch for chat {$chatJid} failed: ".$response->body());
+        }
+
+        return [
+            'body' => $response->body(),
+            'content_type' => $response->header('Content-Type') ?: 'image/jpeg',
+        ];
+    }
+
+    /**
      * @return array<int, array<string, mixed>>
      */
     public function mediaList(string $jwt, string $deviceId, string $chatJid, string $type): array

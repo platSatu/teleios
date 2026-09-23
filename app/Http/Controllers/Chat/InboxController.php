@@ -209,6 +209,60 @@ class InboxController extends Controller
     }
 
     /**
+     * Streams one chat contact's downloaded profile-picture bytes back to
+     * the browser (used as the src= of the sidebar/thread-header avatar
+     * <img> tags) — same shape as media() just above, keyed by chat JID
+     * instead of message ID. Not JSON, same reason as media().
+     *
+     * Companion fix to g_backend commit 3c01b6f / this app's own
+     * inbox.blade.php presence-known fix: WhatsApp's own profile-picture
+     * CDN links (pps.whatsapp.net/...) come back 403 Forbidden when
+     * loaded directly from a browser <img> tag outside an authenticated
+     * WhatsApp session — confirmed 23 September 2026, which is why every
+     * single contact's avatar stayed blank even after the earlier
+     * staleness-refresh fix. g_backend now downloads and re-hosts the
+     * bytes itself; this proxies that the same way media() already
+     * proxies message attachments, so the browser never has to touch
+     * WhatsApp's CDN directly.
+     *
+     * A 404 here (InboxService::avatar() returning null) is the ordinary
+     * case for a contact whose picture hasn't been backfilled yet, or
+     * genuinely has none — quietly returns a 404 response instead of
+     * reporting an exception every time, unlike an actual Go-backend
+     * failure below.
+     */
+    public function avatar(string $device, string $jid): Response
+    {
+        $jwt = session('golang_jwt_token');
+
+        if (! $jwt) {
+            abort(401, 'Sesi WhatsApp tidak ditemukan.');
+        }
+
+        try {
+            $result = $this->inboxService->avatar($jwt, $device, $jid);
+        } catch (Throwable $e) {
+            report($e);
+            abort(404, 'Foto profil tidak ditemukan.');
+        }
+
+        if ($result === null) {
+            abort(404, 'Foto profil tidak ditemukan.');
+        }
+
+        return response($result['body'], 200, [
+            'Content-Type' => $result['content_type'],
+            // Sidebar/thread-header avatars are re-checked (and can
+            // change) every avatarRefreshInterval on the Go side — a
+            // short client-side cache keeps a repolled chat list from
+            // re-downloading the same unchanged picture on every 6s
+            // poll, without ever showing a picture more than a few
+            // minutes stale.
+            'Cache-Control' => 'private, max-age=300',
+        ]);
+    }
+
+    /**
      * AJAX: every label the company has defined, flagged with whether
      * each one is currently attached to this chat — powers the LABELS
      * section of the Inbox detail panel.

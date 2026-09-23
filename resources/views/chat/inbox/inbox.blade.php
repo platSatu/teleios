@@ -655,6 +655,7 @@
             const sendPollUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.send-poll', ['device' => $deviceId, 'jid' => '__JID__'])) }};
             const pollResultsUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.poll-results', ['device' => $deviceId, 'jid' => '__JID__', 'messageId' => '__MSGID__'])) }};
             const mediaUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.media', ['device' => $deviceId, 'messageId' => '__MSGID__'])) }};
+            const avatarUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.avatar', ['device' => $deviceId, 'jid' => '__JID__'])) }};
             const presenceUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.presence', ['device' => $deviceId, 'jid' => '__JID__'])) }};
             const labelsUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.labels', ['device' => $deviceId, 'jid' => '__JID__'])) }};
             const labelAttachUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.labels.attach', ['device' => $deviceId, 'jid' => '__JID__'])) }};
@@ -1070,6 +1071,19 @@
                 return template.replace('__JID__', encodeURIComponent(jid));
             }
 
+            // Companion to urlForMedia() above — see applyAvatar() below
+            // and InboxController::avatar()'s docblock (Laravel side) /
+            // WaChat.AvatarURL's docblock (g_backend side) for why a
+            // chat's avatar has to be loaded through this proxy instead
+            // of chat.avatar_url's own string value: as of 23 September
+            // 2026 that field is g_backend's own /api/... path (not a
+            // browser-reachable URL — g_backend requires a Bearer token
+            // this <img> tag has no way to send), kept only as a
+            // "does this chat have an avatar file at all" flag.
+            function urlForAvatar(jid) {
+                return urlFor(avatarUrlTemplate, jid);
+            }
+
             function fetchJson(url, options) {
                 options = options || {};
                 // See the same fix/comment in chatbot-flows/index.blade.php —
@@ -1205,7 +1219,12 @@
                 if (chat.avatar_url) {
                     container.style.background = 'transparent';
                     const img = document.createElement('img');
-                    img.src = chat.avatar_url;
+                    // chat.avatar_url is only used here as a "does this
+                    // chat have a downloaded avatar at all" flag — the
+                    // actual image always loads through our own proxy
+                    // (urlForAvatar), never that field's own value. See
+                    // urlForAvatar()'s docblock above.
+                    img.src = urlForAvatar(chat.chat_jid);
                     img.alt = '';
                     img.loading = 'lazy';
                     img.style.width = '100%';
