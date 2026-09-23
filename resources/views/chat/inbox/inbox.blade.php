@@ -181,6 +181,21 @@
                         <div id="wa-detail-avatar" class="wa-avatar-circle wa-avatar-lg"></div>
                         <h6 id="wa-detail-name" class="mb-1"></h6>
                         <div class="text-muted small" id="wa-detail-phone"></div>
+                        {{-- "Simpan ke Kontak HP" -- downloads a .vcf via
+                             InboxController::vcard(). WhatsApp itself has
+                             no API for pushing into a user's personal
+                             contacts directly; a vCard the phone's own
+                             native "Add Contact" flow picks up (which
+                             then syncs into WhatsApp's own contact list
+                             the normal way) is the real, achievable
+                             version of "sync ke WA" for a chat whose
+                             number isn't saved yet. Hidden by default —
+                             renderDetail() below shows it (and sets its
+                             href) only for a real 1:1 chat with a phone
+                             number, never for a group/channel. --}}
+                        <a href="#" id="wa-detail-save-contact" class="wa-detail-save-contact-btn d-none" download>
+                            <i class="ri-user-add-line"></i> Simpan ke Kontak HP
+                        </a>
                     </div>
 
                     <div class="wa-detail-section">
@@ -594,6 +609,8 @@
         /* --- right column --- */
         .wa-detail-empty { text-align: center; padding: 24px 8px; font-size: 0.85rem; }
         .wa-detail-header { text-align: center; padding-bottom: 16px; border-bottom: 1px solid #f0f0f0; margin-bottom: 16px; }
+        .wa-detail-save-contact-btn { display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; font-size: 0.78rem; font-weight: 600; color: #16a34a; text-decoration: none; padding: 4px 10px; border: 1px solid #bbf7d0; border-radius: 999px; background: #f0fdf4; }
+        .wa-detail-save-contact-btn:hover { background: #dcfce7; }
         .wa-detail-section { padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid #f5f5f5; }
         .wa-detail-section:last-child { border-bottom: none; }
         .wa-detail-section-title { display: flex; align-items: center; justify-content: space-between; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; color: #6b7280; text-transform: uppercase; margin-bottom: 10px; }
@@ -656,6 +673,7 @@
             const pollResultsUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.poll-results', ['device' => $deviceId, 'jid' => '__JID__', 'messageId' => '__MSGID__'])) }};
             const mediaUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.media', ['device' => $deviceId, 'messageId' => '__MSGID__'])) }};
             const avatarUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.avatar', ['device' => $deviceId, 'jid' => '__JID__'])) }};
+            const vcardUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.vcard', ['device' => $deviceId, 'jid' => '__JID__'])) }};
             const presenceUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.presence', ['device' => $deviceId, 'jid' => '__JID__'])) }};
             const labelsUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.labels', ['device' => $deviceId, 'jid' => '__JID__'])) }};
             const labelAttachUrlTemplate = {{ \Illuminate\Support\Js::from(route('inbox.labels.attach', ['device' => $deviceId, 'jid' => '__JID__'])) }};
@@ -774,6 +792,7 @@
             const detailAvatarEl = document.getElementById('wa-detail-avatar');
             const detailNameEl = document.getElementById('wa-detail-name');
             const detailPhoneEl = document.getElementById('wa-detail-phone');
+            const detailSaveContactEl = document.getElementById('wa-detail-save-contact');
             const contactAssignSelectEl = document.getElementById('wa-contact-assign-select');
             const contactBranchEl = document.getElementById('wa-contact-branch');
             const toggleDetailBtnEl = document.getElementById('wa-toggle-detail-btn');
@@ -1905,7 +1924,25 @@
                 // LID<->phone mapping, which the client-side fallback
                 // (phoneFromJid) can't do since that resolution needs a
                 // live whatsmeow client, not just string parsing.
-                detailPhoneEl.textContent = chat.phone || phoneFromJid(chat.chat_jid) || 'Nomor belum teridentifikasi';
+                const resolvedPhone = chat.phone || phoneFromJid(chat.chat_jid) || '';
+                detailPhoneEl.textContent = resolvedPhone || 'Nomor belum teridentifikasi';
+
+                // "Simpan ke Kontak HP" only makes sense for a real 1:1
+                // chat with a resolvable phone number — never a
+                // group/channel (no single number to save) and never
+                // when we don't have a number yet (e.g. an @lid chat
+                // whose phone hasn't resolved on the Go side yet).
+                const isGroupOrChannel = chat.chat_jid.indexOf('@g.us') !== -1 || chat.chat_jid.indexOf('@newsletter') !== -1;
+                if (!isGroupOrChannel && resolvedPhone) {
+                    const vcardUrl = urlFor(vcardUrlTemplate, chat.chat_jid)
+                        + '?phone=' + encodeURIComponent(resolvedPhone)
+                        + '&name=' + encodeURIComponent(chat.name || '');
+                    detailSaveContactEl.href = vcardUrl;
+                    detailSaveContactEl.classList.remove('d-none');
+                } else {
+                    detailSaveContactEl.classList.add('d-none');
+                    detailSaveContactEl.removeAttribute('href');
+                }
             }
 
             // --- contact assignment ---

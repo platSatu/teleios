@@ -263,6 +263,73 @@ class InboxController extends Controller
     }
 
     /**
+     * Generates a downloadable vCard (.vcf) for one chat's contact, so
+     * "Simpan ke Kontak HP" in the detail panel can hand the browser a
+     * file the phone's own OS recognizes and offers to add straight to
+     * its native contacts / sync into WhatsApp's own contact list from
+     * there (WhatsApp itself has no API for a third-party app to push
+     * into a user's personal contacts directly — a vCard the phone's own
+     * "Add Contact" flow picks up is the standard, actually-achievable
+     * equivalent every contact-export feature like this uses).
+     *
+     * Name/phone are read from the query string rather than re-fetched
+     * from the Go backend or WaContact — the detail panel already has
+     * both once a chat is open (chat.name/chat.phone, exactly what's
+     * already showing on screen), so this avoids a redundant round trip
+     * for something this small. Not a JSON endpoint, and deliberately
+     * not behind ownership/JWT checks beyond the ordinary 'chat'
+     * middleware group this route sits in (see routes/web.php) — a
+     * vCard's contents are just the name/phone already visible on the
+     * page the person requesting it is looking at.
+     */
+    public function vcard(Request $request, string $device, string $jid): Response
+    {
+        $name = trim((string) $request->query('name', ''));
+        $phone = trim((string) $request->query('phone', ''));
+
+        if ($phone === '') {
+            abort(404, 'Kontak ini tidak punya nomor telepon (grup/channel).');
+        }
+
+        // WhatsApp JIDs store the phone digits-only ("+" stripped); vCard
+        // TEL values conventionally keep the leading "+" for an
+        // international number, which is also what most phones' own
+        // "Add Contact" flow expects to auto-format correctly.
+        $digits = preg_replace('/\D+/', '', $phone);
+        $formattedPhone = $digits !== '' ? '+'.$digits : $phone;
+
+        $displayName = $name !== '' ? $name : $formattedPhone;
+
+        // vCard 3.0: the widest-supported version across both iOS and
+        // Android's native contact-import flows (4.0 has patchier
+        // support, especially on older Android "Add Contact" handlers).
+        $vcard = "BEGIN:VCARD\r\n"
+            ."VERSION:3.0\r\n"
+            .'FN:'.$this->escapeVCardValue($displayName)."\r\n"
+            .'N:'.$this->escapeVCardValue($displayName).";;;\r\n"
+            .'TEL;TYPE=CELL:'.$formattedPhone."\r\n"
+            ."END:VCARD\r\n";
+
+        $safeFileName = preg_replace('/[^A-Za-z0-9 _-]/', '', $displayName) ?: 'kontak';
+
+        return response($vcard, 200, [
+            'Content-Type' => 'text/vcard; charset=utf-8',
+            'Content-Disposition' => 'attachment; filename="'.$safeFileName.'.vcf"',
+        ]);
+    }
+
+    /**
+     * Escapes a value for use inside a vCard field (comma/semicolon are
+     * field/value separators in the vCard spec, backslash is the escape
+     * character itself — all three have to be backslash-escaped, same as
+     * every vCard-writing library does for a plain-text field like FN/N).
+     */
+    private function escapeVCardValue(string $value): string
+    {
+        return str_replace(['\\', ',', ';'], ['\\\\', '\\,', '\\;'], $value);
+    }
+
+    /**
      * AJAX: every label the company has defined, flagged with whether
      * each one is currently attached to this chat — powers the LABELS
      * section of the Inbox detail panel.
