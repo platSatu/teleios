@@ -65,7 +65,11 @@
     <div class="tp-page">
         <div class="tp-card">
             <div class="tp-head">
-                <div class="brand">Konexa &middot; Tagihan</div>
+                {{-- Brand "Konexa" di bagian atas dihilangkan, diganti
+                     nomor invoice (App\Models\TagihanPenerima::invoice_number,
+                     format "{prefix category}-XXXXXX") -- 23 September
+                     2026 permintaan user. --}}
+                <div class="brand">{{ $penerima->invoice_number ?? '-' }}</div>
                 <h1>{{ $penerima->tagihan->name ?? 'Tagihan' }}</h1>
             </div>
             <div class="tp-body">

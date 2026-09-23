@@ -32,7 +32,17 @@
                     </tr>
                     <tr>
                         <td class="text-muted">Status</td>
-                        <td>{{ str_replace('_', ' ', $penerima->status) }}</td>
+                        <td>
+                            @php
+                                $statusBadge = [
+                                    'belum_bayar' => 'bg-warning-subtle text-warning',
+                                    'lunas' => 'bg-success-subtle text-success',
+                                    'kadaluarsa' => 'bg-secondary-subtle text-secondary',
+                                    'dibatalkan' => 'bg-danger-subtle text-danger',
+                                ][$penerima->status] ?? 'bg-secondary-subtle text-secondary';
+                            @endphp
+                            <span class="badge {{ $statusBadge }} text-capitalize">{{ str_replace('_', ' ', $penerima->status) }}</span>
+                        </td>
                     </tr>
                     <tr>
                         <td class="text-muted">Dibayar</td>
@@ -80,7 +90,16 @@
                             @forelse($penerima->paymentTransactions as $tx)
                                 <tr>
                                     <td>{{ $tx->created_at?->format('d M Y H:i') }}</td>
-                                    <td>{{ $tx->status }}</td>
+                                    <td>
+                                        @php
+                                            $txBadge = [
+                                                'SUCCESS' => 'bg-success-subtle text-success',
+                                                'PENDING' => 'bg-warning-subtle text-warning',
+                                                'FAILED' => 'bg-danger-subtle text-danger',
+                                            ][strtoupper($tx->status)] ?? 'bg-secondary-subtle text-secondary';
+                                        @endphp
+                                        <span class="badge {{ $txBadge }}">{{ $tx->status }}</span>
+                                    </td>
                                     <td>Rp {{ number_format($tx->amount, 0, ',', '.') }}</td>
                                     <td>{{ $tx->payment_method ?: '-' }}</td>
                                 </tr>

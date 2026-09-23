@@ -37,6 +37,7 @@ class TagihanPenerima extends Model
         'company_id',
         'branch_office_id',
         'order_number',
+        'invoice_number',
         'amount',
         'denda_amount',
         'status',
@@ -76,6 +77,18 @@ class TagihanPenerima extends Model
             // nyasar dari App\Models\Deposit yang pakai prefix "DEP-").
             if (empty($penerima->order_number)) {
                 $penerima->order_number = 'TGH-'.now()->format('YmdHis').strtoupper(Str::random(6));
+            }
+
+            // Nomor invoice yang DITAMPILKAN ke pelanggan (halaman publik
+            // & halaman Laporan admin) -- beda dari order_number di atas
+            // (itu murni ID teknis buat Duitku, tidak pernah ditampilkan).
+            // Prefix diambil dari App\Models\TagihanCategory::invoice_prefix
+            // (diatur admin lewat Setting Tagihan tab "Invoice &
+            // Notifikasi"), fallback "INV" kalau kategori belum mengisinya.
+            // 23 September 2026 (permintaan user poin 3.6).
+            if (empty($penerima->invoice_number)) {
+                $prefix = $penerima->tagihan?->category?->invoice_prefix ?: 'INV';
+                $penerima->invoice_number = strtoupper($prefix).'-'.strtoupper(Str::random(6));
             }
         });
     }
