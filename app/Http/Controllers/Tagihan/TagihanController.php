@@ -9,7 +9,6 @@ use App\Models\Tagihan;
 use App\Models\TagihanCategory;
 use App\Models\TagihanPelanggan;
 use App\Models\TagihanPenerima;
-use App\Models\TagihanReminderRule;
 use App\Jobs\SendTagihanLinkWaMessage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -332,34 +331,13 @@ class TagihanController extends Controller
             ->with('success', 'Penerima berhasil dihapus dari Tagihan ini.');
     }
 
-    public function addReminderRule(Request $request, string $id): RedirectResponse
-    {
-        $context = $this->companyContext($request);
-        $tagihan = $this->findOrFail($context, $id);
-
-        $validated = Validator::make($request->all(), [
-            'remind_value' => ['required', 'integer', 'min:0'],
-            'remind_unit' => ['required', 'in:'.implode(',', TagihanReminderRule::UNITS)],
-        ])->validate();
-
-        $tagihan->reminderRules()->create($validated);
-
-        return redirect()
-            ->route('tagihan.show', $tagihan->id)
-            ->with('success', 'Aturan pengingat berhasil ditambahkan.');
-    }
-
-    public function removeReminderRule(Request $request, string $id, string $ruleId): RedirectResponse
-    {
-        $context = $this->companyContext($request);
-        $tagihan = $this->findOrFail($context, $id);
-
-        $tagihan->reminderRules()->where('id', $ruleId)->firstOrFail()->delete();
-
-        return redirect()
-            ->route('tagihan.show', $tagihan->id)
-            ->with('success', 'Aturan pengingat berhasil dihapus.');
-    }
+    // addReminderRule()/removeReminderRule() (CRUD manual per-Tagihan)
+    // dihapus 23 September 2026 -- aturan pengingat sekarang diatur
+    // sekali di level kategori (App\Http\Controllers\Tagihan\
+    // TagihanCategorySettingController), disalin otomatis ke
+    // $tagihan->reminderRules() saat store() di bawah membuat Tagihan
+    // baru. Relasi reminderRules() di App\Models\Tagihan tetap ada buat
+    // dibaca job pengiriman pengingat nanti.
 
     /**
      * Disalin dari tagihan_category_pelanggan yang status-nya masih

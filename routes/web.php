@@ -604,9 +604,10 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::post('/{id}/penerima', 'addPenerima')->name('tagihan.penerima.add');
                 Route::post('/{id}/penerima/bulk', 'addPenerimaBulk')->name('tagihan.penerima.add-bulk');
                 Route::delete('/{id}/penerima/{penerimaId}', 'removePenerima')->name('tagihan.penerima.remove');
-                // Aturan pengingat (H-7/H-3/dst) khusus tagihan ini.
-                Route::post('/{id}/reminder-rule', 'addReminderRule')->name('tagihan.reminder-rule.add');
-                Route::delete('/{id}/reminder-rule/{ruleId}', 'removeReminderRule')->name('tagihan.reminder-rule.remove');
+                // CRUD manual aturan pengingat per-Tagihan dihapus 23
+                // September 2026 -- diatur sekali di level kategori lewat
+                // Setting Tagihan (lihat 'category/{tagihanCategory}/setting'
+                // group di atas), bukan lagi di sini.
             });
 
         // Daftar invoice per-penerima (lintas Tagihan) -- laporan &

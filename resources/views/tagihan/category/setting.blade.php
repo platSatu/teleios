@@ -227,11 +227,26 @@
 
 <script>
     (function () {
+        // 3 mode denda ini SENGAJA pakai nama field yang sama
+        // (denda_flat_amount muncul di mode "flat" & "persentase_flat",
+        // denda_persen muncul di "persentase" & "persentase_flat") supaya
+        // controller-nya sederhana. Tapi itu berarti kalau field yang
+        // TIDAK aktif dibiarkan enabled, browser tetap ikut mengirim
+        // nilainya (kosong) saat submit -- dan karena nama field yang
+        // sama muncul 2x, PHP cuma baca yang TERAKHIR, jadi nilai yang
+        // sudah diisi user di mode aktif bisa ketiban kosong dari field
+        // mode lain yang tersembunyi. Makanya field di luar mode yang
+        // sedang aktif di-disable, bukan cuma disembunyikan lewat CSS --
+        // input yang disabled tidak ikut ke-submit sama sekali.
         function syncDendaMode() {
             var checked = document.querySelector('#dendaModeSwitch input[name="denda_mode"]:checked');
             var mode = checked ? checked.value : null;
             document.querySelectorAll('.denda-mode-fields').forEach(function (el) {
-                el.classList.toggle('active', el.dataset.mode === mode);
+                var isActive = el.dataset.mode === mode;
+                el.classList.toggle('active', isActive);
+                el.querySelectorAll('input, select, textarea').forEach(function (field) {
+                    field.disabled = !isActive;
+                });
             });
         }
 

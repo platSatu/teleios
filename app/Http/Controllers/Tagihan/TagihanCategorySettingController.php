@@ -150,6 +150,16 @@ class TagihanCategorySettingController extends Controller
             'denda_persen' => ['required_if:denda_mode,persentase,persentase_flat', 'nullable', 'numeric', 'min:0', 'max:100'],
             'denda_persen_frekuensi' => ['required_if:denda_mode,persentase', 'nullable', 'in:per_hari,per_bulan'],
             'denda_persen_sampai_hari' => ['required_if:denda_mode,persentase_flat', 'nullable', 'integer', 'min:1', 'max:365'],
+        ], [
+            'denda_mode.required' => 'Pilih salah satu mode denda dulu.',
+            'denda_flat_amount.required_if' => 'Nominal denda wajib diisi untuk mode Flat.',
+            'denda_flat_amount.numeric' => 'Nominal denda harus berupa angka.',
+            'denda_persen.required_if' => 'Persentase wajib diisi untuk mode ini.',
+            'denda_persen.numeric' => 'Persentase harus berupa angka.',
+            'denda_persen.max' => 'Persentase tidak boleh lebih dari 100.',
+            'denda_persen_frekuensi.required_if' => 'Pilih dihitung per hari atau per bulan.',
+            'denda_persen_sampai_hari.required_if' => 'Isi sampai dengan hari ke berapa.',
+            'denda_persen_sampai_hari.integer' => 'Sampai dengan hari ke- harus berupa angka bulat.',
         ]);
     }
 }
