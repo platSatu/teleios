@@ -386,11 +386,34 @@ class InboxService
 
     protected function request(string $method, string $path, string $jwt, array $payload = []): array
     {
-        $response = Http::withHeaders([
+        $client = Http::withHeaders([
             'X-API-KEY' => $this->apiKey,
             'Authorization' => 'Bearer '.trim($jwt),
             'Accept' => 'application/json',
-        ])->{$method}("{$this->baseUrl}{$path}", $payload);
+        ]);
+
+        // Every GET caller in this class bakes its query string straight
+        // into $path (mediaList()'s "?type=...", messages()'s
+        // "?after_seq=..."), never through $payload. That matters because
+        // Laravel's PendingRequest::get($url, $query) treats ANY second
+        // argument — even the empty array $payload defaults to — as a
+        // query-string override: func_num_args() sees 2 args and sends
+        // ['query' => []] to Guzzle, which then replaces $path's existing
+        // query string with the (empty) one it builds from that array,
+        // silently dropping it before the request ever reaches g_backend.
+        //
+        // Confirmed 23 September 2026: this is why every Media & Files tab
+        // except Photos showed Photos' own items — "?type=video" and
+        // "?type=document" were stripped in transit, so g_backend's
+        // c.DefaultQuery("type", "image") fell back to "image" no matter
+        // which tab was clicked. It silently broke messages()'s
+        // "?after_seq=" polling delta the same way, forcing every poll to
+        // re-fetch the full thread instead of just what's new. Calling
+        // get() with just the URL (no second argument at all) leaves
+        // $path's own query string intact.
+        $response = strtolower($method) === 'get'
+            ? $client->get("{$this->baseUrl}{$path}")
+            : $client->{$method}("{$this->baseUrl}{$path}", $payload);
 
         if ($response->failed()) {
             throw new RuntimeException("Golang inbox request to {$path} failed: ".$response->body());
