@@ -173,6 +173,50 @@
                                     </a>
                                 </li>
                             @endif
+
+                            {{-- Keuangan -- Saldo Branch/Company/Reseller &
+                                     Tarik Saldo. Dipindah jadi sub-grup
+                                     bertingkat dua di dalam Jadwal (bukan
+                                     menu berdiri sendiri lagi, dan bukan
+                                     cuma diratakan ke list Jadwal) --
+                                     permintaan user 23 September 2026:
+                                     "keuangan itu bagian dari jadwal", pola
+                                     nested-collapse-nya dicontohkan dari
+                                     "Chat > Pesan" (#collapseMenuLavels2) di
+                                     bawah. Konsekuensinya item-item ini
+                                     sekarang ikut ter-gate
+                                     $hasActiveJadwalPackage, sebelumnya
+                                     tidak ada gate sama sekali. --}}
+                            <li class="pe-slide-item pe-has-sub">
+                                <a href="#collapseJadwalKeuangan" class="pe-nav-link" data-bs-toggle="collapse"
+                                    aria-expanded="false" aria-controls="collapseJadwalKeuangan">
+                                    <span class="pe-nav-sub-content">Keuangan</span>
+                                    <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
+                                    <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
+                                </a>
+                                <ul class="pe-slide-menu collapse" id="collapseJadwalKeuangan">
+                                    <li class="pe-slide-item">
+                                        <a href="{{ route('keuangan.dashboard.index') }}" class="pe-nav-link">
+                                            Dashboard Saldo
+                                        </a>
+                                    </li>
+                                    <li class="pe-slide-item">
+                                        <a href="{{ route('keuangan.transfer-fee.index') }}" class="pe-nav-link">
+                                            Transfer Fee Pengajar
+                                        </a>
+                                    </li>
+                                    <li class="pe-slide-item">
+                                        <a href="{{ route('keuangan.withdrawal.index') }}" class="pe-nav-link">
+                                            Tarik Saldo
+                                        </a>
+                                    </li>
+                                    <li class="pe-slide-item">
+                                        <a href="{{ route('keuangan.withdrawal.approval.index') }}" class="pe-nav-link">
+                                            Persetujuan Tarik Saldo
+                                        </a>
+                                    </li>
+                                </ul>
+                            </li>
                         </ul>
                     </li>
                 @endif
@@ -213,46 +257,6 @@
                         <li class="pe-slide-item">
                             <a href="{{ route('tagihan.laporan.index') }}" class="pe-nav-link">
                                 Laporan
-                            </a>
-                        </li>
-                    </ul>
-                </li>
-
-                {{-- Menu "Keuangan" -- Saldo Branch/Company/Reseller &
-                         Tarik Saldo (diskusi 22 September 2026, lihat
-                         App\Models\Wallet, App\Models\PengajarFeeTransfer).
-                         "Transfer Fee" adalah item PERTAMA yang jadi --
-                         item "Tarik Saldo"/"Persetujuan Penarikan"
-                         menyusul di sini nanti, belum ditambahkan. Sama
-                         seperti Tagihan, SENGAJA belum dibungkus
-                         package-gate. --}}
-                <li class="pe-slide pe-has-sub">
-                    <a href="#collapseKeuangan" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
-                        aria-controls="collapseKeuangan">
-                        <i class="uil uil-wallet pe-nav-icon"></i>
-                        <span class="pe-nav-content">Keuangan</span>
-                        <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
-                        <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
-                    </a>
-                    <ul class="pe-slide-menu collapse" id="collapseKeuangan">
-                        <li class="pe-slide-item">
-                            <a href="{{ route('keuangan.dashboard.index') }}" class="pe-nav-link">
-                                Dashboard Saldo
-                            </a>
-                        </li>
-                        <li class="pe-slide-item">
-                            <a href="{{ route('keuangan.transfer-fee.index') }}" class="pe-nav-link">
-                                Transfer Fee Pengajar
-                            </a>
-                        </li>
-                        <li class="pe-slide-item">
-                            <a href="{{ route('keuangan.withdrawal.index') }}" class="pe-nav-link">
-                                Tarik Saldo
-                            </a>
-                        </li>
-                        <li class="pe-slide-item">
-                            <a href="{{ route('keuangan.withdrawal.approval.index') }}" class="pe-nav-link">
-                                Persetujuan Tarik Saldo
                             </a>
                         </li>
                     </ul>
