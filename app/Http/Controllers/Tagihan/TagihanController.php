@@ -85,7 +85,7 @@ class TagihanController extends Controller
             abort(403);
         }
 
-        $tagihan = DB::transaction(function () use ($validated, $category, $company) {
+        $tagihan = DB::transaction(function () use ($validated, $category, $company, $request) {
             $tagihan = Tagihan::create([
                 'company_id' => $company->id,
                 'branch_office_id' => $category->branch_office_id,
