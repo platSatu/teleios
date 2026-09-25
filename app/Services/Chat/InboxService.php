@@ -2,7 +2,9 @@
 
 namespace App\Services\Chat;
 
+use App\Exceptions\PackageLimitExceededException;
 use App\Models\Company;
+use App\Models\JadwalReminderSetting;
 use App\Services\PackageLimitService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
@@ -71,14 +73,14 @@ class InboxService
      */
     public function send(string $jwt, string $deviceId, string $chatJid, string $body, ?Company $company = null, ?string $limitMetric = 'broadcast_send'): array
     {
-        $this->guardPackageLimit($company, $limitMetric);
+        $reservation = $this->guardPackageLimit($deviceId, $company, $limitMetric);
 
         try {
             return $this->request('post', "/api/wa/devices/{$deviceId}/chats/".rawurlencode($chatJid).'/messages', $jwt, [
                 'body' => $body,
             ])['message'] ?? [];
         } catch (Throwable $e) {
-            $this->releasePackageLimit($company, $limitMetric);
+            $this->releasePackageLimit($reservation);
 
             throw $e;
         }
@@ -101,7 +103,7 @@ class InboxService
      */
     public function sendPoll(string $jwt, string $deviceId, string $chatJid, string $question, array $options, int $selectableCount = 1, ?Company $company = null, ?string $limitMetric = 'broadcast_send'): array
     {
-        $this->guardPackageLimit($company, $limitMetric);
+        $reservation = $this->guardPackageLimit($deviceId, $company, $limitMetric);
 
         try {
             return $this->request('post', "/api/wa/devices/{$deviceId}/chats/".rawurlencode($chatJid).'/polls', $jwt, [
@@ -110,7 +112,7 @@ class InboxService
                 'selectable_count' => $selectableCount,
             ])['message'] ?? [];
         } catch (Throwable $e) {
-            $this->releasePackageLimit($company, $limitMetric);
+            $this->releasePackageLimit($reservation);
 
             throw $e;
         }
@@ -145,7 +147,7 @@ class InboxService
      */
     public function sendMedia(string $jwt, string $deviceId, string $chatJid, UploadedFile $file, ?string $caption, bool $asSticker, ?Company $company = null, ?string $limitMetric = 'broadcast_send'): array
     {
-        $this->guardPackageLimit($company, $limitMetric);
+        $reservation = $this->guardPackageLimit($deviceId, $company, $limitMetric);
 
         try {
             $response = Http::withHeaders([
@@ -170,7 +172,7 @@ class InboxService
 
             return $response->json()['message'] ?? [];
         } catch (Throwable $e) {
-            $this->releasePackageLimit($company, $limitMetric);
+            $this->releasePackageLimit($reservation);
 
             throw $e;
         }
@@ -190,7 +192,7 @@ class InboxService
      */
     public function sendStoredMedia(string $jwt, string $deviceId, string $chatJid, string $absolutePath, string $filename, ?string $mimeType, ?string $caption, ?Company $company = null, ?string $limitMetric = 'broadcast_send'): array
     {
-        $this->guardPackageLimit($company, $limitMetric);
+        $reservation = $this->guardPackageLimit($deviceId, $company, $limitMetric);
 
         try {
             $response = Http::withHeaders([
@@ -212,7 +214,7 @@ class InboxService
 
             return $response->json()['message'] ?? [];
         } catch (Throwable $e) {
-            $this->releasePackageLimit($company, $limitMetric);
+            $this->releasePackageLimit($reservation);
 
             throw $e;
         }
@@ -423,84 +425,76 @@ class InboxService
     }
 
     /**
-     * Centralized package/quota guard for every send path in this
-     * service (CLAUDE.md checklist item #3, Fase 1). $company is
-     * optional and defaults to null so this stays fully backward
-     * compatible: a caller that doesn't pass it gets exactly the old,
-     * unguarded behavior — this lets the centralization be rolled out
-     * caller-by-caller (only the callers that have actually been
-     * reviewed/tested pass $company) instead of silently changing
-     * behavior for every one of send()/sendPoll()/sendMedia()/
-     * sendStoredMedia()'s callers app-wide in one shot. See CLAUDE.md's
-     * 22 September 2026 note on checklist #3 for which callers are
-     * opted in so far and which are still pending review.
+     * Guard paket/kuota terpusat untuk SEMUA jalur kirim di service ini
+     * (CLAUDE.md checklist #3). Sejak paket berlaku per branch (25
+     * September 2026), yang dicek adalah paket milik BRANCH PEMILIK
+     * DEVICE pengirim -- bukan company secara umum:
      *
-     * Deliberately does NOT touch App\Services\Chat\
-     * BroadcastThrottleService here, unlike PackageLimitService::
-     * reserve()/release() — a throttle attempt() call PERMANENTLY
-     * CONSUMES a rate-limit slot the moment it's called (see that
-     * service's docblock), it isn't a safe, idempotent check like
-     * requireActivePackage(). The jobs opting into this guard so far
-     * (SendScheduledWaMessage, SendAutoReplyMessage, SendAiBotReply)
-     * already call throttle->attempt() themselves before ever reaching
-     * this method, with their own "not a failure, redispatch with a
-     * delay" handling wrapped around it. If this guard called attempt()
-     * too, every one of their sends would burn TWO rate-limit slots
-     * instead of one — quietly halving each device's real throughput
-     * against the ceiling it's supposed to respect. Centralizing
-     * throttle safely needs its own follow-up (a typed exception each
-     * caller's existing redispatch logic can catch instead), tracked
-     * separately rather than folded into this pass.
+     *   - Device harus sudah terpasang ke sebuah branch, dan branch itu
+     *     harus punya paket aktif yang mencakup layanan Chat. Branch
+     *     dengan paket tanpa Chat (mis. "Tagihan saja") tidak bisa
+     *     mengirim sama sekali.
+     *   - $company diisi pemanggil (opt-in lama: broadcast terjadwal,
+     *     auto-reply, AI bot, API, tagihan, dst) -> kuota $limitMetric
+     *     dipotong dari counter branch itu (null = tidak dimeter).
+     *   - $company kosong (balasan manual Inbox, notifikasi Jadwal,
+     *     konfirmasi opt-out, Google Form) -> company diambil dari device
+     *     dan HANYA dicek masih aktif, TIDAK memotong kuota (keputusan
+     *     25 September 2026: balasan manual tidak memotong kuota).
+     *   - Device tanpa company sama sekali (akun lama tanpa Company) ->
+     *     tidak dicek, sama seperti sebelumnya.
      *
-     * Reuses App\Exceptions\PackageLimitExceededException (thrown by
-     * requireActivePackage()/reserve() themselves) rather than a new
-     * exception type — every caller opted in so far already has a catch
-     * block for this exact exception (for their own now-removed manual
-     * calls to the same two methods), so opting a caller in only means
-     * passing $company through, never touching its catch logic.
+     * Sengaja TIDAK menyentuh BroadcastThrottleService -- attempt()
+     * menghabiskan slot rate-limit permanen; job yang butuh throttle sudah
+     * memanggilnya sendiri sebelum sampai sini.
      *
-     * $limitMetric may be null — for a caller whose messages aren't
-     * metered against any quota (e.g. auto-reply/AI bot right now: see
-     * CLAUDE.md checklist item #8, still an open decision on whether
-     * they ever should be) — in which case only requireActivePackage()
-     * runs and reserve() is skipped entirely, never touching any
-     * CompanyLimitUsage row. Passing 'broadcast_send' here for a caller
-     * that isn't supposed to be metered would silently start consuming
-     * a real company's broadcast quota for messages that were never
-     * counted against it before, which is exactly the regression this
-     * split is here to prevent.
+     * @return array{company: Company, branch: \App\Models\BranchOffice, metric: string}|null
+     *         Reservasi kuota yang harus dikembalikan lewat
+     *         releasePackageLimit() kalau pengirimannya gagal.
      */
-    private function guardPackageLimit(?Company $company, ?string $limitMetric): void
+    private function guardPackageLimit(string $deviceId, ?Company $company, ?string $limitMetric): ?array
     {
         if ($company === null) {
-            return;
+            $company = $this->packageLimits->companyForDevice($deviceId);
+            $limitMetric = null;
         }
 
-        $this->packageLimits->requireActivePackage($company);
-
-        if ($limitMetric !== null) {
-            $this->packageLimits->reserve($company, $limitMetric);
+        if ($company === null) {
+            return null;
         }
+
+        $branch = $this->packageLimits->branchForDevice($deviceId);
+
+        if ($branch === null) {
+            throw new PackageLimitExceededException(
+                'Device WhatsApp ini belum terpasang ke branch mana pun. Hubungkan ulang device dari branch yang memiliki paket Chat.',
+                'active_package'
+            );
+        }
+
+        $this->packageLimits->requireActivePackage($company, $branch, JadwalReminderSetting::CHAT_CATEGORY_NAMES);
+
+        if ($limitMetric === null) {
+            return null;
+        }
+
+        $this->packageLimits->reserve($company, $limitMetric, 1, $branch);
+
+        return ['company' => $company, 'branch' => $branch, 'metric' => $limitMetric];
     }
 
     /**
-     * Mirrors guardPackageLimit() — gives back a reservation it made,
-     * when the send that followed then failed, so a retried/failed
-     * attempt never permanently burns quota it never actually used.
-     * No-op when $company is null, for the same opt-in reason as
-     * guardPackageLimit(). Safe to call even when guardPackageLimit()
-     * never actually reserved anything (e.g. it threw before reaching
-     * reserve(), or the company has no active package/limit configured
-     * at all) — PackageLimitService::release() itself already no-ops in
-     * every one of those cases and floors at 0 rather than going
-     * negative.
+     * Kembalikan kuota yang dipotong guardPackageLimit() saat pengiriman
+     * yang menyusul gagal, supaya percobaan gagal tidak menghabiskan kuota.
+     *
+     * @param  array{company: Company, branch: \App\Models\BranchOffice, metric: string}|null  $reservation
      */
-    private function releasePackageLimit(?Company $company, ?string $limitMetric): void
+    private function releasePackageLimit(?array $reservation): void
     {
-        if ($company === null || $limitMetric === null) {
+        if ($reservation === null) {
             return;
         }
 
-        $this->packageLimits->release($company, $limitMetric);
+        $this->packageLimits->release($reservation['company'], $reservation['metric'], 1, $reservation['branch']);
     }
 }

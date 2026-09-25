@@ -22,7 +22,7 @@ class PackageController extends Controller
     {
         $packages = CrudAdmin::getAll(
             modelClass: Package::class,
-            relations: ['user', 'categoryApplication'],
+            relations: ['user', 'categoryApplication', 'categoryApplications'],
             search: $request->string('search')->value() ?: null,
             searchFields: ['name', 'description'],
         );
@@ -39,9 +39,9 @@ class PackageController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $validated = $this->validated($request);
+        [$validated, $categoryIds] = $this->validated($request);
 
-        CrudAdmin::store(Package::class, $validated);
+        CrudAdmin::store(Package::class, $validated, afterCreate: fn (Package $package) => $package->categoryApplications()->sync($categoryIds));
 
         return redirect()
             ->route('package.index')
@@ -50,14 +50,14 @@ class PackageController extends Controller
 
     public function show(string $id): View
     {
-        $package = CrudAdmin::find(Package::class, $id, relations: ['user', 'categoryApplication']);
+        $package = CrudAdmin::find(Package::class, $id, relations: ['user', 'categoryApplication', 'categoryApplications']);
 
         return view('superadmin.package.show', compact('package'));
     }
 
     public function edit(string $id): View
     {
-        $package = CrudAdmin::find(Package::class, $id);
+        $package = CrudAdmin::find(Package::class, $id, relations: ['categoryApplications']);
         [$users, $categoryApplications] = $this->formOptions();
 
         return view('superadmin.package.edit', compact('package', 'users', 'categoryApplications'));
@@ -65,9 +65,9 @@ class PackageController extends Controller
 
     public function update(Request $request, string $id): RedirectResponse
     {
-        $validated = $this->validated($request);
+        [$validated, $categoryIds] = $this->validated($request);
 
-        CrudAdmin::update(Package::class, $id, $validated);
+        CrudAdmin::update(Package::class, $id, $validated, afterUpdate: fn (Package $package) => $package->categoryApplications()->sync($categoryIds));
 
         return redirect()
             ->route('package.index')
@@ -84,13 +84,17 @@ class PackageController extends Controller
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{0: array<string, mixed>, 1: array<int, string>} [data paket, id layanan]
      */
     private function validated(Request $request): array
     {
         $validated = $request->validate([
             'user_id' => ['nullable', 'uuid', 'exists:users,id'],
-            'category_application_id' => ['required', 'uuid', 'exists:category_applications,id'],
+            // Paket bisa mencakup beberapa layanan sekaligus (pivot
+            // package_category_applications); yang pertama dicentang jadi
+            // category utama (kolom lama, masih NOT NULL & dibaca kode lama).
+            'category_application_ids' => ['required', 'array', 'min:1'],
+            'category_application_ids.*' => ['uuid', 'distinct', 'exists:category_applications,id'],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'duration' => ['required', 'integer', 'min:1'],
@@ -104,7 +108,11 @@ class PackageController extends Controller
         // tidak berubah dari nilai lama saat update.
         $validated['is_featured'] = $request->boolean('is_featured');
 
-        return $validated;
+        $categoryIds = array_values($validated['category_application_ids']);
+        unset($validated['category_application_ids']);
+        $validated['category_application_id'] = $categoryIds[0];
+
+        return [$validated, $categoryIds];
     }
 
     /**

@@ -123,29 +123,22 @@ class PhoneBookController extends Controller
                 ->withInput();
         }
 
-        // Package quota guard: "contact_count" is a 'stock' metric (see
-        // App\Models\LimitMetric) — measured live against the real
-        // current count rather than a separately-tracked counter, so it
-        // can't drift if rows get deleted/imported outside this method.
-        // Fails open if there's no active package or the package doesn't
-        // cap this metric.
+        $validated = $validator->validated();
+        $phone = WaPhoneBook::normalizePhone($validated['phone']);
+
+        // Kontak tanpa pilihan branch masuk ke branch yang sedang dibuka --
+        // limit kontak (contact_count, metric 'stock') dihitung per branch,
+        // mengikuti paket branch itu.
+        $validated['branch_office_id'] ??= $context->activeBranch()?->id;
+
         try {
-            $this->packageLimits->assertWithinLimit(
-                $company,
-                'contact_count',
-                1,
-                null,
-                fn () => WaPhoneBook::where('company_id', $company->id)->count(),
-            );
+            $this->assertContactQuota($company, $validated['branch_office_id']);
         } catch (PackageLimitExceededException $e) {
             return redirect()
                 ->route('chat.phone-books.create')
                 ->withErrors(['limit' => $e->getMessage()])
                 ->withInput();
         }
-
-        $validated = $validator->validated();
-        $phone = WaPhoneBook::normalizePhone($validated['phone']);
 
         // CRM Roadmap Fase 0: resolve (or create) the one WaCustomer
         // identity this phone belongs to before creating the phone book
@@ -565,6 +558,28 @@ class PhoneBookController extends Controller
         }
 
         return $query->firstOrFail();
+    }
+
+    /**
+     * Limit kontak paket branch: jumlah kontak di branch itu + 1 tidak
+     * boleh melebihi contact_count paket aktif branch tersebut. Fail-open
+     * kalau paket tidak membatasi (lihat PackageLimitService).
+     *
+     * @throws PackageLimitExceededException
+     */
+    private function assertContactQuota(Company $company, ?string $branchOfficeId): void
+    {
+        $branch = $branchOfficeId ? $company->branchOffices()->whereKey($branchOfficeId)->first() : null;
+
+        $this->packageLimits->assertWithinLimit(
+            $company,
+            'contact_count',
+            1,
+            $branch,
+            fn () => WaPhoneBook::where('company_id', $company->id)
+                ->where('branch_office_id', $branch?->id)
+                ->count(),
+        );
     }
 
     private function validator(Request $request, Company $company, ?string $ignoreId = null)

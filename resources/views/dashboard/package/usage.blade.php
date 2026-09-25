@@ -5,6 +5,7 @@
         <div>
             <h4 class="mb-1">Sisa Kuota Paket Saya</h4>
             <p class="text-muted mb-0">
+                Branch <strong>{{ $branch?->name ?? '-' }}</strong> &middot;
                 @if ($activePackage)
                     Paket aktif: <strong>{{ $activePackage->name }}</strong>
                 @else

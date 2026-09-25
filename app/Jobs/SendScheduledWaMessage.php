@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Exceptions\PackageLimitExceededException;
 use App\Jobs\Concerns\NormalizesWhatsAppJid;
+use App\Models\JadwalReminderSetting;
 use App\Models\User;
 use App\Models\WaMessageSchedule;
 use App\Models\WaMessageScheduleLog;
@@ -194,7 +195,7 @@ class SendScheduledWaMessage implements ShouldQueue
         // broken send, it's a send that was never supposed to happen.
         if ($schedule->company) {
             try {
-                $packageLimits->requireActivePackage($schedule->company);
+                $packageLimits->requireActivePackage($schedule->company, $packageLimits->branchForDevice($schedule->device_id), JadwalReminderSetting::CHAT_CATEGORY_NAMES);
             } catch (PackageLimitExceededException $e) {
                 $log->forceFill([
                     'status' => WaMessageScheduleLog::STATUS_SKIPPED,
@@ -244,7 +245,7 @@ class SendScheduledWaMessage implements ShouldQueue
         // before the network send further down (see the comment there
         // for why a separate check-then-consume pair isn't safe enough
         // for something this job runs highly concurrently).
-        if ($schedule->company && $packageLimits->remaining($schedule->company, 'broadcast_send') === 0) {
+        if ($schedule->company && $packageLimits->remaining($schedule->company, 'broadcast_send', $packageLimits->branchForDevice($schedule->device_id)) === 0) {
             $log->forceFill([
                 'status' => WaMessageScheduleLog::STATUS_SKIPPED,
                 'error' => 'Kuota pengiriman broadcast paket Anda untuk periode ini sudah habis. Beli/upgrade paket untuk melanjutkan.',

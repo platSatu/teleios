@@ -71,9 +71,9 @@
                         <span class="avatar-item avatar-lg rounded-3 bg-primary-subtle text-primary d-flex align-items-center justify-content-center">
                             <i class="ri-box-3-line fs-3"></i>
                         </span>
-                        @if ($package->categoryApplication)
-                            <span class="badge bg-info-subtle text-info fw-medium">
-                                {{ $package->categoryApplication->name }}
+                        @if ($package->categoryNames() !== '')
+                            <span class="badge bg-info-subtle text-info fw-medium text-wrap text-end">
+                                {{ $package->categoryNames() }}
                             </span>
                         @endif
                     </div>
@@ -165,6 +165,32 @@
 
                     <form action="{{ route('dashboard.package.checkout.store', $package->id) }}" method="POST" id="checkout-form">
                         @csrf
+
+                        {{-- Paket berlaku per branch. Branch yang masih aktif dengan
+                             paket LAIN tidak bisa dipilih (tidak ada upgrade/downgrade);
+                             aturan yang sama dicek ulang di server. --}}
+                        <div class="mb-3">
+                            <label for="branch_office_id" class="form-label fw-semibold">Untuk Branch <span class="text-danger">*</span></label>
+                            <select name="branch_office_id" id="branch_office_id" class="form-select" required>
+                                <option value="">— Pilih branch —</option>
+                                @foreach ($branchOptions as $option)
+                                    @php
+                                        $activeVoucher = $option['voucher'];
+                                        $blocked = $activeVoucher && $activeVoucher->package_id !== $package->id;
+                                    @endphp
+                                    <option value="{{ $option['branch']->id }}" @disabled($blocked)
+                                        @selected($selectedBranchId === $option['branch']->id)>
+                                        {{ $option['branch']->name }}
+                                        @if ($activeVoucher)
+                                            — {{ $activeVoucher->package?->name }} aktif s/d {{ $activeVoucher->valid_until->format('d M Y') }}{{ $blocked ? ' (tidak bisa diganti)' : ' (perpanjang)' }}
+                                        @else
+                                            — belum berlangganan
+                                        @endif
+                                    </option>
+                                @endforeach
+                            </select>
+                            <div class="form-text">Perpanjangan paket yang sama menambah masa aktif dari tanggal habis sekarang.</div>
+                        </div>
                         <input type="hidden" name="kode_voucher" id="input_kode_voucher">
                         <input type="hidden" name="kode_referral" id="input_kode_referral">
                         <button type="submit" class="btn btn-primary w-100">

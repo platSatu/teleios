@@ -18,6 +18,7 @@ use App\Models\VoucherUser;
 use App\Models\VoucherUserRedemption;
 use App\Models\Wallet;
 use App\Notifications\PackagePurchasedNotification;
+use App\Services\Package\BranchSubscriptionService;
 use App\Services\Wallet\WalletLedgerService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -57,7 +58,7 @@ use RuntimeException;
  */
 class PackageCheckoutController extends Controller
 {
-    public function show(Request $request, Package $package): View|RedirectResponse
+    public function show(Request $request, Package $package, BranchSubscriptionService $branchSubscriptions): View|RedirectResponse
     {
         abort_unless($package->status === 'active', 404);
 
@@ -73,7 +74,21 @@ class PackageCheckoutController extends Controller
                 ->with('error', 'Anda harus melengkapi data Company terlebih dahulu sebelum membeli package.');
         }
 
-        $package->load('categoryApplication');
+        // Paket dibeli PER BRANCH -- company harus sudah punya minimal satu
+        // branch (alur Company -> Branch -> Paket).
+        $branchOptions = $branchSubscriptions->branchesWithActiveVoucher(
+            Company::where('user_id', Auth::id())->first()
+        );
+
+        if ($branchOptions->isEmpty()) {
+            return redirect()
+                ->route('profile.edit', ['tab' => 'company'])
+                ->with('error', 'Buat branch terlebih dahulu. Paket dibeli untuk masing-masing branch.');
+        }
+
+        $selectedBranchId = old('branch_office_id', $request->query('branch_office_id'));
+
+        $package->load(['categoryApplication', 'categoryApplications']);
         $user = Auth::user();
         $wallet = $user->wallet;
 
@@ -94,7 +109,7 @@ class PackageCheckoutController extends Controller
         // sudah terkunci ke satu referrer ($linkedReferrer di atas).
         $suggestedReferralCode = $linkedReferrer ? null : $request->cookie('referral_code');
 
-        return view('dashboard.package.checkout', compact('package', 'wallet', 'linkedReferrer', 'suggestedReferralCode'));
+        return view('dashboard.package.checkout', compact('package', 'wallet', 'linkedReferrer', 'suggestedReferralCode', 'branchOptions', 'selectedBranchId'));
     }
 
     public function applyPromo(Request $request, Package $package): JsonResponse
@@ -113,7 +128,7 @@ class PackageCheckoutController extends Controller
         return response()->json($result);
     }
 
-    public function store(Request $request, Package $package): RedirectResponse
+    public function store(Request $request, Package $package, BranchSubscriptionService $branchSubscriptions): RedirectResponse
     {
         abort_unless($package->status === 'active', 404);
 
@@ -129,9 +144,20 @@ class PackageCheckoutController extends Controller
         }
 
         $request->validate([
+            'branch_office_id' => ['required', 'uuid'],
             'kode_voucher' => ['nullable', 'string', 'max:32'],
             'kode_referral' => ['nullable', 'string', 'max:32'],
         ]);
+
+        // Branch tujuan wajib milik company owner ini, dan tidak sedang
+        // aktif dengan paket lain (tidak ada upgrade/downgrade). Dicek
+        // lagi saat redeem -- lihat BranchSubscriptionService.
+        try {
+            $branch = $branchSubscriptions->branchOfCompanyOrFail($company, $request->input('branch_office_id'));
+            $branchSubscriptions->assertCanActivate($company, $branch, $package);
+        } catch (RuntimeException $e) {
+            return back()->withInput()->with('error', $e->getMessage());
+        }
 
         $user = Auth::user();
         $promoCode = trim((string) $request->input('kode_voucher'));
@@ -221,7 +247,7 @@ class PackageCheckoutController extends Controller
             $subscription = DB::transaction(function () use (
                 $package, $user, $wallet, $price, $discountPercent, $discountAmount, $finalPrice,
                 $voucherUser, $referralCodeForDiscount, $referralCodeForCommission, $isNewReferralLink,
-                $company
+                $company, $branch
             ) {
                 // Re-check the promo quota INSIDE the transaction, under a
                 // row lock on voucher_users, right before we commit to
@@ -305,6 +331,7 @@ class PackageCheckoutController extends Controller
                 Voucher::create([
                     'user_id' => $user->id,
                     'company_id' => $company->id,
+                    'branch_office_id' => $branch->id,
                     'package_id' => $package->id,
                     'subscription_id' => $subscription->id,
                     'kode_voucher' => Voucher::generateUniqueCode(),
@@ -356,6 +383,7 @@ class PackageCheckoutController extends Controller
                     'entity_id' => $subscription->id,
                     'new_value' => [
                         'package_id' => $package->id,
+                        'branch_office_id' => $branch->id,
                         'amount' => $finalPrice,
                         'kode_voucher' => $voucherUser?->kode_voucher,
                         'kode_referral' => $referralCodeForCommission?->code,

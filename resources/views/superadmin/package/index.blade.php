@@ -41,7 +41,7 @@
                         @forelse ($packages as $item)
                             <tr>
                                 <td class="fw-semibold">{{ $item->name }}</td>
-                                <td>{{ $item->categoryApplication->name ?? '-' }}</td>
+                                <td>{{ $item->categoryNames() ?: '-' }}</td>
                                 <td>{{ $item->duration }} hari</td>
                                 <td>Rp {{ number_format($item->price, 0, ',', '.') }}</td>
                                 <td>{{ $item->user->name ?? '-' }}</td>

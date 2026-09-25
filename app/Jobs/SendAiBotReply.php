@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Exceptions\PackageLimitExceededException;
+use App\Models\JadwalReminderSetting;
 use App\Models\WaAiBot;
 use App\Services\AiBot\AiReplyGenerator;
 use App\Services\Chat\BroadcastThrottleService;
@@ -76,7 +77,7 @@ class SendAiBotReply implements ShouldQueue
         // going out for a company whose package has since expired.
         if ($bot->company) {
             try {
-                $packageLimits->requireActivePackage($bot->company);
+                $packageLimits->requireActivePackage($bot->company, $packageLimits->branchForDevice($bot->device_id), JadwalReminderSetting::CHAT_CATEGORY_NAMES);
             } catch (PackageLimitExceededException $e) {
                 $this->markFailed($bot, $e->getMessage());
 

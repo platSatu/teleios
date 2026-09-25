@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -89,6 +90,20 @@ class Voucher extends Model
     public function subscription(): BelongsTo
     {
         return $this->belongsTo(Subscription::class);
+    }
+
+    /**
+     * Voucher yang sedang berlaku SAAT INI (status active & now() di dalam
+     * valid_from..valid_until) -- satu definisi "paket aktif" yang dipakai
+     * PackageLimitService, EnsureActivePackage, dan halaman paket.
+     */
+    public function scopeCurrentlyActive(Builder $query): Builder
+    {
+        return $query->where('status', 'active')
+            ->whereNotNull('valid_from')
+            ->whereNotNull('valid_until')
+            ->where('valid_from', '<=', now())
+            ->where('valid_until', '>=', now());
     }
 
     /**

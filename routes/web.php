@@ -176,6 +176,7 @@ use App\Http\Controllers\Chat\MessageAutoReplyController;
 use App\Http\Controllers\Chat\MessageQuickReplyController;
 use App\Http\Controllers\Chat\AiBotController;
 use App\Http\Controllers\Dashboard\PackageController as DashboardPackageController;
+use App\Http\Controllers\Dashboard\ActiveBranchController;
 use App\Http\Controllers\Dashboard\PackageCheckoutController;
 use App\Http\Controllers\Dashboard\VoucherRedeemController;
 use App\Http\Controllers\Dashboard\WalletTransferController;
@@ -212,6 +213,12 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
     ->name('dashboard');
 
 Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () {
+
+    // Pemilih branch di header -- branch yang sedang "dibuka" menentukan
+    // menu & paket yang berlaku (paket berlaku per branch). Lihat
+    // Dashboard\ActiveBranchController & App\Services\Company\ActiveBranchSelection.
+    Route::post('/active-branch', [ActiveBranchController::class, 'update'])
+        ->name('dashboard.active-branch.update');
 
     // Moved from Chat > Laporan (used to be ChatReportController /
     // views/chat/reports/index.blade.php, gated behind 'active.package'
@@ -521,12 +528,10 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
     // (lihat App\Models\Tagihan* & migration-nya, 22 September 2026):
     // company bisa menagih pelanggan-nya sendiri (SPP-style berulang
     // atau sekali bayar), collect via Duitku, dengan halaman publik
-    // tanpa login. SENGAJA belum di-gate 'active.package:Pembayaran' --
-    // saat kategori package "Pembayaran" ini dibahas di sesi
-    // sebelumnya, pemilik akun eksplisit bilang gating-nya "di luar
-    // scope dulu". Tinggal tambahkan 'active.package:Pembayaran' ke
-    // middleware group ini kalau nanti mau diaktifkan, sama pola
-    // dengan 'form'/'jadwal' di atas.
+    // tanpa login. Sejak 25 September 2026 di-gate
+    // 'active.package:Tagihan,Pembayaran' -- hanya branch yang paketnya
+    // mencakup layanan Tagihan yang bisa membuka menu ini (lihat
+    // App\Support\MenuGateCategories::TAGIHAN_CATEGORY_NAMES).
     //
     // Halaman PUBLIK bayar tagihan (app.konexa.id/tagihan/{branch-slug}/
     // {token}) TIDAK ada di sini -- itu rute top-level tanpa auth,
@@ -535,7 +540,7 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
     // publik Tagihan punya prefix tetap "tagihan/" jadi TIDAK perlu
     // ditaruh paling bawah file ini -- tidak akan pernah "mencuri" rute
     // lain seperti /login, /dashboard, dst.
-    Route::prefix('tagihan')->middleware(['menu.access'])->group(function () {
+    Route::prefix('tagihan')->middleware(['active.package:Tagihan,Pembayaran', 'menu.access'])->group(function () {
         Route::prefix('category')
             ->controller(TagihanCategoryController::class)
             ->group(function () {

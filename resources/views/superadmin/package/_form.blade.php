@@ -19,15 +19,29 @@
 </div>
 
 <div class="mb-3">
-    <label for="category_application_id" class="form-label">Kategori Aplikasi <span class="text-danger">*</span></label>
-    <select name="category_application_id" id="category_application_id" class="form-select" required>
-        <option value="">— Pilih kategori —</option>
+    <label class="form-label">Layanan yang Dicakup <span class="text-danger">*</span></label>
+    @php
+        $selectedCategoryIds = old(
+            'category_application_ids',
+            isset($package) ? $package->categoryIds() : []
+        );
+    @endphp
+    <div class="row g-2">
         @foreach ($categoryApplications as $category)
-            <option value="{{ $category->id }}" @selected(old('category_application_id', $package->category_application_id ?? '') == $category->id)>
-                {{ $category->name }}
-            </option>
+            <div class="col-6 col-md-4">
+                <div class="form-check">
+                    <input type="checkbox" name="category_application_ids[]" value="{{ $category->id }}"
+                        id="category_{{ $category->id }}" class="form-check-input"
+                        @checked(in_array($category->id, $selectedCategoryIds, true))>
+                    <label for="category_{{ $category->id }}" class="form-check-label">{{ $category->name }}</label>
+                </div>
+            </div>
         @endforeach
-    </select>
+    </div>
+    <div class="form-text">
+        Centang semua layanan yang termasuk paket ini (mis. paket Lengkap: Chat, Form, Jadwal, Tagihan).
+        Nama layanan dipakai untuk membuka menu -- jangan diganti setelah dipakai customer.
+    </div>
 </div>
 
 <div class="mb-3">

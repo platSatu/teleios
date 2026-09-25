@@ -48,7 +48,12 @@
                             <div class="col-12 col-md-6">
                                 <p class="text-muted small mb-1">Paket Aktif</p>
                                 @if ($summary['package'])
-                                    <h5 class="mb-1">{{ $summary['package']['name'] ?? '-' }}</h5>
+                                    <h5 class="mb-1">
+                                        {{ $summary['package']['name'] ?? '-' }}
+                                        @if (! empty($summary['package']['branch']))
+                                            <span class="text-muted fs-14 fw-normal">&middot; Branch {{ $summary['package']['branch'] }}</span>
+                                        @endif
+                                    </h5>
                                     <p class="text-muted small mb-0">
                                         Berlaku sampai
                                         {{ \Illuminate\Support\Carbon::parse($summary['package']['valid_until'])->translatedFormat('d M Y H:i') }}

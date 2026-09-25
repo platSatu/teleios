@@ -2,6 +2,7 @@
 
 namespace App\Services\Chat;
 
+use App\Models\BranchOffice;
 use App\Models\Company;
 use App\Models\WaApiKey;
 use App\Models\WaApiRequestLog;
@@ -93,13 +94,16 @@ class WaApiUsageService
      */
     public function summary(WaApiKey $apiKey): array
     {
+        // Paket & kuota berlaku per branch -- API key terikat ke satu
+        // device, device terikat ke satu branch.
         $company = $apiKey->company;
-        $voucher = $company ? $this->packageLimits->resolveActiveVoucher($company) : null;
+        $branch = $this->packageLimits->branchForDevice($apiKey->device_id);
+        $voucher = $company && $branch ? $this->packageLimits->resolveActiveVoucher($company, $branch) : null;
         $periodStart = $voucher?->valid_from;
 
         return [
             'package' => $this->packageInfo($company, $voucher),
-            'quota' => $company ? $this->quotaInfo($company) : null,
+            'quota' => $company && $branch ? $this->quotaInfo($company, $branch) : null,
             'api_key' => [
                 'today' => $this->countsFor($apiKey, now()->startOfDay()),
                 'this_month' => $this->countsFor($apiKey, now()->startOfMonth()),
@@ -118,11 +122,14 @@ class WaApiUsageService
      */
     public function companySummary(Company $company): array
     {
+        // Paket berlaku per branch: tampilkan paket aktif terbaru company
+        // ini beserta kuota branch pemiliknya. Rincian per device ada di
+        // tabel API key halaman yang sama.
         $voucher = $this->packageLimits->resolveActiveVoucher($company);
 
         return [
             'package' => $this->packageInfo($company, $voucher),
-            'quota' => $this->quotaInfo($company),
+            'quota' => $this->quotaInfo($company, $voucher?->branchOffice),
         ];
     }
 
@@ -134,6 +141,7 @@ class WaApiUsageService
 
         return [
             'name' => $voucher->package?->name,
+            'branch' => $voucher->branchOffice?->name,
             'valid_from' => $voucher->valid_from?->toIso8601String(),
             'valid_until' => $voucher->valid_until?->toIso8601String(),
         ];
@@ -145,9 +153,9 @@ class WaApiUsageService
      * limitnya) — sama persis dengan perilaku fail-open
      * PackageLimitService::reserve().
      */
-    private function quotaInfo(Company $company): array
+    private function quotaInfo(Company $company, ?BranchOffice $branch = null): array
     {
-        $packageLimit = $this->packageLimits->limitFor($company, 'broadcast_send');
+        $packageLimit = $this->packageLimits->limitFor($company, 'broadcast_send', $branch);
 
         if (! $packageLimit) {
             return [
@@ -159,7 +167,7 @@ class WaApiUsageService
             ];
         }
 
-        $remaining = (int) $this->packageLimits->remaining($company, 'broadcast_send');
+        $remaining = (int) $this->packageLimits->remaining($company, 'broadcast_send', $branch);
 
         return [
             'metric' => 'broadcast_send',

@@ -6,6 +6,7 @@ use App\Exceptions\PackageLimitExceededException;
 use App\Http\Controllers\Concerns\ResolvesCompanyContext;
 use App\Http\Controllers\Controller;
 use App\Services\Chat\ConnectDeviceService;
+use App\Services\Chat\DeviceDirectory;
 use App\Services\PackageLimitService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -29,12 +30,13 @@ class ConnectDeviceController extends Controller
     public function __construct(
         protected ConnectDeviceService $connectDeviceService,
         protected PackageLimitService $packageLimits,
+        protected DeviceDirectory $deviceDirectory,
     ) {}
 
     /**
      * Show the device list page.
      */
-    public function index(): View|RedirectResponse
+    public function index(Request $request): View|RedirectResponse
     {
         $jwt = session('golang_jwt_token');
 
@@ -45,7 +47,7 @@ class ConnectDeviceController extends Controller
         }
 
         try {
-            $devices = $this->connectDeviceService->listDevices($jwt);
+            $devices = $this->devicesOfActiveBranch($request, $this->connectDeviceService->listDevices($jwt));
         } catch (Throwable $e) {
             report($e);
             $devices = [];
@@ -60,10 +62,10 @@ class ConnectDeviceController extends Controller
      * AJAX: polled by the table to keep every device's status (and the
      * blinking connected/disconnected dot) fresh without a full reload.
      */
-    public function list(): JsonResponse
+    public function list(Request $request): JsonResponse
     {
         return $this->safeJson(fn (string $jwt) => [
-            'devices' => $this->connectDeviceService->listDevices($jwt),
+            'devices' => $this->devicesOfActiveBranch($request, $this->connectDeviceService->listDevices($jwt)),
         ]);
     }
 
@@ -91,19 +93,29 @@ class ConnectDeviceController extends Controller
         }
 
         try {
-            $company = $this->companyContext($request)->company;
+            $context = $this->companyContext($request);
         } catch (Throwable $e) {
-            $company = null;
+            $context = null;
         }
 
-        if ($company) {
+        // Device selalu milik satu branch (paket & kuota berlaku per
+        // branch). Company tanpa branch belum bisa menambah device.
+        $branch = $context?->activeBranch();
+
+        if ($context && ! $branch) {
+            return response()->json(['error' => 'Buat branch terlebih dahulu sebelum menghubungkan device.'], 403);
+        }
+
+        if ($context) {
             try {
                 $this->packageLimits->assertWithinLimit(
-                    $company,
+                    $context->company,
                     'device_count',
                     1,
-                    null,
-                    fn () => count($this->connectDeviceService->listDevices($jwt)),
+                    $branch,
+                    fn () => collect($this->connectDeviceService->listDevices($jwt))
+                        ->where('branch_office_id', $branch->id)
+                        ->count(),
                 );
             } catch (PackageLimitExceededException $e) {
                 return response()->json(['error' => $e->getMessage()], 403);
@@ -115,7 +127,15 @@ class ConnectDeviceController extends Controller
             }
         }
 
-        return $this->safeJson(fn (string $jwt) => $this->connectDeviceService->addDevice($jwt));
+        return $this->safeJson(function (string $jwt) use ($context, $branch) {
+            $result = $this->connectDeviceService->addDevice($jwt);
+
+            if ($context && $branch && ! empty($result['device_id'])) {
+                $this->deviceDirectory->assignBranchIfMissing($result['device_id'], $context->company->id, $branch->id);
+            }
+
+            return $result;
+        });
     }
 
     /**
@@ -163,6 +183,34 @@ class ConnectDeviceController extends Controller
      * session or an upstream failure into a consistent JSON error
      * response instead of leaking exceptions to the frontend.
      */
+    /**
+     * Owner / member tingkat company hanya melihat device milik branch
+     * yang sedang dibuka (menu & paket berlaku per branch). Member yang
+     * terkunci ke satu branch sudah difilter backend Go sendiri.
+     *
+     * @param  array<int, array<string, mixed>>  $devices
+     * @return array<int, array<string, mixed>>
+     */
+    protected function devicesOfActiveBranch(Request $request, array $devices): array
+    {
+        try {
+            $context = $this->companyContext($request);
+        } catch (Throwable $e) {
+            return $devices;
+        }
+
+        if ($context->isLockedToBranch()) {
+            return $devices;
+        }
+
+        $branchId = $context->activeBranch()?->id;
+
+        return array_values(array_filter(
+            $devices,
+            fn (array $device) => ($device['branch_office_id'] ?? null) === $branchId
+        ));
+    }
+
     protected function safeJson(callable $callback): JsonResponse
     {
         $jwt = session('golang_jwt_token');

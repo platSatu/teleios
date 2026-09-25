@@ -44,6 +44,8 @@ class PackageController extends Controller
             ->where('status', 'active')
             ->with([
                 'categoryApplication:id,name',
+                // Semua layanan yang dicakup paket (paket bisa multi-layanan).
+                'categoryApplications:id,name',
                 'limits' => fn ($query) => $query->orderBy('max_value'),
                 'limits.limitMetric:id,key,name,unit',
             ])

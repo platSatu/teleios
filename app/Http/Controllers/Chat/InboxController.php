@@ -386,7 +386,10 @@ class InboxController extends Controller
         $context = $this->companyContext($request);
         $company = $context->company;
 
-        $branchOfficeId = $context->isLockedToBranch() ? $context->branchOffice?->id : null;
+        // Kontak disimpan ke branch yang sedang dibuka (member terkunci =
+        // branch-nya sendiri) -- limit kontak berlaku per branch.
+        $branch = $context->activeBranch();
+        $branchOfficeId = $branch?->id;
 
         $validator = Validator::make($request->all(), [
             'name' => ['required', 'string', 'max:255'],
@@ -433,8 +436,10 @@ class InboxController extends Controller
                 $company,
                 'contact_count',
                 1,
-                null,
-                fn () => WaPhoneBook::where('company_id', $company->id)->count(),
+                $branch,
+                fn () => WaPhoneBook::where('company_id', $company->id)
+                    ->where('branch_office_id', $branchOfficeId)
+                    ->count(),
             );
         } catch (\App\Exceptions\PackageLimitExceededException $e) {
             return response()->json(['error' => $e->getMessage()], 422);

@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Dashboard;
 use App\Http\Controllers\Concerns\ResolvesCompanyContext;
 use App\Http\Controllers\Controller;
 use App\Models\CategoryApplication;
+use App\Models\Company;
 use App\Models\Package;
+use App\Services\Package\BranchSubscriptionService;
 use App\Services\PackageLimitService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -24,7 +26,7 @@ class PackageController extends Controller
 {
     use ResolvesCompanyContext;
 
-    public function index(Request $request): View
+    public function index(Request $request, BranchSubscriptionService $branchSubscriptions): View
     {
         $categories = CategoryApplication::query()
             ->where('status', 'active')
@@ -37,6 +39,7 @@ class PackageController extends Controller
         $packages = Package::query()
             ->with([
                 'categoryApplication',
+                'categoryApplications',
                 // Buat daftar spesifikasi berikon di tiap kartu package
                 // (lihat resources/views/dashboard/package/index.blade.php)
                 // -- desain kartunya disamakan dengan pricing card
@@ -48,7 +51,9 @@ class PackageController extends Controller
                 'limits.limitMetric',
             ])
             ->where('status', 'active')
-            ->when($categoryId, fn ($query) => $query->where('category_application_id', $categoryId))
+            ->when($categoryId, fn ($query) => $query->where(fn ($q) => $q
+                ->where('category_application_id', $categoryId)
+                ->orWhereHas('categoryApplications', fn ($c) => $c->whereKey($categoryId))))
             ->when($search, function ($query) use ($search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%")
@@ -59,11 +64,18 @@ class PackageController extends Controller
             ->paginate(9)
             ->withQueryString();
 
+        // Status paket tiap branch -- hanya untuk owner (satu-satunya yang
+        // boleh membeli paket, lihat PackageCheckoutController).
+        $ownedCompany = Company::where('user_id', $request->user()->id)->first();
+        $branchStatuses = $ownedCompany ? $branchSubscriptions->branchesWithActiveVoucher($ownedCompany) : collect();
+
         return view('dashboard.package.index', [
             'packages' => $packages,
             'categories' => $categories,
             'search' => $search,
             'categoryId' => $categoryId,
+            'branchStatuses' => $branchStatuses,
+            'selectedBranchId' => $request->query('branch_office_id'),
         ]);
     }
 
@@ -77,30 +89,39 @@ class PackageController extends Controller
      */
     public function usage(Request $request, PackageLimitService $packageLimits): View
     {
-        $company = $this->companyContext($request)->company;
+        $context = $this->companyContext($request);
+        $company = $context->company;
+        $branch = $context->activeBranch();
 
+        // Pemakaian ditampilkan untuk branch yang sedang dibuka -- paket,
+        // kuota, dan limit berlaku per branch.
         $liveCountResolvers = [
-            'contact_count' => fn () => \App\Models\WaPhoneBook::where('company_id', $company->id)->count(),
+            'contact_count' => fn () => \App\Models\WaPhoneBook::where('company_id', $company->id)
+                ->where('branch_office_id', $branch?->id)
+                ->count(),
         ];
 
         $jwt = session('golang_jwt_token');
 
         if ($jwt) {
-            $liveCountResolvers['device_count'] = function () use ($jwt) {
+            $liveCountResolvers['device_count'] = function () use ($jwt, $branch) {
                 try {
-                    return count(app(\App\Services\Chat\ConnectDeviceService::class)->listDevices($jwt));
+                    return collect(app(\App\Services\Chat\ConnectDeviceService::class)->listDevices($jwt))
+                        ->where('branch_office_id', $branch?->id)
+                        ->count();
                 } catch (\Throwable $e) {
                     return null;
                 }
             };
         }
 
-        $rows = $packageLimits->usageReport($company, null, $liveCountResolvers);
-        $activePackage = $packageLimits->activePackage($company);
+        $rows = $branch ? $packageLimits->usageReport($company, $branch, $liveCountResolvers) : [];
+        $activePackage = $branch ? $packageLimits->activePackage($company, $branch) : null;
 
         return view('dashboard.package.usage', [
             'rows' => $rows,
             'activePackage' => $activePackage,
+            'branch' => $branch,
         ]);
     }
 }

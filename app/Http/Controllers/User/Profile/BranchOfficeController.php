@@ -2,13 +2,10 @@
 
 namespace App\Http\Controllers\User\Profile;
 
-use App\Exceptions\PackageLimitExceededException;
 use App\Http\Controllers\Concerns\ResolvesCompanyContext;
 use App\Http\Controllers\Controller;
-use App\Http\Controllers\User\Profile\Concerns\ScopesActivePackage;
 use App\Models\BranchOffice;
 use App\Models\Company;
-use App\Services\PackageLimitService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -28,24 +25,15 @@ use Illuminate\View\View;
  * BranchOfficeUnitController). The view hides this tab's add form
  * behind that same "no company yet" check the other tabs use.
  *
- * Creating NEW branch offices additionally requires the owner to
- * currently have at least one active package (see ScopesActivePackage)
- * — the tab itself is hidden in the view when that's not the case, same
- * gating as Setting Users/Roles/Applications. Editing/deleting an
- * already-existing branch office stays allowed regardless (same
- * "manage what you already have, even after a package lapses" stance as
- * CompanyRoleController), even though the view currently has no path to
- * reach those actions once the tab is hidden.
+ * Sejak 25 September 2026 membuat branch TIDAK lagi butuh paket aktif:
+ * alurnya Company -> Branch -> Paket (paket dibeli PER BRANCH, lihat
+ * Dashboard\PackageCheckoutController), jadi branch memang harus ada
+ * dulu sebelum paket bisa dibeli. Limit "branch_count" juga tidak
+ * dipakai lagi di sini -- setiap branch membayar paketnya sendiri.
  */
 class BranchOfficeController extends Controller
 {
     use ResolvesCompanyContext;
-
-    use ScopesActivePackage;
-
-    public function __construct(
-        protected PackageLimitService $packageLimits,
-    ) {}
 
     /**
      * "Add Branch" row action on the Company tab lands here — a
@@ -64,12 +52,6 @@ class BranchOfficeController extends Controller
             abort(404);
         }
 
-        if ($this->activeCategoryApplicationIds($company->user_id)->isEmpty()) {
-            return redirect()
-                ->route('profile.edit', ['tab' => 'company'])
-                ->with('error', 'Anda belum memiliki package aktif. Beli package terlebih dahulu sebelum menambah branch office.');
-        }
-
         session(['active_company_id' => $company->id]);
 
         return view('user.profile.branch-offices.create', compact('company'));
@@ -78,35 +60,6 @@ class BranchOfficeController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $company = $this->ownedCompanyOrFail($request);
-
-        if ($this->activeCategoryApplicationIds($company->user_id)->isEmpty()) {
-            return redirect()
-                ->route('profile.edit', ['tab' => 'company'])
-                ->with('error', 'Anda belum memiliki package aktif. Beli package terlebih dahulu sebelum menambah branch office.');
-        }
-
-        // Package quota guard: "branch_count" is a 'stock' metric (see
-        // App\Models\LimitMetric), checked live against how many branch
-        // offices this company already has — same pattern as
-        // "device_count" in Chat\ConnectDeviceController::add(). Until a
-        // superadmin actually registers a branch_count LimitMetric and
-        // attaches a PackageLimit to a package, this fails open
-        // (unlimited) exactly like every other metric does when it's
-        // simply not configured yet — see PackageLimitService::
-        // assertWithinLimit()'s docblock.
-        try {
-            $this->packageLimits->assertWithinLimit(
-                $company,
-                'branch_count',
-                1,
-                null,
-                fn () => $company->branchOffices()->count(),
-            );
-        } catch (PackageLimitExceededException $e) {
-            return redirect()
-                ->route('profile.branch-offices.create', $company->id)
-                ->with('error', $e->getMessage());
-        }
 
         $validator = $this->validator($request);
 

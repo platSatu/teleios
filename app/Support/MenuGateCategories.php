@@ -43,4 +43,11 @@ class MenuGateCategories
     public const FORM_CATEGORY_NAMES = ['Form'];
 
     public const JADWAL_CATEGORY_NAMES = ['Jadwal'];
+
+    /**
+     * Layanan Tagihan (invoice & pembayaran pelanggan). "Pembayaran" ikut
+     * diterima -- nama category ini sempat dipakai saat fitur Tagihan
+     * dibahas pertama kali (lihat routes/web.php grup 'tagihan').
+     */
+    public const TAGIHAN_CATEGORY_NAMES = ['Tagihan', 'Pembayaran'];
 }

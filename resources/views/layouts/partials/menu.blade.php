@@ -221,15 +221,12 @@
                     </li>
                 @endif
 
-                {{-- Menu "Tagihan" -- aplikasi pembayaran/invoice berdiri
-                         sendiri (22 September 2026, lihat App\Models\Tagihan*
-                         & routes/web.php's 'tagihan' group). SENGAJA belum
-                         dibungkus package-gate seperti Form/Jadwal di atas
-                         -- saat kategori package "Pembayaran" dibahas,
-                         pemilik akun eksplisit bilang gating-nya "di luar
-                         scope dulu". Tambahkan @if ($hasActivePembayaranPackage)
-                         di sini nanti kalau mau diaktifkan, pola sama
-                         dengan Form/Jadwal. --}}
+                {{-- Menu "Tagihan" -- aplikasi pembayaran/invoice (lihat
+                         App\Models\Tagihan* & routes/web.php grup 'tagihan').
+                         Tampil hanya kalau paket branch aktif mencakup layanan
+                         Tagihan -- pola sama dengan Form/Jadwal di atas; route-
+                         nya sendiri dikunci 'active.package:Tagihan,Pembayaran'. --}}
+                @if ($hasActiveTagihanPackage)
                 <li class="pe-slide pe-has-sub">
                     <a href="#collapseTagihan" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
                         aria-controls="collapseTagihan">
@@ -261,6 +258,7 @@
                         </li>
                     </ul>
                 </li>
+                @endif
 
                 {{-- Chat menu (and its whole "Pengaturan" sub-tree) only
                          shown while the user has at least one active,
@@ -280,7 +278,7 @@
                     $canSeeChatMenu = fn(string $routeName) => $allowedChatRouteNames === null ||
                         $allowedChatRouteNames->contains($routeName);
                 @endphp
-                @if ($hasActivePackage)
+                @if ($hasActiveChatPackage)
                     <li class="pe-slide pe-has-sub">
                         <a href="#collapseChat" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
                             aria-controls="collapseApplications">

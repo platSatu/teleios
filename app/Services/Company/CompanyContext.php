@@ -50,4 +50,26 @@ final class CompanyContext
     {
         return ! $this->seesAllBranches();
     }
+
+    private bool $activeBranchResolved = false;
+
+    private ?BranchOffice $activeBranch = null;
+
+    /**
+     * Branch yang sedang "dibuka" user ini -- menentukan menu & paket yang
+     * berlaku di dashboard (paket berlaku per branch). Member yang terkunci
+     * ke satu branch selalu branch-nya sendiri; owner/member tingkat
+     * company memakai pilihan di pemilih branch header. Lihat
+     * App\Services\Company\ActiveBranchSelection. Null kalau company
+     * belum punya branch sama sekali.
+     */
+    public function activeBranch(): ?BranchOffice
+    {
+        if (! $this->activeBranchResolved) {
+            $this->activeBranch = app(ActiveBranchSelection::class)->resolve($this);
+            $this->activeBranchResolved = true;
+        }
+
+        return $this->activeBranch;
+    }
 }

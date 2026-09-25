@@ -4,8 +4,11 @@ namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
+use App\Models\BranchOffice;
+use App\Models\Company;
 use App\Models\TransactionStatusHistory;
 use App\Models\Voucher;
+use App\Services\Package\BranchSubscriptionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -29,7 +32,7 @@ class VoucherRedeemController extends Controller
 
         $pendingVouchers = Voucher::where('user_id', $userId)
             ->where('status', 'pending')
-            ->with('package.categoryApplication')
+            ->with(['package.categoryApplications', 'package.categoryApplication', 'branchOffice:id,name'])
             ->latest()
             ->get();
 
@@ -46,19 +49,25 @@ class VoucherRedeemController extends Controller
         // bukan yang dikeluhkan user.
         $activeVouchers = Voucher::where('user_id', $userId)
             ->where('status', 'active')
-            ->with('package.categoryApplication')
+            ->with(['package.categoryApplications', 'package.categoryApplication', 'branchOffice:id,name'])
             ->latest()
             ->paginate(10)
             ->withQueryString()
             ->onEachSide(1);
 
-        return view('dashboard.voucher-redeem.index', compact('pendingVouchers', 'activeVouchers'));
+        // Pilihan branch untuk voucher yang belum terikat branch (voucher
+        // buatan superadmin / sebelum paket per branch). Voucher hasil
+        // checkout sudah membawa branch-nya sendiri.
+        $branches = Company::where('user_id', $userId)->first()?->branchOffices()->orderBy('created_at')->get(['id', 'name']) ?? collect();
+
+        return view('dashboard.voucher-redeem.index', compact('pendingVouchers', 'activeVouchers', 'branches'));
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, BranchSubscriptionService $branchSubscriptions): RedirectResponse
     {
         $validated = $request->validate([
             'kode_voucher' => ['required', 'string', 'max:32'],
+            'branch_office_id' => ['nullable', 'uuid'],
         ]);
 
         $code = trim($validated['kode_voucher']);
@@ -79,7 +88,7 @@ class VoucherRedeemController extends Controller
         // closes that gap: a second request blocks until the first
         // commits, then re-reads the now-current state.
         try {
-            $voucher = DB::transaction(function () use ($code, $request) {
+            $voucher = DB::transaction(function () use ($code, $request, $branchSubscriptions) {
                 $voucher = Voucher::where('kode_voucher', $code)
                     ->where('user_id', Auth::id())
                     ->with('package')
@@ -98,6 +107,33 @@ class VoucherRedeemController extends Controller
                     throw new RuntimeException('Kode voucher ini tidak bisa di-redeem (status: ' . ucfirst($voucher->status) . ').');
                 }
 
+                // Paket berlaku PER BRANCH: voucher hasil checkout sudah
+                // membawa branch-nya; voucher tanpa branch (buatan
+                // superadmin / lama) wajib dipilihkan branch-nya di sini.
+                // Hanya owner company yang bisa (Company::user_id).
+                $company = Company::where('user_id', Auth::id())->first();
+
+                if (! $company) {
+                    throw new RuntimeException('Buat company dan branch terlebih dahulu sebelum me-redeem voucher.');
+                }
+
+                if (! $voucher->package) {
+                    throw new RuntimeException('Package untuk voucher ini sudah tidak tersedia. Hubungi administrator.');
+                }
+
+                $branch = $branchSubscriptions->branchOfCompanyOrFail(
+                    $company,
+                    $voucher->branch_office_id ?? $request->input('branch_office_id')
+                );
+
+                // Kunci baris branch supaya dua redeem bersamaan untuk
+                // branch yang sama diproses berurutan -- tanpa ini, dua
+                // voucher paket BERBEDA bisa sama-sama lolos
+                // assertCanActivate() dan aktif bersamaan di satu branch.
+                BranchOffice::whereKey($branch->id)->lockForUpdate()->first();
+
+                $branchSubscriptions->assertCanActivate($company, $branch, $voucher->package, $voucher->id);
+
                 $days = (int) ($voucher->package?->duration ?? 30);
                 $oldStatus = $voucher->status;
 
@@ -108,7 +144,8 @@ class VoucherRedeemController extends Controller
                 // today. Otherwise, redeeming a second voucher for a
                 // package you're already covered on would just give you
                 // an identical/overlapping window and silently waste it.
-                $previousActive = Voucher::where('user_id', $voucher->user_id)
+                $previousActive = Voucher::where('company_id', $company->id)
+                    ->where('branch_office_id', $branch->id)
                     ->where('package_id', $voucher->package_id)
                     ->where('id', '!=', $voucher->id)
                     ->where('status', 'active')
@@ -121,6 +158,8 @@ class VoucherRedeemController extends Controller
                     : now();
 
                 $voucher->update([
+                    'company_id' => $company->id,
+                    'branch_office_id' => $branch->id,
                     'status' => 'active',
                     'valid_from' => $validFrom,
                     'valid_until' => (clone $validFrom)->addDays($days),

@@ -20,6 +20,43 @@
             </div>
             <div class="flex-shrink-0 d-flex align-items-center gap-1 gap-md-3">
 
+                {{-- Pemilih branch: paket & menu berlaku per branch, jadi
+                     dashboard selalu berjalan "sebagai" satu branch. Hanya
+                     tampil untuk user yang boleh membuka >1 branch (owner /
+                     member tingkat company). Data dari view composer di
+                     AppServiceProvider; validasi di ActiveBranchController. --}}
+                @if ($switchableBranches->isNotEmpty())
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-light border d-flex align-items-center gap-1 text-truncate"
+                            style="max-width: 200px;" type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                            title="Branch aktif">
+                            <i class="ri-store-2-line"></i>
+                            <span class="text-truncate">{{ $activeBranch?->name ?? 'Pilih Branch' }}</span>
+                            <i class="ri-arrow-down-s-line"></i>
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end shadow-sm border" style="min-width: 220px;">
+                            <h6 class="dropdown-header">Branch aktif</h6>
+                            @foreach ($switchableBranches as $branchOption)
+                                <form method="POST" action="{{ route('dashboard.active-branch.update') }}">
+                                    @csrf
+                                    <input type="hidden" name="branch_office_id" value="{{ $branchOption->id }}">
+                                    <button type="submit"
+                                        class="dropdown-item d-flex align-items-center justify-content-between {{ $activeBranch?->id === $branchOption->id ? 'active' : '' }}">
+                                        <span class="text-truncate">{{ $branchOption->name }}</span>
+                                        @if ($activeBranch?->id === $branchOption->id)
+                                            <i class="ri-check-line"></i>
+                                        @endif
+                                    </button>
+                                </form>
+                            @endforeach
+                            <div class="dropdown-divider"></div>
+                            <a class="dropdown-item" href="{{ route('dashboard.package.index') }}">
+                                <i class="ri-price-tag-3-line me-1"></i> Paket &amp; Langganan
+                            </a>
+                        </div>
+                    </div>
+                @endif
+
                 <div class="dropdown pe-dropdown-mega d-none d-md-block">
                     <button class="btn rounded-circle text-muted icon-btn fs-5 header-menu-btn position-relative"
                         type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Messages">

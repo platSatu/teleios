@@ -89,9 +89,62 @@
          flash was set but never actually rendered anywhere. --}}
     @include('components.notifikasi')
 
+    {{-- Paket berlaku PER BRANCH (alur Company -> Branch -> Paket). Kartu
+         di bawah hanya untuk owner (satu-satunya yang bisa membeli paket).
+         "Pilih Paket" menyimpan branch tujuan di query string supaya
+         otomatis terpilih di halaman checkout. --}}
+    @if ($branchStatuses->isNotEmpty())
+        <h6 class="mb-2">Paket per Branch</h6>
+        <div class="row g-3 mb-4">
+            @foreach ($branchStatuses as $status)
+                @php
+                    $statusBranch = $status['branch'];
+                    $statusVoucher = $status['voucher'];
+                @endphp
+                <div class="col-12 col-sm-6 col-xl-4">
+                    <div class="card border-0 shadow-sm h-100 mb-0 {{ $selectedBranchId === $statusBranch->id ? 'border border-primary' : '' }}">
+                        <div class="card-body d-flex flex-column">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <span class="fw-semibold text-truncate"><i class="ri-store-2-line me-1"></i>{{ $statusBranch->name }}</span>
+                                @if ($statusVoucher)
+                                    <span class="badge bg-success-subtle text-success">Aktif</span>
+                                @else
+                                    <span class="badge bg-secondary-subtle text-secondary">Belum berlangganan</span>
+                                @endif
+                            </div>
+                            <p class="text-muted fs-13 mb-3">
+                                @if ($statusVoucher)
+                                    {{ $statusVoucher->package?->name }} &middot; s/d {{ $statusVoucher->valid_until->format('d M Y') }}
+                                @else
+                                    Pilih paket untuk membuka layanan di branch ini.
+                                @endif
+                            </p>
+                            <div class="mt-auto">
+                                @if ($statusVoucher)
+                                    <a href="{{ route('dashboard.package.checkout', ['package' => $statusVoucher->package_id, 'branch_office_id' => $statusBranch->id]) }}"
+                                        class="btn btn-sm btn-outline-primary w-100">
+                                        <i class="ri-refresh-line"></i> Perpanjang
+                                    </a>
+                                @else
+                                    <a href="{{ route('dashboard.package.index', ['branch_office_id' => $statusBranch->id]) }}#paket"
+                                        class="btn btn-sm btn-primary w-100">
+                                        <i class="ri-shopping-cart-2-line"></i> Pilih Paket
+                                    </a>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            @endforeach
+        </div>
+    @endif
+
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-body p-3">
             <form method="GET" action="{{ route('dashboard.package.index') }}" class="row g-2 align-items-center">
+                @if ($selectedBranchId)
+                    <input type="hidden" name="branch_office_id" value="{{ $selectedBranchId }}">
+                @endif
                 <div class="col-12 col-md">
                     <div class="input-group">
                         <span class="input-group-text bg-transparent border-end-0">
@@ -153,7 +206,7 @@
             ];
         @endphp
 
-        <div class="row g-4">
+        <div class="row g-4" id="paket">
             @foreach ($packages as $package)
                 @php
                     $isFeatured = (bool) $package->is_featured;
@@ -165,9 +218,9 @@
                                 <span class="package-badge">TERPOPULER</span>
                             @endif
 
-                            @if ($package->categoryApplication)
-                                <span class="badge bg-primary-subtle text-primary fw-medium mb-2 align-self-start">
-                                    {{ $package->categoryApplication->name }}
+                            @if ($package->categoryNames() !== '')
+                                <span class="badge bg-primary-subtle text-primary fw-medium mb-2 align-self-start text-wrap text-start">
+                                    {{ $package->categoryNames() }}
                                 </span>
                             @endif
 
@@ -179,7 +232,7 @@
                             </div>
                             <p class="text-muted fs-13 mb-3">per {{ $package->duration }} hari</p>
 
-                            <a href="{{ route('dashboard.package.checkout', $package->id) }}"
+                            <a href="{{ route('dashboard.package.checkout', array_filter(['package' => $package->id, 'branch_office_id' => $selectedBranchId])) }}"
                                 class="btn {{ $isFeatured ? 'btn-primary' : 'btn-outline-primary' }} w-100 mb-3">
                                 <i class="ri-shopping-cart-2-line"></i> Pilih Package
                             </a>

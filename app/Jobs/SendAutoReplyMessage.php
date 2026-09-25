@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Exceptions\PackageLimitExceededException;
+use App\Models\JadwalReminderSetting;
 use App\Models\WaMessageAutoReply;
 use App\Services\Chat\AutoReplyTagResolver;
 use App\Services\Chat\BroadcastThrottleService;
@@ -87,7 +88,7 @@ class SendAutoReplyMessage implements ShouldQueue
         // whose package has since expired.
         if ($rule->company) {
             try {
-                $packageLimits->requireActivePackage($rule->company);
+                $packageLimits->requireActivePackage($rule->company, $packageLimits->branchForDevice($rule->device_id), JadwalReminderSetting::CHAT_CATEGORY_NAMES);
             } catch (PackageLimitExceededException $e) {
                 $this->markFailed($rule, $e->getMessage());
 

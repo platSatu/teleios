@@ -18,7 +18,7 @@
             <table class="table table-sm table-borderless mb-0">
                 <tr>
                     <td class="text-muted" style="width: 25%">Kategori</td>
-                    <td>{{ $package->categoryApplication->name ?? '-' }}</td>
+                    <td>{{ $package->categoryNames() ?: '-' }}</td>
                 </tr>
                 <tr>
                     <td class="text-muted">Deskripsi</td>

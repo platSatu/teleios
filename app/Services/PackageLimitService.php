@@ -6,157 +6,158 @@ use App\Exceptions\PackageLimitExceededException;
 use App\Models\BranchOffice;
 use App\Models\Company;
 use App\Models\CompanyLimitUsage;
+use App\Models\JadwalReminderSetting;
 use App\Models\LimitMetric;
 use App\Models\Package;
 use App\Models\PackageLimit;
 use App\Models\Subscription;
 use App\Models\Voucher;
 use App\Notifications\PackageLimitExhaustedNotification;
+use App\Services\Chat\DeviceDirectory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 /**
- * The one place that knows how to answer "is this company still allowed
- * to do X?" for any App\Models\LimitMetric on any App\Models\Package —
- * built generic on purpose (see the migrations' docblocks) so a future
- * application beyond WhatsApp/Konexa can reuse this exact service by
- * just registering its own LimitMetric rows and attaching PackageLimit
- * values to its own packages, without touching this class.
+ * Satu-satunya tempat yang menjawab "apakah company/branch ini masih boleh
+ * melakukan X?" untuk App\Models\LimitMetric mana pun di App\Models\Package
+ * mana pun.
  *
- * Two ways a metric is measured, per LimitMetric::metric_type:
- *   - 'consumable' — a running counter (App\Models\CompanyLimitUsage.
- *     used_value) that only resets when a new Subscription becomes
- *     active. Callers report usage via consume() after the action
- *     actually happens (e.g. a broadcast message really sent).
- *   - 'stock' — measured live against reality via a caller-supplied
- *     count callback (e.g. WaPhoneBook::count()) rather than a
- *     separately-tracked number, so it can never drift.
+ * PAKET BERLAKU PER BRANCH (alur Company -> Branch -> Paket, 25 September
+ * 2026). Hampir semua method menerima ?BranchOffice $branch:
+ *   - diisi  -> hanya voucher/paket milik branch itu yang dihitung, dan
+ *               counter kuota (CompanyLimitUsage) juga milik branch itu.
+ *   - null   -> perilaku lama tingkat company: voucher aktif milik branch
+ *               mana pun, counter kuota tingkat company. Hanya dipakai
+ *               untuk pengecekan kasar ("company ini masih pelanggan?")
+ *               di tempat yang memang tidak tahu branch-nya; pengecekan
+ *               pengiriman WA yang sebenarnya selalu per branch device
+ *               (lihat App\Services\Chat\InboxService::guardPackageLimit()).
+ *
+ * Dua cara metric diukur, per LimitMetric::metric_type:
+ *   - 'consumable' -- counter berjalan (CompanyLimitUsage.used_value) per
+ *     subscription; reset hanya saat subscription baru aktif.
+ *   - 'stock' -- dihitung live dari data sebenarnya lewat callback dari
+ *     pemanggil (mis. jumlah kontak), jadi tidak pernah melenceng.
  */
 class PackageLimitService
 {
-    /**
-     * The company's currently valid, redeemed voucher — same "active
-     * package" definition App\Http\Middleware\EnsureActivePackage uses,
-     * but resolved by company_id directly (a Voucher already carries
-     * one) rather than via the billing user, since usage/limits are
-     * naturally a per-company concept.
-     */
-    public function resolveActiveVoucher(Company $company): ?Voucher
+    public function __construct(protected DeviceDirectory $devices)
     {
-        return Voucher::where('company_id', $company->id)
-            ->where('status', 'active')
-            ->whereNotNull('valid_from')
-            ->whereNotNull('valid_until')
-            ->where('valid_from', '<=', now())
-            ->where('valid_until', '>=', now())
+    }
+
+    /**
+     * Voucher yang sedang berlaku untuk company (dan branch, kalau diisi).
+     * Yang terbaru menang kalau ada lebih dari satu.
+     */
+    public function resolveActiveVoucher(Company $company, ?BranchOffice $branch = null): ?Voucher
+    {
+        return $this->activeVouchers($company, $branch)
             ->latest('valid_from')
             ->first();
     }
 
-    public function activePackage(Company $company): ?Package
+    public function activePackage(Company $company, ?BranchOffice $branch = null): ?Package
     {
-        return $this->resolveActiveVoucher($company)?->package;
+        return $this->resolveActiveVoucher($company, $branch)?->package;
     }
 
-    public function activeSubscription(Company $company): ?Subscription
+    public function activeSubscription(Company $company, ?BranchOffice $branch = null): ?Subscription
     {
-        return $this->resolveActiveVoucher($company)?->subscription;
+        return $this->resolveActiveVoucher($company, $branch)?->subscription;
     }
 
     /**
-     * Category-SCOPED version of activePackage()/requireActivePackage()
-     * above -- those two only ask "does this company have ANY active
-     * package at all", which is deliberately what App\Http\Middleware     * EnsureActivePackage's Chat gate still uses today (see that
-     * class's docblock: existing category_applications aren't reliably
-     * tagged across every customer's package yet, so filtering the
-     * long-standing Chat gate by category risks locking out already-
-     * paying customers). A brand-new, category-gated feature has no
-     * such legacy customers to break, so it can safely ask the sharper
-     * question from day one: "does this company have an active package
-     * that belongs to one of THESE categories specifically" -- e.g.
-     * App\Models\JadwalReminderSetting::CHAT_CATEGORY_NAMES, so a
-     * company that only ever bought a "Jadwal" package (no "Chat"/
-     * "WhatsApp" category) never gets treated as WhatsApp-entitled.
+     * Apakah company/branch punya paket aktif yang MENCAKUP salah satu
+     * layanan bernama $categoryNames (mis. JadwalReminderSetting::
+     * CHAT_CATEGORY_NAMES). Cakupan dibaca dari pivot paket (paket bisa
+     * multi-layanan) maupun category utamanya -- lihat
+     * Package::scopeCoveringCategoryNames().
      *
-     * Same active-voucher shape as resolveActiveVoucher() above, plus
-     * the category_application.name filter -- mirrors exactly how
-     * EnsureActivePackage's own optional category argument is matched,
-     * INCLUDING its backward-compat fallback (Tahap 4): a package never
-     * tagged with any category (category_application_id still NULL --
-     * every package that existed before category tagging was a thing)
-     * counts as passing this filter too, same reasoning as
-     * EnsureActivePackage's docblock. In practice this means a
-     * long-time WhatsApp customer's untagged package keeps working for
-     * Jadwal reminders exactly like it already does for Chat, without
-     * needing anyone to go back and manually tag it first.
+     * @param  array<int, string>  $categoryNames
      */
-    public function hasActiveCategoryPackage(Company $company, array $categoryNames): bool
+    public function hasActiveCategoryPackage(Company $company, array $categoryNames, ?BranchOffice $branch = null): bool
     {
-        return Voucher::where('company_id', $company->id)
-            ->where('status', 'active')
-            ->whereNotNull('valid_from')
-            ->whereNotNull('valid_until')
-            ->where('valid_from', '<=', now())
-            ->where('valid_until', '>=', now())
-            ->where(function ($q) use ($categoryNames) {
-                $q->whereHas(
-                    'package.categoryApplication',
-                    fn ($qq) => $qq->whereIn('name', $categoryNames)
-                )
-                    ->orWhereDoesntHave('package.categoryApplication');
-            })
+        return $this->activeVouchers($company, $branch)
+            ->whereHas('package', fn (Builder $q) => $q->coveringCategoryNames($categoryNames))
             ->exists();
     }
 
     /**
-     * Throws PackageLimitExceededException if the company has NO active
-     * package at all right now — deliberately the opposite failure mode
-     * from assertWithinLimit()/reserve()/consume() below, which all
-     * fail OPEN (silently allow) when there's no active package, because
-     * they're answering "is this specific metric capped by the package
-     * the company has?", not "does this company have a package at all?".
-     * That fail-open is correct for e.g. a metric nobody's configured a
-     * PackageLimit for yet — but it's the wrong answer for "should this
-     * company's WhatsApp messages keep going out after their package
-     * expired", which is exactly what this method is for.
+     * Melempar PackageLimitExceededException ('active_package') kalau
+     * company/branch tidak punya paket aktif -- atau, kalau $categoryNames
+     * diisi, tidak punya paket aktif yang mencakup layanan itu.
      *
-     * Why this needs to exist as its own check rather than just relying
-     * on assertWithinLimit('broadcast_send', ...): App\Http\Middleware\
-     * EnsureActivePackage already blocks an expired company from the
-     * dashboard UI, but it's HTTP middleware — it never runs for
-     * App\Console\Commands\DispatchDueWaMessageSchedules (a scheduled
-     * artisan command) or the queue jobs it dispatches
-     * (App\Jobs\SendScheduledWaMessage, SendAutoReplyMessage,
-     * SendAiBotReply). A schedule created while the package was active
-     * keeps being picked up by cron and sent forever afterwards unless
-     * something inside those jobs themselves checks this. Call this
-     * before every send in those jobs, in ADDITION to (not instead of)
-     * the existing reserve()/BroadcastThrottleService checks — this
-     * answers "are they still a customer at all", those answer "have
-     * they used up what they're entitled to this period".
+     * Kebalikan dari assertWithinLimit()/reserve() yang fail-OPEN saat
+     * tidak ada paket: method ini menjawab "masih pelanggan atau tidak",
+     * bukan "kuota metric ini sudah habis atau belum". Dipanggil job/
+     * command (yang tidak lewat middleware HTTP) sebelum mengirim WA.
+     *
+     * @param  array<int, string>|null  $categoryNames
      */
-    public function requireActivePackage(Company $company): void
+    public function requireActivePackage(Company $company, ?BranchOffice $branch = null, ?array $categoryNames = null): void
     {
-        if ($this->activePackage($company) === null) {
-            $this->recordBreach();
+        $active = $categoryNames === null
+            ? $this->activePackage($company, $branch) !== null
+            : $this->hasActiveCategoryPackage($company, $categoryNames, $branch);
 
-            throw new PackageLimitExceededException(
-                'Masa aktif package perusahaan ini sudah habis. Redeem voucher atau beli package baru untuk melanjutkan pengiriman WhatsApp.',
-                'active_package'
-            );
+        if ($active) {
+            return;
         }
+
+        $this->recordBreach();
+
+        throw new PackageLimitExceededException(
+            $branch
+                ? "Branch {$branch->name} tidak memiliki paket aktif untuk layanan ini. Perpanjang atau beli paket untuk branch tersebut."
+                : 'Masa aktif package perusahaan ini sudah habis. Redeem voucher atau beli package baru untuk melanjutkan pengiriman WhatsApp.',
+            'active_package'
+        );
     }
 
     /**
-     * CLAUDE.md checklist #10 — increments App\Services\
-     * PlatformAlertService's rolling counter at the single choke point
-     * every PackageLimitExceededException passes through, rather than
-     * relying on each of this exception's ~8 scattered catch-site callers
-     * to log consistently (investigated first: several don't log at all
-     * today). Resolved via app() rather than constructor-injected — a
-     * constructor dependency here would be circular, since
-     * PlatformAlertService itself depends on InboxService, which depends
-     * on THIS class.
+     * Branch pemilik sebuah device WhatsApp (wa_devices.branch_office_id,
+     * di-cache singkat oleh DeviceDirectory). Null kalau device belum
+     * terpasang ke branch mana pun.
+     */
+    public function branchForDevice(?string $deviceId): ?BranchOffice
+    {
+        if (! $deviceId) {
+            return null;
+        }
+
+        $branchId = $this->devices->scopeFor($deviceId)['branch_office_id'] ?? null;
+
+        return $branchId ? BranchOffice::find($branchId) : null;
+    }
+
+    /**
+     * Company pemilik sebuah device WhatsApp, atau null.
+     */
+    public function companyForDevice(?string $deviceId): ?Company
+    {
+        $companyId = $deviceId ? $this->devices->companyFor($deviceId) : null;
+
+        return $companyId ? Company::find($companyId) : null;
+    }
+
+    /**
+     * Shortcut untuk pengecekan pengiriman WA: device ini boleh mengirim
+     * kalau branch-nya punya paket aktif yang mencakup layanan Chat.
+     */
+    public function deviceHasActiveChatPackage(Company $company, ?string $deviceId): bool
+    {
+        $branch = $this->branchForDevice($deviceId);
+
+        return $branch !== null
+            && $this->hasActiveCategoryPackage($company, JadwalReminderSetting::CHAT_CATEGORY_NAMES, $branch);
+    }
+
+    /**
+     * CLAUDE.md checklist #10 -- satu titik penghitung setiap
+     * PackageLimitExceededException (lihat PlatformAlertService). Di-resolve
+     * lewat app() karena PlatformAlertService bergantung ke InboxService
+     * yang bergantung ke class ini (circular kalau lewat constructor).
      */
     private function recordBreach(): void
     {
@@ -164,11 +165,8 @@ class PackageLimitService
     }
 
     /**
-     * The catalog row for a metric key, preferring one scoped to the
-     * given product/application (if any) and falling back to a global
-     * (category_application_id = null) row with the same key — this is
-     * what lets a metric key like "contact_count" be reused as-is by a
-     * future application instead of every product needing its own copy.
+     * Baris katalog metric untuk sebuah key, memprioritaskan yang terikat
+     * ke category tertentu lalu fallback ke metric global (tanpa category).
      */
     public function metricByKey(string $key, ?string $categoryApplicationId = null): ?LimitMetric
     {
@@ -186,130 +184,48 @@ class PackageLimitService
     }
 
     /**
-     * The max_value the company's active package sets for this metric,
-     * or null if there's no active package, no LimitMetric registered
-     * for this key, or the package simply doesn't cap this metric —
-     * every one of those cases means "unlimited", never "blocked".
+     * Limit (max_value) yang dipasang paket aktif company/branch untuk
+     * metric ini, atau null (= unlimited: tidak ada paket aktif, atau paket
+     * tidak membatasi metric ini).
      */
-    public function limitFor(Company $company, string $metricKey): ?PackageLimit
+    public function limitFor(Company $company, string $metricKey, ?BranchOffice $branch = null): ?PackageLimit
     {
-        $package = $this->activePackage($company);
+        $package = $this->activePackage($company, $branch);
 
-        if (! $package) {
-            return null;
-        }
-
-        $metric = $this->metricByKey($metricKey, $package->category_application_id);
-
-        if (! $metric) {
-            return null;
-        }
-
-        return PackageLimit::where('package_id', $package->id)
-            ->where('limit_metric_id', $metric->id)
-            ->first();
+        return $package ? $this->packageLimitFor($package, $metricKey) : null;
     }
 
     /**
-     * The counter row for a consumable metric, scoped to the company's
-     * currently active subscription — created on first use. Wrapped in a
-     * locked transaction (same lockForUpdate() convention App\Helpers\
-     * CrudAdmin uses) so two near-simultaneous actions can't both read
-     * "1 remaining" and both go through.
-     */
-    protected function usageRow(Company $company, LimitMetric $metric, ?BranchOffice $branch, ?Subscription $subscription): CompanyLimitUsage
-    {
-        return DB::transaction(fn () => $this->lockOrCreateUsage($company, $metric, $branch, $subscription));
-    }
-
-    /**
-     * Fetches (with a row lock) or creates the counter row for one
-     * (company, branch, metric, subscription) combination — MUST be
-     * called from inside an existing DB::transaction(), never on its
-     * own. `lockForUpdate()` only locks rows that already exist, so it
-     * can't by itself stop two simultaneous callers from both trying to
-     * create the FIRST row for a brand new combination; the retry below
-     * catches that race via the `usage_key` unique constraint (see the
-     * company_limit_usages migration's docblock) instead of letting a
-     * duplicate slip through or the whole operation blow up.
-     */
-    protected function lockOrCreateUsage(Company $company, LimitMetric $metric, ?BranchOffice $branch, ?Subscription $subscription): CompanyLimitUsage
-    {
-        $find = fn () => CompanyLimitUsage::where('company_id', $company->id)
-            ->where('branch_office_id', $branch?->id)
-            ->where('limit_metric_id', $metric->id)
-            ->where('subscription_id', $subscription?->id)
-            ->lockForUpdate()
-            ->first();
-
-        $row = $find();
-
-        if ($row) {
-            return $row;
-        }
-
-        try {
-            return CompanyLimitUsage::create([
-                'company_id' => $company->id,
-                'branch_office_id' => $branch?->id,
-                'limit_metric_id' => $metric->id,
-                'subscription_id' => $subscription?->id,
-                'used_value' => 0,
-                'period_start' => $subscription?->start_date,
-                'period_end' => $subscription?->end_date,
-            ]);
-        } catch (QueryException $e) {
-            // Lost the race for the first row on this combination —
-            // someone else's transaction created (and committed) it a
-            // moment ago. Fetch and lock theirs instead of failing.
-            $row = $find();
-
-            if ($row) {
-                return $row;
-            }
-
-            throw $e;
-        }
-    }
-
-    /**
-     * How many of this metric the company can still use — null means
-     * unlimited (no active package, or the package doesn't cap this
-     * metric). For a 'stock' metric, $liveCountResolver must be supplied
-     * (returns the current real count); ignored for 'consumable'.
+     * Sisa jatah metric ini -- null berarti unlimited. Untuk metric 'stock'
+     * $liveCountResolver wajib diisi (mengembalikan jumlah sekarang).
      */
     public function remaining(Company $company, string $metricKey, ?BranchOffice $branch = null, ?callable $liveCountResolver = null): ?int
     {
-        $packageLimit = $this->limitFor($company, $metricKey);
+        [$packageLimit, $subscription] = $this->limitAndSubscription($company, $metricKey, $branch);
 
         if (! $packageLimit) {
             return null;
         }
 
-        $metric = $packageLimit->limitMetric;
-
-        if ($metric->isStock()) {
+        if ($packageLimit->limitMetric->isStock()) {
             $used = $liveCountResolver ? (int) $liveCountResolver() : 0;
 
             return max(0, $packageLimit->max_value - $used);
         }
 
-        $usage = $this->usageRow($company, $metric, $branch, $this->activeSubscription($company));
+        $usage = $this->usageRow($company, $packageLimit->limitMetric, $branch, $subscription);
 
         return max(0, $packageLimit->max_value - $usage->used_value);
     }
 
     /**
-     * Throws App\Exceptions\PackageLimitExceededException if performing
-     * this action ($amount units of $metricKey) would exceed the
-     * company's active package limit. Does nothing (silently allows) if
-     * there's no active package or no limit registered — this is a
-     * deliberate fail-open so a company simply never sees a block until
-     * a superadmin actually configures a limit for their package.
+     * Melempar PackageLimitExceededException kalau tindakan ini ($amount
+     * unit $metricKey) melampaui limit paket aktif. Fail-open (diizinkan)
+     * kalau tidak ada paket aktif atau metric-nya tidak dibatasi.
      */
     public function assertWithinLimit(Company $company, string $metricKey, int $amount = 1, ?BranchOffice $branch = null, ?callable $liveCountResolver = null): void
     {
-        $packageLimit = $this->limitFor($company, $metricKey);
+        [$packageLimit, $subscription] = $this->limitAndSubscription($company, $metricKey, $branch);
 
         if (! $packageLimit) {
             return;
@@ -332,109 +248,56 @@ class PackageLimitService
             return;
         }
 
-        $subscription = $this->activeSubscription($company);
         $usage = $this->usageRow($company, $metric, $branch, $subscription);
 
         if ($usage->used_value + $amount > $packageLimit->max_value) {
             $this->notifyExhausted($company, $metric, $usage, $packageLimit->max_value);
             $this->recordBreach();
 
-            throw new PackageLimitExceededException(
-                "Kuota {$metric->name} paket Anda untuk periode ini sudah habis ({$usage->used_value}/{$packageLimit->max_value} {$metric->unit}). Beli/upgrade paket untuk melanjutkan.",
-                $metricKey
-            );
+            throw $this->quotaExhausted($metric, $usage, $packageLimit);
         }
     }
 
     /**
-     * Records that $amount units of a 'consumable' metric were actually
-     * used — call this AFTER the action succeeds (e.g. a broadcast
-     * message really went out), never before, so a failed action never
-     * eats into the company's quota. No-op for 'stock' metrics (their
-     * usage is always measured live, never stored).
+     * Catat pemakaian SETELAH tindakannya benar-benar terjadi. Tidak
+     * melempar kalau melewati limit (pakai reserve() untuk itu).
      */
     public function consume(Company $company, string $metricKey, int $amount = 1, ?BranchOffice $branch = null): void
     {
-        $package = $this->activePackage($company);
+        [$packageLimit, $subscription] = $this->limitAndSubscription($company, $metricKey, $branch);
 
-        if (! $package) {
+        if (! $packageLimit || ! $packageLimit->limitMetric->isConsumable()) {
             return;
         }
 
-        $metric = $this->metricByKey($metricKey, $package->category_application_id);
-
-        if (! $metric || ! $metric->isConsumable()) {
-            return;
-        }
-
-        $subscription = $this->activeSubscription($company);
-
-        DB::transaction(function () use ($company, $metric, $branch, $subscription, $amount) {
-            $usage = $this->lockOrCreateUsage($company, $metric, $branch, $subscription);
-            $usage->increment('used_value', $amount);
+        DB::transaction(function () use ($company, $packageLimit, $branch, $subscription, $amount) {
+            $this->lockOrCreateUsage($company, $packageLimit->limitMetric, $branch, $subscription)
+                ->increment('used_value', $amount);
         });
     }
 
     /**
-     * Atomically checks AND consumes $amount units of a 'consumable'
-     * metric in one locked transaction — unlike a separate
-     * assertWithinLimit() + consume() pair (still fine for simple
-     * synchronous actions like a single form submit), this closes the
-     * check-then-consume race a highly concurrent caller would otherwise
-     * hit — e.g. many App\Jobs\SendScheduledWaMessage jobs for the same
-     * company running across several queue workers at once, all reading
-     * "still room" before any of them writes back. `lockForUpdate()`
-     * inside the same transaction as the increment means a second
-     * concurrent caller blocks until the first one's write commits,
-     * instead of both reading a stale count.
-     *
-     * Call this immediately before the action that actually spends the
-     * quota (e.g. right before the network send), and call release() if
-     * that action then fails, so a retried/failed attempt never
-     * permanently burns quota it never actually used.
-     *
-     * Throws PackageLimitExceededException — without reserving anything
-     * — if there's no room left. Fails open (reserves nothing, no error)
-     * if there's no active package, no LimitMetric for this key, no
-     * PackageLimit configured, or the metric isn't 'consumable' (a
-     * 'stock' metric has no counter to reserve against — use
-     * assertWithinLimit() with a live-count resolver for those instead).
+     * Cek + potong kuota consumable dalam SATU transaksi terkunci
+     * (lockForUpdate), supaya dua pengiriman bersamaan tidak sama-sama
+     * lolos di "sisa 1". Pasangan release() kalau pengirimannya gagal.
      */
     public function reserve(Company $company, string $metricKey, int $amount = 1, ?BranchOffice $branch = null): void
     {
-        $package = $this->activePackage($company);
+        [$packageLimit, $subscription] = $this->limitAndSubscription($company, $metricKey, $branch);
 
-        if (! $package) {
+        if (! $packageLimit || ! $packageLimit->limitMetric->isConsumable()) {
             return;
         }
 
-        $metric = $this->metricByKey($metricKey, $package->category_application_id);
-
-        if (! $metric || ! $metric->isConsumable()) {
-            return;
-        }
-
-        $packageLimit = PackageLimit::where('package_id', $package->id)
-            ->where('limit_metric_id', $metric->id)
-            ->first();
-
-        if (! $packageLimit) {
-            return;
-        }
-
-        $subscription = $this->activeSubscription($company);
-
-        DB::transaction(function () use ($company, $metric, $branch, $subscription, $amount, $packageLimit) {
+        DB::transaction(function () use ($company, $packageLimit, $branch, $subscription, $amount) {
+            $metric = $packageLimit->limitMetric;
             $usage = $this->lockOrCreateUsage($company, $metric, $branch, $subscription);
 
             if ($usage->used_value + $amount > $packageLimit->max_value) {
                 $this->notifyExhausted($company, $metric, $usage, $packageLimit->max_value);
                 $this->recordBreach();
 
-                throw new PackageLimitExceededException(
-                    "Kuota {$metric->name} paket Anda untuk periode ini sudah habis ({$usage->used_value}/{$packageLimit->max_value} {$metric->unit}). Beli/upgrade paket untuk melanjutkan.",
-                    $metric->key
-                );
+                throw $this->quotaExhausted($metric, $usage, $packageLimit);
             }
 
             $usage->increment('used_value', $amount);
@@ -442,34 +305,20 @@ class PackageLimitService
     }
 
     /**
-     * Gives back a reservation made by reserve() — call this when the
-     * action it was guarding ultimately failed (e.g. the WhatsApp send
-     * threw and will be retried, or failed for good), so quota is only
-     * ever permanently spent on something that actually happened. No-op
-     * for the same fail-open cases as reserve(); floors at 0 rather than
-     * going negative.
+     * Kembalikan reservasi reserve() saat pengiriman yang menyusul gagal.
+     * Aman dipanggil walau reserve() tidak memotong apa pun; tidak pernah
+     * membuat counter negatif.
      */
     public function release(Company $company, string $metricKey, int $amount = 1, ?BranchOffice $branch = null): void
     {
-        $package = $this->activePackage($company);
+        [$packageLimit, $subscription] = $this->limitAndSubscription($company, $metricKey, $branch);
 
-        if (! $package) {
+        if (! $packageLimit || ! $packageLimit->limitMetric->isConsumable()) {
             return;
         }
 
-        $metric = $this->metricByKey($metricKey, $package->category_application_id);
-
-        if (! $metric || ! $metric->isConsumable()) {
-            return;
-        }
-
-        $subscription = $this->activeSubscription($company);
-
-        DB::transaction(function () use ($company, $metric, $branch, $subscription, $amount) {
-            $usage = CompanyLimitUsage::where('company_id', $company->id)
-                ->where('branch_office_id', $branch?->id)
-                ->where('limit_metric_id', $metric->id)
-                ->where('subscription_id', $subscription?->id)
+        DB::transaction(function () use ($company, $packageLimit, $branch, $subscription, $amount) {
+            $usage = $this->usageQuery($company, $packageLimit->limitMetric, $branch, $subscription)
                 ->lockForUpdate()
                 ->first();
 
@@ -480,10 +329,8 @@ class PackageLimitService
     }
 
     /**
-     * Emails the company owner once per exhaustion (throttled via
-     * `notified_at` — only sent again if the row's notified_at is still
-     * null, i.e. not yet notified for this subscription period), rather
-     * than on every single blocked attempt.
+     * Kirim notifikasi "kuota habis" ke owner company, maksimal sekali per
+     * periode (notified_at).
      */
     public function notifyExhausted(Company $company, LimitMetric $metric, CompanyLimitUsage $usage, int $maxValue): void
     {
@@ -491,40 +338,31 @@ class PackageLimitService
             return;
         }
 
-        $owner = $company->user;
-
-        if ($owner) {
-            $owner->notify(new PackageLimitExhaustedNotification($metric->name, $metric->unit, $maxValue));
-        }
+        $company->user?->notify(new PackageLimitExhaustedNotification($metric->name, $metric->unit, $maxValue));
 
         $usage->forceFill(['notified_at' => now()])->save();
     }
 
     /**
-     * Purchased vs used vs remaining for every metric the company's
-     * active package caps — powers the company-facing usage report page
-     * (dashboard.package.usage). $liveCountResolvers is an optional
-     * [metric_key => callable] map the caller supplies for 'stock'
-     * metrics it knows how to count live (e.g. 'contact_count' =>
-     * fn() => WaPhoneBook::where(...)->count()); a stock metric with no
-     * resolver supplied shows as "unknown" (null) rather than a
-     * misleading 0.
+     * Semua limit paket aktif company/branch beserta pemakaiannya -- untuk
+     * halaman pemakaian paket. $liveCountResolvers: [metric_key => callable]
+     * untuk metric 'stock'; metric stock tanpa resolver tampil null
+     * ("tidak diketahui"), bukan 0 yang menyesatkan.
      *
      * @param  array<string, callable>  $liveCountResolvers
      * @return array<int, array{metric: LimitMetric, max_value: int, used: ?int, remaining: ?int, period_start: ?\Illuminate\Support\Carbon, period_end: ?\Illuminate\Support\Carbon}>
      */
     public function usageReport(Company $company, ?BranchOffice $branch = null, array $liveCountResolvers = []): array
     {
-        $package = $this->activePackage($company);
+        $voucher = $this->resolveActiveVoucher($company, $branch);
 
-        if (! $package) {
+        if (! $voucher?->package) {
             return [];
         }
 
-        $subscription = $this->activeSubscription($company);
-        $limits = PackageLimit::with('limitMetric')->where('package_id', $package->id)->get();
+        $limits = PackageLimit::with('limitMetric')->where('package_id', $voucher->package_id)->get();
 
-        return $limits->map(function (PackageLimit $packageLimit) use ($company, $branch, $subscription, $liveCountResolvers) {
+        return $limits->map(function (PackageLimit $packageLimit) use ($company, $branch, $voucher, $liveCountResolvers) {
             $metric = $packageLimit->limitMetric;
 
             if ($metric->isStock()) {
@@ -542,7 +380,7 @@ class PackageLimitService
                 ];
             }
 
-            $usage = $this->usageRow($company, $metric, $branch, $subscription);
+            $usage = $this->usageRow($company, $metric, $branch, $voucher->subscription);
 
             return [
                 'metric' => $metric,
@@ -553,5 +391,105 @@ class PackageLimitService
                 'period_end' => $usage->period_end,
             ];
         })->all();
+    }
+
+    /**
+     * Query dasar voucher aktif company, dipersempit ke satu branch kalau
+     * $branch diisi.
+     */
+    protected function activeVouchers(Company $company, ?BranchOffice $branch): Builder
+    {
+        return Voucher::query()
+            ->currentlyActive()
+            ->where('company_id', $company->id)
+            ->when($branch, fn (Builder $q) => $q->where('branch_office_id', $branch->id));
+    }
+
+    /**
+     * PackageLimit paket ini untuk metric ber-key $metricKey. Dicari lewat
+     * limit yang benar-benar dipasang di paket (bukan lewat category
+     * utama), jadi paket multi-layanan dan metric dari category mana pun
+     * tetap terbaca selama superadmin memasangnya di paket itu.
+     */
+    protected function packageLimitFor(Package $package, string $metricKey): ?PackageLimit
+    {
+        return PackageLimit::with('limitMetric')
+            ->where('package_id', $package->id)
+            ->whereHas('limitMetric', fn (Builder $q) => $q->where('key', $metricKey)->where('status', 'active'))
+            ->first();
+    }
+
+    /**
+     * @return array{0: ?PackageLimit, 1: ?Subscription}
+     */
+    protected function limitAndSubscription(Company $company, string $metricKey, ?BranchOffice $branch): array
+    {
+        $voucher = $this->resolveActiveVoucher($company, $branch);
+
+        if (! $voucher?->package) {
+            return [null, null];
+        }
+
+        return [$this->packageLimitFor($voucher->package, $metricKey), $voucher->subscription];
+    }
+
+    protected function quotaExhausted(LimitMetric $metric, CompanyLimitUsage $usage, PackageLimit $packageLimit): PackageLimitExceededException
+    {
+        return new PackageLimitExceededException(
+            "Kuota {$metric->name} paket Anda untuk periode ini sudah habis ({$usage->used_value}/{$packageLimit->max_value} {$metric->unit}). Beli/perpanjang paket untuk melanjutkan.",
+            $metric->key
+        );
+    }
+
+    /**
+     * Counter consumable satu (company, branch, metric, subscription),
+     * dibuat saat pertama dipakai.
+     */
+    protected function usageRow(Company $company, LimitMetric $metric, ?BranchOffice $branch, ?Subscription $subscription): CompanyLimitUsage
+    {
+        return DB::transaction(fn () => $this->lockOrCreateUsage($company, $metric, $branch, $subscription));
+    }
+
+    protected function usageQuery(Company $company, LimitMetric $metric, ?BranchOffice $branch, ?Subscription $subscription): Builder
+    {
+        return CompanyLimitUsage::where('company_id', $company->id)
+            ->where('branch_office_id', $branch?->id)
+            ->where('limit_metric_id', $metric->id)
+            ->where('subscription_id', $subscription?->id);
+    }
+
+    /**
+     * Ambil (dengan row lock) atau buat counter -- WAJIB dipanggil di
+     * dalam DB::transaction(). lockForUpdate() tidak bisa mengunci baris
+     * yang belum ada, jadi balapan INSERT pertama ditangkap lewat unique
+     * constraint usage_key (lihat migration company_limit_usages).
+     */
+    protected function lockOrCreateUsage(Company $company, LimitMetric $metric, ?BranchOffice $branch, ?Subscription $subscription): CompanyLimitUsage
+    {
+        $find = fn () => $this->usageQuery($company, $metric, $branch, $subscription)->lockForUpdate()->first();
+
+        if ($row = $find()) {
+            return $row;
+        }
+
+        try {
+            return CompanyLimitUsage::create([
+                'company_id' => $company->id,
+                'branch_office_id' => $branch?->id,
+                'limit_metric_id' => $metric->id,
+                'subscription_id' => $subscription?->id,
+                'used_value' => 0,
+                'period_start' => $subscription?->start_date,
+                'period_end' => $subscription?->end_date,
+            ]);
+        } catch (QueryException $e) {
+            // Kalah balapan baris pertama -- transaksi lain baru saja
+            // membuatnya. Ambil & kunci milik mereka.
+            if ($row = $find()) {
+                return $row;
+            }
+
+            throw $e;
+        }
     }
 }

@@ -17,7 +17,7 @@
     // their data. Bounce back to Company (where the "Beli Package"
     // nudge lives) instead of leaving $activeTab pointed at markup
     // that's about to render as hidden.
-    if (! $hasActivePackage && in_array($activeTab, ['branch-office', 'unit-divisi', 'users', 'roles', 'applications'])) {
+    if (! $hasActivePackage && in_array($activeTab, ['unit-divisi', 'users', 'roles', 'applications'])) {
         $activeTab = 'company';
     }
 
@@ -77,7 +77,8 @@
                 class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
                 <div>
                     <i class="ri-lock-2-line me-1"></i>
-                    Menu <strong>Branch Office</strong>, <strong>Unit/Divisi</strong>, <strong>Setting Users</strong>,
+                    Buat <strong>Branch Office</strong> dulu, lalu beli paket untuk branch tersebut. Menu
+                    <strong>Unit/Divisi</strong>, <strong>Setting Users</strong>,
                     <strong>Roles</strong>, dan <strong>Applications</strong>
                     baru aktif setelah Anda memiliki package yang masih berlaku.
                 </div>
@@ -120,7 +121,7 @@
                          or if no superadmin has catalogued it yet
                          (fail-open, same rule as the 'menu.access'
                          middleware actually guarding these routes). --}}
-                    @if ($hasActivePackage && $canAccessBranchOfficeTab)
+                    @if ($canAccessBranchOfficeTab)
                         <li class="nav-item" role="presentation">
                             <a class="nav-link text-nowrap {{ $activeTab === 'branch-office' ? 'active' : '' }}"
                                 id="tab-branch-office-btn" data-bs-toggle="tab" href="#tab-branch-office"
@@ -369,7 +370,7 @@
                     {{-- ============================= --}}
                     {{-- TAB: BRANCH OFFICE (requires an active package + canAccessBranchOfficeTab) --}}
                     {{-- ============================= --}}
-                    @if ($hasActivePackage && $canAccessBranchOfficeTab)
+                    @if ($canAccessBranchOfficeTab)
                     <div class="tab-pane fade {{ $activeTab === 'branch-office' ? 'show active' : '' }}"
                         id="tab-branch-office" role="tabpanel">
 

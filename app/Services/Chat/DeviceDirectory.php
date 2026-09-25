@@ -58,6 +58,27 @@ class DeviceDirectory
     }
 
     /** Convenience shortcut when only the company is needed. */
+    /**
+     * Pasang device ke sebuah branch kalau belum terpasang. Device yang
+     * dibuat OWNER lewat backend Go tidak membawa branch (Go hanya
+     * mengisi branch dari membership staff), padahal paket & kuota
+     * berlaku per branch -- jadi Laravel memasangkan branch aktif owner
+     * begitu device dibuat (Chat\ConnectDeviceController::add()). Tidak
+     * pernah memindahkan device yang sudah punya branch.
+     */
+    public function assignBranchIfMissing(string $deviceId, string $companyId, string $branchOfficeId): void
+    {
+        $updated = DB::table('wa_devices')
+            ->where('id', $deviceId)
+            ->where('company_id', $companyId)
+            ->whereNull('branch_office_id')
+            ->update(['branch_office_id' => $branchOfficeId]);
+
+        if ($updated) {
+            Cache::forget("wa-device-scope:{$deviceId}");
+        }
+    }
+
     public function companyFor(string $deviceId): ?string
     {
         return $this->scopeFor($deviceId)['company_id'];

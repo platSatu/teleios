@@ -25,6 +25,16 @@
                             <input type="text" name="kode_voucher" id="kode_voucher" class="form-control text-uppercase"
                                 placeholder="Contoh: A1B2C3D4E5" value="{{ old('kode_voucher') }}" required>
                         </div>
+                        <div class="mb-3">
+                            <label for="branch_office_id" class="form-label">Untuk Branch</label>
+                            <select name="branch_office_id" id="branch_office_id" class="form-select">
+                                <option value="">— Pilih branch —</option>
+                                @foreach ($branches as $branch)
+                                    <option value="{{ $branch->id }}" @selected(old('branch_office_id') === $branch->id)>{{ $branch->name }}</option>
+                                @endforeach
+                            </select>
+                            <div class="form-text">Wajib untuk voucher yang belum terikat branch. Voucher hasil pembelian paket otomatis memakai branch yang dipilih saat checkout.</div>
+                        </div>
                         <button type="submit" class="btn btn-primary w-100">
                             <i class="ri-check-double-line"></i> Redeem Sekarang
                         </button>
@@ -43,6 +53,7 @@
                                 <tr>
                                     <th>Kode</th>
                                     <th>Package</th>
+                                    <th>Branch</th>
                                     <th>Durasi</th>
                                     <th class="text-end">Action</th>
                                 </tr>
@@ -53,13 +64,22 @@
                                         <td><code>{{ $item->kode_voucher }}</code></td>
                                         <td>
                                             {{ $item->package?->name ?? '-' }}
-                                            <div class="text-muted small">{{ $item->package?->categoryApplication?->name }}</div>
+                                            <div class="text-muted small">{{ $item->package?->categoryNames() }}</div>
                                         </td>
+                                        <td>{{ $item->branchOffice?->name ?? '-' }}</td>
                                         <td>{{ $item->package?->duration ?? '-' }} hari</td>
                                         <td class="text-end">
                                             <form action="{{ route('dashboard.voucher-redeem.store') }}" method="POST">
                                                 @csrf
                                                 <input type="hidden" name="kode_voucher" value="{{ $item->kode_voucher }}">
+                                                @unless ($item->branch_office_id)
+                                                    <select name="branch_office_id" class="form-select form-select-sm mb-1" required aria-label="Pilih branch">
+                                                        <option value="">Pilih branch</option>
+                                                        @foreach ($branches as $branch)
+                                                            <option value="{{ $branch->id }}">{{ $branch->name }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                @endunless
                                                 <button type="submit" class="btn btn-outline-primary btn-sm">
                                                     <i class="ri-check-line"></i> Redeem
                                                 </button>
@@ -68,7 +88,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="4" class="text-center text-muted py-4">Tidak ada voucher yang menunggu redeem.</td>
+                                        <td colspan="5" class="text-center text-muted py-4">Tidak ada voucher yang menunggu redeem.</td>
                                     </tr>
                                 @endforelse
                             </tbody>
@@ -86,6 +106,7 @@
                                 <tr>
                                     <th>Kode</th>
                                     <th>Package</th>
+                                    <th>Branch</th>
                                     <th>Berlaku Sampai</th>
                                 </tr>
                             </thead>
@@ -94,6 +115,7 @@
                                     <tr>
                                         <td><code>{{ $item->kode_voucher }}</code></td>
                                         <td>{{ $item->package?->name ?? '-' }}</td>
+                                        <td>{{ $item->branchOffice?->name ?? '-' }}</td>
                                         <td>
                                             {{ optional($item->valid_until)->format('d M Y H:i') }}
                                             @if ($item->valid_until && $item->valid_until->isPast())
@@ -105,7 +127,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="3" class="text-center text-muted py-4">Belum ada voucher aktif.</td>
+                                        <td colspan="4" class="text-center text-muted py-4">Belum ada voucher aktif.</td>
                                     </tr>
                                 @endforelse
                             </tbody>

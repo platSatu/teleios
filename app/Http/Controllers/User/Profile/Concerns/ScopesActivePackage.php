@@ -28,23 +28,16 @@ trait ScopesActivePackage
      */
     protected function activeCategoryApplicationIds(string $userId): Collection
     {
+        // Semua layanan dari SEMUA paket aktif company (lintas branch) --
+        // dipakai layar setup tim (role, anggota, menu per role), yang
+        // memang tingkat company. Paket bisa multi-layanan, jadi id
+        // diambil dari Package::categoryIds() (pivot + category utama).
         return Voucher::query()
+            ->currentlyActive()
             ->where('user_id', $userId)
-            ->where('status', 'active')
-            // Same defense-in-depth as EnsureActivePackage: a 'pending'
-            // (never redeemed) voucher already fails status='active', but
-            // valid_from/valid_until are checked explicitly too so an
-            // incomplete row can never slip through, and a voucher whose
-            // window hasn't started yet (valid_from in the future) isn't
-            // counted either.
-            ->whereNotNull('valid_from')
-            ->whereNotNull('valid_until')
-            ->where('valid_from', '<=', now())
-            ->where('valid_until', '>=', now())
-            ->with('package')
+            ->with('package.categoryApplications')
             ->get()
-            ->pluck('package.category_application_id')
-            ->filter()
+            ->flatMap(fn (Voucher $voucher) => $voucher->package?->categoryIds() ?? [])
             ->unique()
             ->values();
     }
