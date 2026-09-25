@@ -105,6 +105,35 @@ class Package extends Model
     }
 
     /**
+     * Perkiraan jumlah bulan dari durasi (30 -> 1, 180 -> 6, 365 -> 12).
+     */
+    public function months(): int
+    {
+        return max(1, (int) round($this->duration / 30.4));
+    }
+
+    /**
+     * Label durasi untuk tampilan: "Trial 3 Hari", "6 Bulan", "12 Bulan",
+     * atau "N Hari" untuk durasi di bawah 28 hari.
+     */
+    public function durationLabel(): string
+    {
+        if ($this->is_trial) {
+            return "Trial {$this->duration} Hari";
+        }
+
+        return $this->duration < 28 ? "{$this->duration} Hari" : $this->months().' Bulan';
+    }
+
+    /**
+     * Harga setara per bulan (0 untuk paket gratis).
+     */
+    public function monthlyPrice(): float
+    {
+        return (float) $this->price / $this->months();
+    }
+
+    /**
      * Numeric usage ceilings this package sets (see App\Models\
      * PackageLimit / App\Services\PackageLimitService) — a package with
      * no rows here is unlimited on every metric.
