@@ -28,6 +28,7 @@
                 <table class="table table-centered table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
+                            <th style="width: 110px;">Urutan</th>
                             <th>Pertanyaan</th>
                             <th>Jawaban</th>
                             <th>User</th>
@@ -38,6 +39,14 @@
                     <tbody>
                         @forelse ($faqs as $item)
                             <tr>
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="fw-semibold">{{ $item->sort_order }}</span>
+                                        @unless (request('search'))
+                                            @include('superadmin.web.home-sections._move', ['route' => 'web.faqs.move', 'id' => $item->id, 'first' => $loop->first && $faqs->onFirstPage(), 'last' => $loop->last && ! $faqs->hasMorePages()])
+                                        @endunless
+                                    </div>
+                                </td>
                                 <td class="fw-semibold">{{ $item->name }}</td>
                                 <td class="text-muted">{{ \Illuminate\Support\Str::limit(strip_tags($item->descriptions), 80) }}</td>
                                 <td>{{ $item->user->name ?? '-' }}</td>
@@ -63,7 +72,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="text-center text-muted py-4">Belum ada FAQ.</td>
+                                <td colspan="6" class="text-center text-muted py-4">Belum ada FAQ.</td>
                             </tr>
                         @endforelse
                     </tbody>

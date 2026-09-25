@@ -24,6 +24,7 @@ class WebFaq extends Model
         'name',
         'descriptions',
         'status',
+        'sort_order',
     ];
 
     protected static function boot()

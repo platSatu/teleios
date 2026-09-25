@@ -96,6 +96,8 @@ use App\Http\Controllers\Superadmin\Web\TermConditionController as WebTermCondit
 use App\Http\Controllers\Superadmin\Web\HeaderController as WebHeaderController;
 use App\Http\Controllers\Superadmin\Web\SettingController as WebSettingController;
 use App\Http\Controllers\Superadmin\Web\FeatureController as WebFeatureController;
+use App\Http\Controllers\Superadmin\Web\HomeSectionController as WebHomeSectionController;
+use App\Http\Controllers\Superadmin\Web\HomeSectionItemController as WebHomeSectionItemController;
 use App\Http\Controllers\Superadmin\Web\FooterController as WebFooterController;
 use App\Http\Controllers\Superadmin\WaTemplateReviewController;
 
@@ -1855,6 +1857,7 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
                     Route::get('/{id}/edit', 'edit')->name('web.faqs.edit');
                     Route::put('/{id}', 'update')->name('web.faqs.update');
                     Route::delete('/{id}', 'destroy')->name('web.faqs.destroy');
+                    Route::post('/{id}/move/{direction}', 'move')->whereIn('direction', ['up', 'down'])->name('web.faqs.move');
                 });
 
             Route::prefix('term-conditions')
@@ -1926,6 +1929,32 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
                     Route::get('/{id}/edit', 'edit')->name('web.features.edit');
                     Route::put('/{id}', 'update')->name('web.features.update');
                     Route::delete('/{id}', 'destroy')->name('web.features.destroy');
+                    Route::post('/{id}/move/{direction}', 'move')->whereIn('direction', ['up', 'down'])->name('web.features.move');
+                });
+
+            // Susunan beranda fe-konexa (App\Models\WebHomeSection) --
+            // urutan section (tombol naik/turun), tampil/sembunyi, bingkai,
+            // dan item section tambahan (App\Models\WebHomeSectionItem).
+            Route::prefix('home-sections')
+                ->controller(WebHomeSectionController::class)
+                ->group(function () {
+                    Route::get('/', 'index')->name('web.home-sections.index');
+                    Route::get('/create', 'create')->name('web.home-sections.create');
+                    Route::post('/create', 'store')->name('web.home-sections.store');
+                    Route::get('/{id}/edit', 'edit')->name('web.home-sections.edit');
+                    Route::put('/{id}', 'update')->name('web.home-sections.update');
+                    Route::delete('/{id}', 'destroy')->name('web.home-sections.destroy');
+                    Route::post('/{id}/move/{direction}', 'move')->whereIn('direction', ['up', 'down'])->name('web.home-sections.move');
+                });
+
+            Route::controller(WebHomeSectionItemController::class)
+                ->group(function () {
+                    Route::get('/home-sections/{section}/items/create', 'create')->name('web.home-sections.items.create');
+                    Route::post('/home-sections/{section}/items', 'store')->name('web.home-sections.items.store');
+                    Route::get('/home-section-items/{id}/edit', 'edit')->name('web.home-section-items.edit');
+                    Route::put('/home-section-items/{id}', 'update')->name('web.home-section-items.update');
+                    Route::delete('/home-section-items/{id}', 'destroy')->name('web.home-section-items.destroy');
+                    Route::post('/home-section-items/{id}/move/{direction}', 'move')->whereIn('direction', ['up', 'down'])->name('web.home-section-items.move');
                 });
 
             // Blok link footer (App\Models\WebFooter) — flat list, hanya

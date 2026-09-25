@@ -28,6 +28,7 @@
                 <table class="table table-centered table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
+                            <th style="width: 110px;">Urutan</th>
                             <th>Gambar</th>
                             <th>Nama</th>
                             <th>Deskripsi</th>
@@ -39,6 +40,14 @@
                     <tbody>
                         @forelse ($features as $item)
                             <tr>
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="fw-semibold">{{ $item->sort_order }}</span>
+                                        @unless (request('search'))
+                                            @include('superadmin.web.home-sections._move', ['route' => 'web.features.move', 'id' => $item->id, 'first' => $loop->first && $features->onFirstPage(), 'last' => $loop->last && ! $features->hasMorePages()])
+                                        @endunless
+                                    </div>
+                                </td>
                                 <td>
                                     @if ($item->images)
                                         <img src="{{ $item->images_url }}" alt="{{ $item->name }}" style="width: 56px; height: 56px; object-fit: cover;" class="rounded border">
@@ -71,7 +80,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="text-center text-muted py-4">Belum ada fitur.</td>
+                                <td colspan="7" class="text-center text-muted py-4">Belum ada fitur.</td>
                             </tr>
                         @endforelse
                     </tbody>

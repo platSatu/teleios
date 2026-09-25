@@ -7,6 +7,7 @@ use App\Helpers\WebImageUploader;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\WebFeature;
+use App\Support\SortOrder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -29,12 +30,19 @@ class FeatureController extends Controller
 
     public function index(Request $request): View
     {
-        $features = CrudAdmin::getAll(
-            modelClass: WebFeature::class,
-            relations: ['user'],
-            search: $request->string('search')->value() ?: null,
-            searchFields: ['name', 'description'],
-        );
+        $search = $request->string('search')->value();
+
+        // Urut sort_order (bisa diatur dengan tombol naik/turun). Sengaja
+        // tidak lewat CrudAdmin::getAll() yang selalu urut created_at desc;
+        // route ini sudah di belakang middleware 'superadmin'.
+        $features = WebFeature::with('user')
+            ->when($search, fn ($query) => $query->where(fn ($q) => $q
+                ->where('name', 'like', "%{$search}%")
+                ->orWhere('description', 'like', "%{$search}%")))
+            ->orderBy('sort_order')
+            ->orderBy('created_at')
+            ->paginate(50)
+            ->withQueryString();
 
         return view('superadmin.web.features.index', compact('features'));
     }
@@ -53,6 +61,8 @@ class FeatureController extends Controller
         if ($request->hasFile('images')) {
             $validated['images'] = WebImageUploader::upload($request->file('images'), self::IMAGE_SUBDIRECTORY);
         }
+
+        $validated['sort_order'] = SortOrder::next(WebFeature::query());
 
         CrudAdmin::store(WebFeature::class, $validated);
 
@@ -104,6 +114,13 @@ class FeatureController extends Controller
         return redirect()
             ->route('web.features.index')
             ->with('success', 'Fitur berhasil dihapus.');
+    }
+
+    public function move(string $id, string $direction): RedirectResponse
+    {
+        SortOrder::move(WebFeature::findOrFail($id), $direction, WebFeature::query());
+
+        return back();
     }
 
     /**

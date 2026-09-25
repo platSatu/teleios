@@ -6,6 +6,7 @@ use App\Helpers\CrudAdmin;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\WebFaq;
+use App\Support\SortOrder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -19,12 +20,19 @@ class FaqController extends Controller
 {
     public function index(Request $request): View
     {
-        $faqs = CrudAdmin::getAll(
-            modelClass: WebFaq::class,
-            relations: ['user'],
-            search: $request->string('search')->value() ?: null,
-            searchFields: ['name', 'descriptions'],
-        );
+        $search = $request->string('search')->value();
+
+        // Urut sort_order (bisa diatur dengan tombol naik/turun). Sengaja
+        // tidak lewat CrudAdmin::getAll() yang selalu urut created_at desc;
+        // route ini sudah di belakang middleware 'superadmin'.
+        $faqs = WebFaq::with('user')
+            ->when($search, fn ($query) => $query->where(fn ($q) => $q
+                ->where('name', 'like', "%{$search}%")
+                ->orWhere('descriptions', 'like', "%{$search}%")))
+            ->orderBy('sort_order')
+            ->orderBy('created_at')
+            ->paginate(50)
+            ->withQueryString();
 
         return view('superadmin.web.faqs.index', compact('faqs'));
     }
@@ -39,6 +47,8 @@ class FaqController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $validated = $this->validated($request);
+
+        $validated['sort_order'] = SortOrder::next(WebFaq::query());
 
         CrudAdmin::store(WebFaq::class, $validated);
 
@@ -73,6 +83,13 @@ class FaqController extends Controller
         return redirect()
             ->route('web.faqs.index')
             ->with('success', 'FAQ berhasil dihapus.');
+    }
+
+    public function move(string $id, string $direction): RedirectResponse
+    {
+        SortOrder::move(WebFaq::findOrFail($id), $direction, WebFaq::query());
+
+        return back();
     }
 
     /**

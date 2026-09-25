@@ -741,6 +741,11 @@
                                 </a>
                             </li>
                             <li class="pe-slide-item">
+                                <a href="{{ route('web.home-sections.index') }}" class="pe-nav-link">
+                                    Susunan Beranda
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
                                 <a href="{{ route('web.features.index') }}" class="pe-nav-link">
                                     Fitur
                                 </a>

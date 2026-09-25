@@ -25,6 +25,7 @@ class FeatureController extends Controller
     {
         $features = WebFeature::query()
             ->where('status', 'active')
+            ->orderBy('sort_order')
             ->orderBy('created_at')
             ->get(['id', 'name', 'description', 'images'])
             ->append('images_url');

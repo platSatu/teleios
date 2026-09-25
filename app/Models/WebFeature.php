@@ -28,6 +28,7 @@ class WebFeature extends Model
         'description',
         'images',
         'status',
+        'sort_order',
     ];
 
     protected static function boot()

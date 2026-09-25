@@ -25,6 +25,7 @@ class FaqController extends Controller
     {
         $faqs = WebFaq::query()
             ->where('status', 'active')
+            ->orderBy('sort_order')
             ->orderBy('name')
             ->get(['id', 'name', 'descriptions']);
 
