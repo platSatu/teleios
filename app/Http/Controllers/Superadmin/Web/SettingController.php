@@ -46,6 +46,7 @@ class SettingController extends Controller
             'handphone' => ['nullable', 'string', 'max:30'],
             'email' => ['nullable', 'email', 'max:255'],
             'address' => ['nullable', 'string', 'max:1000'],
+            'company_name' => ['nullable', 'string', 'max:255'],
             'google_tag' => ['nullable', 'string', 'max:50'],
             'google_analytics' => ['nullable', 'string', 'max:50'],
             'gmaps' => ['nullable', 'string', 'max:2000'],

@@ -748,7 +748,14 @@
                             <li class="pe-slide-item">
                                 <a href="{{ route('web.contact-messages.index') }}" class="pe-nav-link d-flex align-items-center justify-content-between">
                                     Pesan Masuk
-                                    @php $newContactMessages = \App\Models\WebContactMessage::where('status', 'new')->count(); @endphp
+                                    @php
+                                        // Tahan error: kalau tabel belum ada (migrate belum jalan), menu tetap terbuka.
+                                        try {
+                                            $newContactMessages = \App\Models\WebContactMessage::where('status', 'new')->count();
+                                        } catch (\Throwable) {
+                                            $newContactMessages = 0;
+                                        }
+                                    @endphp
                                     @if ($newContactMessages > 0)
                                         <span class="badge bg-danger rounded-pill ms-2">{{ $newContactMessages }}</span>
                                     @endif

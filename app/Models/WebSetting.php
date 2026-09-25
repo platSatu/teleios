@@ -31,6 +31,7 @@ class WebSetting extends Model
         'handphone',
         'email',
         'address',
+        'company_name',
         'google_tag',
         'google_analytics',
         'gmaps',

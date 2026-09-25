@@ -102,6 +102,12 @@
                                             <textarea name="address" id="address" class="form-control" rows="2">{{ old('address', $setting->address) }}</textarea>
                                         </div>
 
+                                        <div class="mb-3">
+                                            <label for="company_name" class="form-label">Nama Perusahaan (PT)</label>
+                                            <input type="text" name="company_name" id="company_name" class="form-control" maxlength="255" placeholder="mis. PT Bizbos Teknologi Indonesia" value="{{ old('company_name', $setting->company_name) }}">
+                                            <div class="form-text">Opsional. Tampil di baris copyright footer website ("© {{ date('Y') }} PT ... All rights reserved."). Kosongkan untuk menampilkan "Bizbos".</div>
+                                        </div>
+
                                         <hr class="my-3">
                                         <h6 class="text-muted mb-3">Tracking &amp; Maps</h6>
 
