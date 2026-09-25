@@ -22,3 +22,10 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# File lokal (tidak ikut ke repo)
+/CLAUDE.md
+/buku-pintar-konexa-tanya-jawab-kasus.docx
+/panduan-menu-chat-konexa.docx
+/perbandingan_fitur_teleios.xlsx
+/_to_delete/
