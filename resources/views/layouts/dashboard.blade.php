@@ -37,7 +37,7 @@
     @endphp
 
     <meta charset="utf-8" />
-    <title>{{ $pageTitle }} | Konexa | Dashboard </title>
+    <title>{{ $pageTitle }} | Bizbos | Dashboard </title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta content="Konexa Dashboard adalah platform manajemen yang membantu Anda mengelola data, memantau aktivitas, dan meningkatkan produktivitas melalui dashboard yang cepat, aman, dan mudah digunakan." name="description" />
     <meta name="keywords" content="Konexa, Dashboard, Manajemen, Sistem Informasi, Monitoring, Data, Laporan, Aplikasi Bisnis, ERP, CRM" />

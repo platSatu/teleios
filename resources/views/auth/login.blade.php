@@ -4,10 +4,10 @@
 <head>
 
     <meta charset="utf-8" />
-    <title>Sign In | Konexa - Login</title>
+    <title>Sign In | Bizbos - Login</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta name="description" content="Masuk ke akun Konexa untuk mengakses dashboard, mengelola data, memantau aktivitas, dan menggunakan berbagai fitur yang dirancang untuk meningkatkan produktivitas Anda." />
-    <meta content="SRBThemes" name="konexa" />
+    <meta name="description" content="Masuk ke akun Bizbos untuk mengakses dashboard, mengelola data, memantau aktivitas, dan menggunakan berbagai fitur yang dirancang untuk meningkatkan produktivitas Anda." />
+    <meta content="SRBThemes" name="bizbos" />
 
     <!-- layout setup -->
     <script type="module" src="{{ asset('be') }}/assets/js/layout-setup.js"></script>
@@ -46,9 +46,9 @@
             <div class="login-section bg-white rounded-4 p-6 px-xl-12">
                 <a href="{{ route('login') }}"
                     class="d-flex justify-content-end align-items-center gap-2 logo-main mt-lg-2 mb-10">
-                    <img height="33" width="33" class="logo-dark" alt="Logo Konexa"
+                    <img height="33" width="33" class="logo-dark" alt="Logo Bizbos"
                         src="{{ asset('be') }}/assets/images/favicon.png">
-                    <h3 class="mb-0 lh-base fw-semibold">Konexa</h3>
+                    <h3 class="mb-0 lh-base fw-semibold">Bizbos</h3>
                 </a>
                 <div class="mb-6">
                     <h5 class="mb-2">Welcome Back</h5>

@@ -4,10 +4,10 @@
 <head>
 
     <meta charset="utf-8" />
-    <title>Sign Up | Konexa - Register</title>
+    <title>Sign Up | Bizbos - Register</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta name="description" content="Daftar akun Konexa sekarang untuk mengakses dashboard yang aman, mengelola data dengan lebih mudah, memantau aktivitas, dan meningkatkan produktivitas dalam satu platform." />
-    <meta content="SRBThemes" name="konexa" />
+    <meta name="description" content="Daftar akun Bizbos sekarang untuk mengakses dashboard yang aman, mengelola data dengan lebih mudah, memantau aktivitas, dan meningkatkan produktivitas dalam satu platform." />
+    <meta content="SRBThemes" name="bizbos" />
 
     <!-- layout setup -->
     <script type="module" src="{{ asset('be') }}/assets/js/layout-setup.js"></script>

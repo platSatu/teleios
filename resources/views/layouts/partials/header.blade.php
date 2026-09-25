@@ -5,7 +5,7 @@
                 <a href="index.html" class="align-items-center logo-main d-none me-5 gap-2">
                     <img height="33" width="33" class="logo-dark" alt="Dark Logo"
                         src="{{ asset('be') }}/assets/images/favicon.png">
-                    <h3 class="text-white text-opacity-80 mb-0 lh-base fw-semibold">Konexa</h3>
+                    <h3 class="text-white text-opacity-80 mb-0 lh-base fw-semibold">Bizbos</h3>
                 </a>
                 <button type="button" class="vertical-toggle btn text-muted rounded-circle icon-btn" id="toggleSidebar"
                     aria-label="Toggle Sidebar">

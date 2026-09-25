@@ -4,7 +4,7 @@
 <head>
 
     <meta charset="utf-8" />
-    <title>Forgot Password | Konexa - Forgot Password</title>
+    <title>Forgot Password | Bizbos - Forgot Password</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta content="Bootstrap Admin & Dashboard Template" name="description" />
     <meta content="SRBThemes" name="author" />
@@ -41,14 +41,14 @@
         <div
             class="main-wrapper border bg-white rounded-4 d-flex flex-column flex-lg-row gap-xl-5 position-relative overflow-hidden w-100 shadow">
             <div class="decoration-section m-5 bg-dark-subtle rounded-3 me-0 mb-0 mb-lg-5 overflow-hidden">
-                <img src="{{ asset('be') }}/images/login.jpg" alt="Konexa" class="w-100 h-100" style="object-fit: cover;">
+                <img src="{{ asset('be') }}/images/login.jpg" alt="Bizbos" class="w-100 h-100" style="object-fit: cover;">
             </div>
             <div class="login-section bg-white rounded-4 p-6 px-xl-12">
                 <a href="{{ route('login') }}"
                     class="d-flex justify-content-end align-items-center gap-2 logo-main mt-lg-2 mb-5 mb-lg-0">
                     <img height="33" width="33" class="logo-dark" alt="Dark Logo"
                         src="{{ asset('be') }}/assets/images/favicon.png">
-                    <h3 class="mb-0 lh-base fw-semibold">Konexa</h3>
+                    <h3 class="mb-0 lh-base fw-semibold">Bizbos</h3>
                 </a>
                 <div class="d-flex flex-column justify-content-center h-100 ">
                     <div class="mb-12">

@@ -4,7 +4,7 @@
         <a href="{{ route('dashboard') }}" class="d-flex gap-2 logo-main">
             <img height="33" width="33" class="logo-dark" alt="Dark Logo"
                 src="{{ asset('be') }}/assets/images/favicon.png">
-            <h3 class="text-white text-opacity-80 mb-0 lh-base fw-semibold">Konexa</h3>
+            <h3 class="text-white text-opacity-80 mb-0 lh-base fw-semibold">Bizbos</h3>
         </a>
         <button type="button" id="sidebarDefaultArrow"
             class="btn btn-sm p-0 fs-4 ms-auto float-end d-none icon-hover-btn text-white text-opacity-60 d-none"><i

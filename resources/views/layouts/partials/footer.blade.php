@@ -3,9 +3,9 @@
          <div class="d-flex justify-content-between align-items-center gap-2">
              <script>
                  document.write(new Date().getFullYear())
-             </script> © Konexa.
+             </script> © PT KREACIPTA SOLUSI DIGITAL
              <div class="text-sm-end d-none d-sm-block">
-                 Design & Develop by Konexa
+                 Design & Develop by Bizbos
              </div>
          </div>
      </div>
