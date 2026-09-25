@@ -97,6 +97,7 @@ use App\Http\Controllers\Superadmin\Web\HeaderController as WebHeaderController;
 use App\Http\Controllers\Superadmin\Web\SettingController as WebSettingController;
 use App\Http\Controllers\Superadmin\Web\FeatureController as WebFeatureController;
 use App\Http\Controllers\Superadmin\Web\HomeSectionController as WebHomeSectionController;
+use App\Http\Controllers\Superadmin\Web\ContactMessageController as WebContactMessageController;
 use App\Http\Controllers\Superadmin\Web\HomeSectionItemController as WebHomeSectionItemController;
 use App\Http\Controllers\Superadmin\Web\FooterController as WebFooterController;
 use App\Http\Controllers\Superadmin\WaTemplateReviewController;
@@ -1945,6 +1946,16 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
                     Route::put('/{id}', 'update')->name('web.home-sections.update');
                     Route::delete('/{id}', 'destroy')->name('web.home-sections.destroy');
                     Route::post('/{id}/move/{direction}', 'move')->whereIn('direction', ['up', 'down'])->name('web.home-sections.move');
+                });
+
+            // Pesan dari form Kontak website (App\Models\WebContactMessage).
+            Route::prefix('contact-messages')
+                ->controller(WebContactMessageController::class)
+                ->group(function () {
+                    Route::get('/', 'index')->name('web.contact-messages.index');
+                    Route::get('/{id}', 'show')->name('web.contact-messages.show');
+                    Route::patch('/{id}/status', 'updateStatus')->name('web.contact-messages.status');
+                    Route::delete('/{id}', 'destroy')->name('web.contact-messages.destroy');
                 });
 
             Route::controller(WebHomeSectionItemController::class)

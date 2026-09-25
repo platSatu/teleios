@@ -746,6 +746,15 @@
                                 </a>
                             </li>
                             <li class="pe-slide-item">
+                                <a href="{{ route('web.contact-messages.index') }}" class="pe-nav-link d-flex align-items-center justify-content-between">
+                                    Pesan Masuk
+                                    @php $newContactMessages = \App\Models\WebContactMessage::where('status', 'new')->count(); @endphp
+                                    @if ($newContactMessages > 0)
+                                        <span class="badge bg-danger rounded-pill ms-2">{{ $newContactMessages }}</span>
+                                    @endif
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
                                 <a href="{{ route('web.features.index') }}" class="pe-nav-link">
                                     Fitur
                                 </a>

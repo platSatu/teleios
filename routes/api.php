@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\GoogleFormWebhookController;
 use App\Http\Controllers\Api\Frontend\ArticleController as FrontendArticleController;
 use App\Http\Controllers\Api\Frontend\CategoryApplicationController as FrontendCategoryApplicationController;
 use App\Http\Controllers\Api\Frontend\CategoryVideoController as FrontendCategoryVideoController;
+use App\Http\Controllers\Api\Frontend\ContactMessageController as FrontendContactMessageController;
 use App\Http\Controllers\Api\Frontend\FaqController as FrontendFaqController;
 use App\Http\Controllers\Api\Frontend\FeatureController as FrontendFeatureController;
 use App\Http\Controllers\Api\Frontend\FooterController as FrontendFooterController;
@@ -160,6 +161,12 @@ Route::prefix('frontend')->middleware('frontend.api-key')->group(function () {
     // lewat App\Http\Middleware\LogVisitorMiddleware di app itu. Gerbang
     // keamanannya sama persis dengan endpoint baca di atas (X-API-KEY),
     // jadi tidak bisa dipanggil bebas dari browser pengunjung.
+    // Form Kontak website -- throttle global sebagai lapis tambahan di
+    // atas batas per-IP pengunjung di ContactMessageController.
+    Route::post('/contact-messages', [FrontendContactMessageController::class, 'store'])
+        ->middleware('throttle:30,1')
+        ->name('api.frontend.contact-messages.store');
+
     Route::post('/visitor-log', [FrontendVisitorLogController::class, 'store'])
         ->name('api.frontend.visitor-log.store');
 });
