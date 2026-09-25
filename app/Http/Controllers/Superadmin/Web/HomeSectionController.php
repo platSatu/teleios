@@ -8,6 +8,7 @@ use App\Helpers\WebImageUploader;
 use App\Http\Controllers\Controller;
 use App\Models\WebCategoryArticle;
 use App\Models\WebHomeSection;
+use App\Models\WebPage;
 use App\Support\SortOrder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -16,7 +17,8 @@ use Illuminate\View\View;
 
 /**
  * Superadmin > Web > Susunan Beranda: section-section beranda fe-konexa
- * (urutan, tampil/sembunyi, bingkai, isi). Tipe section & field yang
+ * (urutan, tampil/sembunyi, bingkai, isi) -- juga dipakai untuk section
+ * halaman landing (web_page_id diisi; lihat PageController). Tipe section & field yang
  * berlaku per tipe ada di App\Models\WebHomeSection::TYPES; item section
  * tambahan dikelola HomeSectionItemController. Ditayangkan publik lewat
  * App\Http\Controllers\Api\Frontend\HomeSectionController.
@@ -30,23 +32,23 @@ class HomeSectionController extends Controller
 
     public function index(): View
     {
-        $sections = WebHomeSection::query()->withCount('items')->orderBy('sort_order')->orderBy('created_at')->get();
-        $usedBuiltins = $sections->filter(fn (WebHomeSection $section) => $section->isBuiltin())->pluck('type')->all();
+        $sections = WebHomeSection::query()->ofPage(null)->withCount('items')->orderBy('sort_order')->orderBy('created_at')->get();
 
-        return view('superadmin.web.home-sections.index', compact('sections', 'usedBuiltins'));
+        return view('superadmin.web.home-sections.index', compact('sections'));
     }
 
     public function create(Request $request): View|RedirectResponse
     {
         $type = (string) $request->query('type');
-        abort_unless(isset(WebHomeSection::TYPES[$type]), 404);
+        $page = $this->landingPage($request->query('page'));
+        abort_unless($page ? WebHomeSection::allowedOnPage($type) : isset(WebHomeSection::TYPES[$type]), 404);
 
-        if ($this->builtinTaken($type)) {
-            return redirect()->route('web.home-sections.index')->with('error', 'Section '.WebHomeSection::TYPES[$type]['label'].' sudah ada di beranda.');
+        if ($this->builtinTaken($type, $page?->id)) {
+            return $this->backToList($page?->id)->with('error', 'Section '.WebHomeSection::TYPES[$type]['label'].' sudah ada.');
         }
 
         return view('superadmin.web.home-sections.form', [
-            'section' => new WebHomeSection(['type' => $type, 'status' => 'active', 'background_type' => 'none', 'text_align' => 'center', 'media_position' => 'right', 'item_limit' => 3]),
+            'section' => new WebHomeSection(['type' => $type, 'web_page_id' => $page?->id, 'status' => 'active', 'background_type' => 'none', 'text_align' => 'center', 'media_position' => 'right', 'item_limit' => 3]),
             'categories' => WebCategoryArticle::orderBy('name')->get(['id', 'name']),
         ]);
     }
@@ -54,16 +56,18 @@ class HomeSectionController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $type = (string) $request->input('type');
-        abort_unless(isset(WebHomeSection::TYPES[$type]), 422);
+        $page = $this->landingPage($request->input('web_page_id'));
+        abort_unless($page ? WebHomeSection::allowedOnPage($type) : isset(WebHomeSection::TYPES[$type]), 422);
 
-        if ($this->builtinTaken($type)) {
-            return redirect()->route('web.home-sections.index')->with('error', 'Section '.WebHomeSection::TYPES[$type]['label'].' sudah ada di beranda.');
+        if ($this->builtinTaken($type, $page?->id)) {
+            return $this->backToList($page?->id)->with('error', 'Section '.WebHomeSection::TYPES[$type]['label'].' sudah ada.');
         }
 
         $section = new WebHomeSection(['type' => $type]);
         $data = $this->validated($request, $section) + [
             'type' => $type,
-            'sort_order' => SortOrder::next(WebHomeSection::query()),
+            'web_page_id' => $page?->id,
+            'sort_order' => SortOrder::next(WebHomeSection::query()->ofPage($page?->id)),
         ];
 
         $created = CrudAdmin::store(WebHomeSection::class, $data);
@@ -76,7 +80,7 @@ class HomeSectionController extends Controller
     public function edit(string $id): View
     {
         return view('superadmin.web.home-sections.form', [
-            'section' => CrudAdmin::find(WebHomeSection::class, $id, ['items']),
+            'section' => CrudAdmin::find(WebHomeSection::class, $id, ['items', 'page']),
             'categories' => WebCategoryArticle::orderBy('name')->get(['id', 'name']),
         ]);
     }
@@ -105,27 +109,48 @@ class HomeSectionController extends Controller
 
     public function destroy(string $id): RedirectResponse
     {
-        CrudAdmin::delete(WebHomeSection::class, $id, function (WebHomeSection $model) {
-            WebImageUploader::delete($model->background_image);
-            WebImageUploader::delete($model->media_image);
-            WebFileUploader::delete($model->background_video);
-            $model->items()->pluck('image')->each(fn (?string $path) => WebImageUploader::delete($path));
-        });
+        $pageId = CrudAdmin::find(WebHomeSection::class, $id)->web_page_id;
 
-        return redirect()->route('web.home-sections.index')->with('success', 'Section berhasil dihapus.');
+        CrudAdmin::delete(WebHomeSection::class, $id, fn (WebHomeSection $model) => $model->deleteFiles());
+
+        return $this->backToList($pageId)->with('success', 'Section berhasil dihapus.');
     }
 
     public function move(string $id, string $direction): RedirectResponse
     {
-        SortOrder::move(WebHomeSection::findOrFail($id), $direction, WebHomeSection::query());
+        $section = WebHomeSection::findOrFail($id);
+
+        SortOrder::move($section, $direction, WebHomeSection::query()->ofPage($section->web_page_id));
 
         return back();
     }
 
-    private function builtinTaken(string $type): bool
+    /**
+     * Section bawaan hanya boleh satu per beranda / per halaman.
+     */
+    private function builtinTaken(string $type, ?string $pageId): bool
     {
         return (WebHomeSection::TYPES[$type]['builtin'] ?? false)
-            && WebHomeSection::where('type', $type)->exists();
+            && WebHomeSection::ofPage($pageId)->where('type', $type)->exists();
+    }
+
+    private function landingPage(?string $pageId): ?WebPage
+    {
+        if (! $pageId) {
+            return null;
+        }
+
+        $page = WebPage::findOrFail($pageId);
+        abort_unless($page->isLanding(), 404);
+
+        return $page;
+    }
+
+    private function backToList(?string $pageId): RedirectResponse
+    {
+        return $pageId
+            ? redirect()->route('web.pages.edit', $pageId)
+            : redirect()->route('web.home-sections.index');
     }
 
     /**

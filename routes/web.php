@@ -98,6 +98,7 @@ use App\Http\Controllers\Superadmin\Web\SettingController as WebSettingControlle
 use App\Http\Controllers\Superadmin\Web\FeatureController as WebFeatureController;
 use App\Http\Controllers\Superadmin\Web\HomeSectionController as WebHomeSectionController;
 use App\Http\Controllers\Superadmin\Web\ContactMessageController as WebContactMessageController;
+use App\Http\Controllers\Superadmin\Web\PageController as WebPageController;
 use App\Http\Controllers\Superadmin\Web\HomeSectionItemController as WebHomeSectionItemController;
 use App\Http\Controllers\Superadmin\Web\FooterController as WebFooterController;
 use App\Http\Controllers\Superadmin\WaTemplateReviewController;
@@ -1946,6 +1947,18 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
                     Route::put('/{id}', 'update')->name('web.home-sections.update');
                     Route::delete('/{id}', 'destroy')->name('web.home-sections.destroy');
                     Route::post('/{id}/move/{direction}', 'move')->whereIn('direction', ['up', 'down'])->name('web.home-sections.move');
+                });
+
+            // Halaman dinamis website /page/{slug} (App\Models\WebPage).
+            Route::prefix('pages')
+                ->controller(WebPageController::class)
+                ->group(function () {
+                    Route::get('/', 'index')->name('web.pages.index');
+                    Route::get('/create', 'create')->name('web.pages.create');
+                    Route::post('/create', 'store')->name('web.pages.store');
+                    Route::get('/{id}/edit', 'edit')->name('web.pages.edit');
+                    Route::put('/{id}', 'update')->name('web.pages.update');
+                    Route::delete('/{id}', 'destroy')->name('web.pages.destroy');
                 });
 
             // Pesan dari form Kontak website (App\Models\WebContactMessage).

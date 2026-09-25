@@ -746,6 +746,11 @@
                                 </a>
                             </li>
                             <li class="pe-slide-item">
+                                <a href="{{ route('web.pages.index') }}" class="pe-nav-link">
+                                    Halaman
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
                                 <a href="{{ route('web.contact-messages.index') }}" class="pe-nav-link d-flex align-items-center justify-content-between">
                                     Pesan Masuk
                                     @php

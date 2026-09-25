@@ -10,7 +10,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Satu section di beranda fe-konexa (Superadmin > Web > Susunan Beranda).
+ * Satu section di beranda fe-konexa (Superadmin > Web > Susunan Beranda),
+ * atau di halaman landing (web_page_id diisi, Superadmin > Web > Halaman).
  *
  * Section BAWAAN (builtin) hanya menunjuk data dari menunya sendiri --
  * Headers, Pengaturan Web (running text), Packages, Fitur, FAQ -- dan
@@ -64,6 +65,7 @@ class WebHomeSection extends Model
     ];
 
     protected $fillable = [
+        'web_page_id',
         'type',
         'title',
         'subtitle',
@@ -93,6 +95,39 @@ class WebHomeSection extends Model
     public function items(): HasMany
     {
         return $this->hasMany(WebHomeSectionItem::class)->orderBy('sort_order')->orderBy('created_at');
+    }
+
+    public function page(): BelongsTo
+    {
+        return $this->belongsTo(WebPage::class, 'web_page_id');
+    }
+
+    /**
+     * Section milik beranda (null) atau milik satu halaman landing.
+     */
+    public function scopeOfPage($query, ?string $pageId)
+    {
+        return $pageId ? $query->where('web_page_id', $pageId) : $query->whereNull('web_page_id');
+    }
+
+    /**
+     * Tipe yang boleh dipasang di halaman landing: semua kecuali Hero &
+     * Running Text (milik beranda; halaman punya header sendiri).
+     */
+    public static function allowedOnPage(string $type): bool
+    {
+        return isset(self::TYPES[$type]) && ! in_array($type, ['hero', 'running_text'], true);
+    }
+
+    /**
+     * Hapus file upload section ini & item-nya.
+     */
+    public function deleteFiles(): void
+    {
+        WebImageUploader::delete($this->background_image);
+        WebImageUploader::delete($this->media_image);
+        WebFileUploader::delete($this->background_video);
+        $this->items()->pluck('image')->each(fn (?string $path) => WebImageUploader::delete($path));
     }
 
     public function articleCategory(): BelongsTo

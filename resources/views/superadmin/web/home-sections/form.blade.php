@@ -4,13 +4,17 @@
     @php
         $isEdit = $section->exists;
         $bgType = old('background_type', $section->background_type ?? 'none');
+        $backUrl = $section->web_page_id ? route('web.pages.edit', $section->web_page_id) : route('web.home-sections.index');
     @endphp
 
     <div class="row justify-content-center">
         <div class="col-xl-9">
             <div class="d-flex align-items-center gap-2 mb-3">
-                <a href="{{ route('web.home-sections.index') }}" class="btn btn-icon btn-outline-secondary btn-sm" title="Kembali"><i class="ri-arrow-left-line"></i></a>
-                <h4 class="mb-0">{{ $isEdit ? 'Edit' : 'Tambah' }} Section: {{ $section->label() }}</h4>
+                <a href="{{ $backUrl }}" class="btn btn-icon btn-outline-secondary btn-sm" title="Kembali"><i class="ri-arrow-left-line"></i></a>
+                <h4 class="mb-0">
+                    {{ $isEdit ? 'Edit' : 'Tambah' }} Section: {{ $section->label() }}
+                    <span class="text-muted fs-14 fw-normal">· {{ $section->web_page_id ? 'Halaman '.($section->page?->title ?? \App\Models\WebPage::find($section->web_page_id)?->title) : 'Beranda' }}</span>
+                </h4>
             </div>
 
             @include('components.notifikasi')
@@ -44,6 +48,9 @@
                             @method('PUT')
                         @else
                             <input type="hidden" name="type" value="{{ $section->type }}">
+                            @if ($section->web_page_id)
+                                <input type="hidden" name="web_page_id" value="{{ $section->web_page_id }}">
+                            @endif
                         @endif
 
                         @if ($section->hasFrame())
@@ -168,7 +175,7 @@
 
                         <div class="d-flex gap-2">
                             <button type="submit" class="btn btn-primary">Simpan</button>
-                            <a href="{{ route('web.home-sections.index') }}" class="btn btn-light">Kembali</a>
+                            <a href="{{ $backUrl }}" class="btn btn-light">Kembali</a>
                         </div>
                     </form>
                 </div>

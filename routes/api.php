@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\Frontend\FooterController as FrontendFooterControll
 use App\Http\Controllers\Api\Frontend\HeaderController as FrontendHeaderController;
 use App\Http\Controllers\Api\Frontend\HomeSectionController as FrontendHomeSectionController;
 use App\Http\Controllers\Api\Frontend\PackageController as FrontendPackageController;
+use App\Http\Controllers\Api\Frontend\PageController as FrontendPageController;
 use App\Http\Controllers\Api\Frontend\TermConditionController as FrontendTermConditionController;
 use App\Http\Controllers\Api\Frontend\VideoController as FrontendVideoController;
 use App\Http\Controllers\Api\Frontend\VisitorLogController as FrontendVisitorLogController;
@@ -155,6 +156,13 @@ Route::prefix('frontend')->middleware('frontend.api-key')->group(function () {
 
     Route::get('/home-sections', [FrontendHomeSectionController::class, 'index'])
         ->name('api.frontend.home-sections.index');
+
+    Route::get('/pages', [FrontendPageController::class, 'index'])
+        ->name('api.frontend.pages.index');
+
+    Route::get('/pages/{slug}', [FrontendPageController::class, 'show'])
+        ->where('slug', '[a-z0-9-]+')
+        ->name('api.frontend.pages.show');
 
     // Satu-satunya endpoint TULIS di grup ini (yang lain semua baca
     // katalog) — fe-konexa lapor tiap kunjungan halaman publik ke sini
