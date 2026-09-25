@@ -47,10 +47,10 @@ class PackageController extends Controller
                 // Semua layanan yang dicakup paket (paket bisa multi-layanan).
                 'categoryApplications:id,name',
                 'limits' => fn ($query) => $query->orderBy('max_value'),
-                'limits.limitMetric:id,key,name,unit',
+                'limits.limitMetric:id,key,name,unit,metric_type',
             ])
             ->orderBy('price')
-            ->get(['id', 'category_application_id', 'name', 'description', 'duration', 'price', 'is_featured']);
+            ->get(['id', 'category_application_id', 'name', 'description', 'duration', 'price', 'is_featured', 'is_trial']);
 
         return response()->json(['data' => $packages]);
     }
