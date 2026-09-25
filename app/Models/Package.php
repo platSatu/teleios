@@ -29,12 +29,14 @@ class Package extends Model
         'price',
         'status',
         'is_featured',
+        'is_trial',
     ];
 
     protected $casts = [
         'duration' => 'integer',
         'price' => 'decimal:2',
         'is_featured' => 'boolean',
+        'is_trial' => 'boolean',
     ];
 
     public function user(): BelongsTo

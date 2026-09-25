@@ -107,7 +107,7 @@
                             <div class="d-flex align-items-center justify-content-between mb-2">
                                 <span class="fw-semibold text-truncate"><i class="ri-store-2-line me-1"></i>{{ $statusBranch->name }}</span>
                                 @if ($statusVoucher)
-                                    <span class="badge bg-success-subtle text-success">Aktif</span>
+                                    <span class="badge bg-success-subtle text-success">{{ $statusVoucher->package?->is_trial ? 'Trial' : 'Aktif' }}</span>
                                 @else
                                     <span class="badge bg-secondary-subtle text-secondary">Belum berlangganan</span>
                                 @endif
@@ -120,7 +120,12 @@
                                 @endif
                             </p>
                             <div class="mt-auto">
-                                @if ($statusVoucher)
+                                @if ($statusVoucher?->package?->is_trial)
+                                    <a href="{{ route('dashboard.package.index', ['branch_office_id' => $statusBranch->id]) }}#paket"
+                                        class="btn btn-sm btn-primary w-100">
+                                        <i class="ri-vip-crown-line"></i> Pilih Paket Berbayar
+                                    </a>
+                                @elseif ($statusVoucher)
                                     <a href="{{ route('dashboard.package.checkout', ['package' => $statusVoucher->package_id, 'branch_office_id' => $statusBranch->id]) }}"
                                         class="btn btn-sm btn-outline-primary w-100">
                                         <i class="ri-refresh-line"></i> Perpanjang

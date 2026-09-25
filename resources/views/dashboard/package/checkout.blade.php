@@ -176,13 +176,14 @@
                                 @foreach ($branchOptions as $option)
                                     @php
                                         $activeVoucher = $option['voucher'];
-                                        $blocked = $activeVoucher && $activeVoucher->package_id !== $package->id;
+                                        $onTrial = (bool) $activeVoucher?->package?->is_trial;
+                                        $blocked = $activeVoucher && ! $onTrial && $activeVoucher->package_id !== $package->id;
                                     @endphp
                                     <option value="{{ $option['branch']->id }}" @disabled($blocked)
                                         @selected($selectedBranchId === $option['branch']->id)>
                                         {{ $option['branch']->name }}
                                         @if ($activeVoucher)
-                                            — {{ $activeVoucher->package?->name }} aktif s/d {{ $activeVoucher->valid_until->format('d M Y') }}{{ $blocked ? ' (tidak bisa diganti)' : ' (perpanjang)' }}
+                                            — {{ $activeVoucher->package?->name }} aktif s/d {{ $activeVoucher->valid_until->format('d M Y') }}{{ $blocked ? ' (tidak bisa diganti)' : ($onTrial && $activeVoucher->package_id !== $package->id ? ' (trial, langsung diganti)' : ' (perpanjang)') }}
                                         @else
                                             — belum berlangganan
                                         @endif

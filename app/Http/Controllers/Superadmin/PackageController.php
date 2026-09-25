@@ -107,6 +107,7 @@ class PackageController extends Controller
         // di form POST) tetap kebaca sebagai false alih-alih diam-diam
         // tidak berubah dari nilai lama saat update.
         $validated['is_featured'] = $request->boolean('is_featured');
+        $validated['is_trial'] = $request->boolean('is_trial');
 
         $categoryIds = array_values($validated['category_application_ids']);
         unset($validated['category_application_ids']);

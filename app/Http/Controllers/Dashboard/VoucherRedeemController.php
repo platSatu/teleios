@@ -166,6 +166,10 @@ class VoucherRedeemController extends Controller
                     'redeemed_at' => now(),
                 ]);
 
+                // Paket trial yang masih aktif di branch ini diganti paket
+                // baru (boleh langsung, tanpa menunggu trial habis).
+                $branchSubscriptions->endActiveTrials($branch, $voucher);
+
                 AuditLog::create([
                     'actor_type' => Auth::user()::class,
                     'actor_id' => Auth::id(),

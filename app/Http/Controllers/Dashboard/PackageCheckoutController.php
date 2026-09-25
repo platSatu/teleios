@@ -155,6 +155,10 @@ class PackageCheckoutController extends Controller
         try {
             $branch = $branchSubscriptions->branchOfCompanyOrFail($company, $request->input('branch_office_id'));
             $branchSubscriptions->assertCanActivate($company, $branch, $package);
+
+            if ($package->is_trial) {
+                $branchSubscriptions->assertTrialAvailable(Auth::user());
+            }
         } catch (RuntimeException $e) {
             return back()->withInput()->with('error', $e->getMessage());
         }
@@ -247,7 +251,7 @@ class PackageCheckoutController extends Controller
             $subscription = DB::transaction(function () use (
                 $package, $user, $wallet, $price, $discountPercent, $discountAmount, $finalPrice,
                 $voucherUser, $referralCodeForDiscount, $referralCodeForCommission, $isNewReferralLink,
-                $company, $branch
+                $company, $branch, $branchSubscriptions
             ) {
                 // Re-check the promo quota INSIDE the transaction, under a
                 // row lock on voucher_users, right before we commit to
@@ -323,6 +327,12 @@ class PackageCheckoutController extends Controller
                 ]);
 
                 $subscription->update(['payment_transaction_id' => $paymentTransaction->id]);
+
+                // Trial sekali per nomor HP -- unique index di tabel klaim
+                // menolak klaim kedua dan me-rollback checkout ini.
+                if ($package->is_trial) {
+                    $branchSubscriptions->claimTrial($user, $company, $branch, $package, $subscription);
+                }
 
                 // Activation code for the purchased package — not valid
                 // yet, only becomes so once redeemed via

@@ -89,6 +89,16 @@
     <div class="form-text">Boleh lebih dari satu package ditandai sekaligus kalau memang perlu.</div>
 </div>
 
+<div class="mb-4 form-check">
+    <input type="checkbox" name="is_trial" id="is_trial" class="form-check-input" value="1"
+        @checked(old('is_trial', $package->is_trial ?? false))>
+    <label for="is_trial" class="form-check-label">Paket trial</label>
+    <div class="form-text">
+        Hanya bisa diambil sekali per nomor HP owner, dan selama masih aktif boleh langsung diganti paket berbayar.
+        Biasanya harga Rp 0 dengan durasi pendek (mis. 3 hari).
+    </div>
+</div>
+
 <div class="d-flex gap-2">
     <button type="submit" class="btn btn-primary">Simpan</button>
     <a href="{{ route('package.index') }}" class="btn btn-light">Batal</a>
