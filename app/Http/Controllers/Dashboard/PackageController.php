@@ -10,6 +10,7 @@ use App\Models\Package;
 use App\Services\Package\BranchSubscriptionService;
 use App\Services\PackageLimitService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
 /**
@@ -60,9 +61,7 @@ class PackageController extends Controller
                         ->orWhere('description', 'like', "%{$search}%");
                 });
             })
-            ->orderBy('name')
-            ->paginate(9)
-            ->withQueryString();
+            ->get();
 
         // Status paket tiap branch -- hanya untuk owner (satu-satunya yang
         // boleh membeli paket, lihat PackageCheckoutController).
@@ -70,13 +69,56 @@ class PackageController extends Controller
         $branchStatuses = $ownedCompany ? $branchSubscriptions->branchesWithActiveVoucher($ownedCompany) : collect();
 
         return view('dashboard.package.index', [
-            'packages' => $packages,
+            'packageGroups' => $this->groupPackages($packages),
             'categories' => $categories,
             'search' => $search,
             'categoryId' => $categoryId,
             'branchStatuses' => $branchStatuses,
             'selectedBranchId' => $request->query('branch_office_id'),
         ]);
+    }
+
+    /**
+     * Kelompokkan paket per kombinasi layanan (satu baris per kelompok,
+     * mis. "Paket Lengkap", "Paket Whatsapp Blast"). Kolom urut Trial ->
+     * durasi terpendek -> terpanjang; kelompok dengan layanan terbanyak
+     * paling atas. 'savings' = % lebih hemat per bulan dibanding durasi
+     * termahal (per bulan) di kelompok yang sama. Sama dengan tampilan
+     * fe-konexa (FrontendController::groupPackages()).
+     *
+     * @param  Collection<int, Package>  $packages
+     * @return Collection<int, array{label: string, services: array<int, string>, packages: Collection<int, Package>, savings: array<string, int>}>
+     */
+    private function groupPackages(Collection $packages): Collection
+    {
+        $servicesOf = fn (Package $package) => $package->categoryApplications->pluck('name')
+            ->whenEmpty(fn ($names) => $names->push($package->categoryApplication?->name))
+            ->filter()->unique()->sort()->values()->all();
+
+        $maxServices = $packages->max(fn (Package $package) => count($servicesOf($package))) ?? 0;
+
+        return $packages
+            ->groupBy(fn (Package $package) => implode('|', $servicesOf($package)))
+            ->map(function ($items) use ($servicesOf, $maxServices) {
+                $services = $servicesOf($items->first());
+                $paid = $items->reject(fn (Package $package) => $package->is_trial || (float) $package->price <= 0);
+                $highestMonthly = $paid->max(fn (Package $package) => $package->monthlyPrice()) ?: 0;
+
+                return [
+                    'label' => count($services) > 1 && count($services) === $maxServices
+                        ? 'Paket Lengkap'
+                        : 'Paket '.(implode(' + ', $services) ?: 'Lainnya'),
+                    'services' => $services,
+                    'packages' => $items
+                        ->sortBy(fn (Package $package) => sprintf('%d-%06d', $package->is_trial ? 0 : 1, $package->duration))
+                        ->values(),
+                    'savings' => $paid->mapWithKeys(fn (Package $package) => [
+                        $package->id => $highestMonthly > 0 ? (int) round((1 - $package->monthlyPrice() / $highestMonthly) * 100) : 0,
+                    ])->all(),
+                ];
+            })
+            ->sortByDesc(fn (array $group) => count($group['services']))
+            ->values();
     }
 
     /**

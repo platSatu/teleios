@@ -77,7 +77,7 @@
     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
         <div>
             <h4 class="mb-1">Packages</h4>
-            <p class="text-muted mb-0">Pilih paket aplikasi yang sesuai dengan kebutuhan Anda.</p>
+            <p class="text-muted mb-0">Pilih paket sesuai layanan yang dibutuhkan. Paket berlaku untuk masing-masing branch.</p>
         </div>
     </div>
 
@@ -185,7 +185,7 @@
         </div>
     </div>
 
-    @if ($packages->isEmpty())
+    @if ($packageGroups->isEmpty())
         <div class="card border-0 shadow-sm">
             <div class="card-body text-center py-5">
                 <i class="ri-inbox-line fs-1 text-muted d-block mb-3"></i>
@@ -195,10 +195,8 @@
         </div>
     @else
         @php
-            // Pemetaan kata kunci LimitMetric.key -> ikon Remix Icon,
-            // semangatnya sama dengan $iconMap di fe-konexa (situ pakai
-            // Bootstrap Icons bi-*, di sini Remix Icon ri-* karena itu
-            // yang dipakai seluruh dashboard Teleios).
+            // LimitMetric.key -> ikon Remix Icon. Urutan tampil: Pengiriman
+            // -> Device -> Kontak, metric lain menyusul.
             $iconMap = [
                 'device' => 'ri-smartphone-line',
                 'user' => 'ri-team-line',
@@ -209,81 +207,123 @@
                 'branch' => 'ri-git-branch-line',
                 'agent' => 'ri-customer-service-2-line',
             ];
+            $limitOrder = ['broadcast', 'device', 'contact'];
+            $limitRank = function ($limit) use ($limitOrder) {
+                $key = strtolower($limit->limitMetric->key ?? '');
+                foreach ($limitOrder as $rank => $needle) {
+                    if (str_contains($key, $needle)) {
+                        return $rank;
+                    }
+                }
+
+                return count($limitOrder);
+            };
         @endphp
 
-        <div class="row g-4" id="paket">
-            @foreach ($packages as $package)
-                @php
-                    $isFeatured = (bool) $package->is_featured;
-                @endphp
-                <div class="col-12 col-sm-6 col-xl-4">
-                    <div class="card package-card h-100 border-0 {{ $isFeatured ? 'package-card--featured' : '' }}">
-                        <div class="card-body d-flex flex-column p-4">
-                            @if ($isFeatured)
-                                <span class="package-badge">TERPOPULER</span>
-                            @endif
+        <div id="paket">
+            @foreach ($packageGroups as $group)
+                <div class="{{ $loop->last ? '' : 'mb-5' }}">
+                    <div class="d-flex align-items-center flex-wrap gap-2 mb-3 pb-2 border-bottom">
+                        <h5 class="mb-0 me-2">{{ $group['label'] }}</h5>
+                        @foreach ($group['services'] as $service)
+                            <span class="badge bg-primary-subtle text-primary fw-medium">{{ $service }}</span>
+                        @endforeach
+                    </div>
 
-                            @if ($package->categoryNames() !== '')
-                                <span class="badge bg-primary-subtle text-primary fw-medium mb-2 align-self-start text-wrap text-start">
-                                    {{ $package->categoryNames() }}
-                                </span>
-                            @endif
+                    <div class="row g-4">
+                        @foreach ($group['packages'] as $package)
+                            @php
+                                $isFeatured = (bool) $package->is_featured;
+                                $isTrial = (bool) $package->is_trial;
+                                $isFree = (float) $package->price <= 0;
+                                $savings = $group['savings'][$package->id] ?? 0;
+                                $limits = $package->limits->sortBy($limitRank)->values();
+                            @endphp
+                            <div class="col-12 col-md-6 col-xl-4">
+                                <div class="card package-card h-100 border-0 {{ $isFeatured ? 'package-card--featured' : '' }}">
+                                    <div class="card-body d-flex flex-column p-4">
+                                        @if ($isFeatured)
+                                            <span class="package-badge">TERPOPULER</span>
+                                        @endif
 
-                            <h5 class="mb-1">{{ $package->name }}</h5>
+                                        <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                                            <span class="badge {{ $isTrial ? 'bg-success-subtle text-success' : 'bg-primary-subtle text-primary' }} fs-12">
+                                                {{ $package->durationLabel() }}
+                                            </span>
+                                            @if ($savings > 0)
+                                                <span class="badge bg-warning-subtle text-warning fs-12">Hemat {{ $savings }}%</span>
+                                            @endif
+                                        </div>
 
-                            <div class="d-flex align-items-baseline gap-1 mb-1">
-                                <span class="fw-semibold text-muted">Rp</span>
-                                <span class="package-price-amount">{{ number_format($package->price, 0, ',', '.') }}</span>
+                                        <h5 class="mb-2">{{ $package->name }}</h5>
+
+                                        <div class="d-flex align-items-baseline gap-1 mb-1">
+                                            @if ($isFree)
+                                                <span class="package-price-amount">Gratis</span>
+                                            @else
+                                                <span class="fw-semibold text-muted">Rp</span>
+                                                <span class="package-price-amount">{{ number_format($package->price, 0, ',', '.') }}</span>
+                                            @endif
+                                        </div>
+                                        <p class="text-muted fs-13 mb-3">
+                                            Masa aktif {{ $package->duration }} hari
+                                            @if (! $isFree && $package->months() > 1)
+                                                &middot; setara <strong>Rp {{ number_format($package->monthlyPrice(), 0, ',', '.') }}</strong>/bulan
+                                            @endif
+                                        </p>
+
+                                        <a href="{{ route('dashboard.package.checkout', array_filter(['package' => $package->id, 'branch_office_id' => $selectedBranchId])) }}"
+                                            class="btn {{ $isFeatured ? 'btn-primary' : 'btn-outline-primary' }} w-100 mb-3">
+                                            @if ($isTrial)
+                                                <i class="ri-gift-line"></i> Coba Gratis
+                                            @else
+                                                <i class="ri-shopping-cart-2-line"></i> Pilih Paket
+                                            @endif
+                                        </a>
+
+                                        <ul class="package-feature-list list-unstyled mb-0 flex-grow-1">
+                                            @forelse ($limits as $limit)
+                                                @php
+                                                    $metric = $limit->limitMetric;
+                                                    $metricKey = strtolower($metric->key ?? '');
+                                                    $icon = 'ri-checkbox-circle-line';
+                                                    foreach ($iconMap as $needle => $mappedIcon) {
+                                                        if (str_contains($metricKey, $needle)) {
+                                                            $icon = $mappedIcon;
+                                                            break;
+                                                        }
+                                                    }
+                                                    // Kuota kiriman berlaku per bulan (PackageLimitService::currentPeriod()).
+                                                    $perMonth = $metric?->isConsumable() && ! $isTrial;
+                                                @endphp
+                                                <li>
+                                                    <i class="{{ $icon }}"></i>
+                                                    <span>
+                                                        {{ $metric->name ?? 'Limit' }}:
+                                                        <strong>{{ number_format((float) $limit->max_value, 0, ',', '.') }}</strong>
+                                                        {{ $metric?->unit }}{{ $perMonth ? '/bulan' : '' }}
+                                                    </span>
+                                                </li>
+                                            @empty
+                                                <li>
+                                                    <i class="ri-checkbox-circle-line"></i>
+                                                    <span>Fitur lengkap sesuai kebutuhan bisnis Anda</span>
+                                                </li>
+                                            @endforelse
+                                        </ul>
+
+                                        @if ($package->description)
+                                            <p class="text-muted fs-13 mt-3 mb-0">
+                                                {{ \Illuminate\Support\Str::limit($package->description, 120) }}
+                                            </p>
+                                        @endif
+                                    </div>
+                                </div>
                             </div>
-                            <p class="text-muted fs-13 mb-3">per {{ $package->duration }} hari</p>
-
-                            <a href="{{ route('dashboard.package.checkout', array_filter(['package' => $package->id, 'branch_office_id' => $selectedBranchId])) }}"
-                                class="btn {{ $isFeatured ? 'btn-primary' : 'btn-outline-primary' }} w-100 mb-3">
-                                <i class="ri-shopping-cart-2-line"></i> Pilih Package
-                            </a>
-
-                            <ul class="package-feature-list list-unstyled mb-0 flex-grow-1">
-                                @forelse ($package->limits as $limit)
-                                    @php
-                                        $metric = $limit->limitMetric;
-                                        $metricKey = strtolower($metric->key ?? '');
-                                        $icon = 'ri-checkbox-circle-line';
-                                        foreach ($iconMap as $needle => $mappedIcon) {
-                                            if (str_contains($metricKey, $needle)) {
-                                                $icon = $mappedIcon;
-                                                break;
-                                            }
-                                        }
-                                    @endphp
-                                    <li>
-                                        <i class="{{ $icon }}"></i>
-                                        <span>
-                                            {{ $metric->name ?? 'Limit' }}:
-                                            <strong>{{ number_format((float) $limit->max_value, 0, ',', '.') }}</strong>
-                                            @if ($metric?->unit) {{ $metric->unit }} @endif
-                                        </span>
-                                    </li>
-                                @empty
-                                    <li>
-                                        <i class="ri-checkbox-circle-line"></i>
-                                        <span>Fitur lengkap sesuai kebutuhan bisnis Anda</span>
-                                    </li>
-                                @endforelse
-                            </ul>
-
-                            @if ($package->description)
-                                <p class="text-muted fs-13 mt-3 mb-0">
-                                    {{ \Illuminate\Support\Str::limit($package->description, 100) }}
-                                </p>
-                            @endif
-                        </div>
+                        @endforeach
                     </div>
                 </div>
             @endforeach
-        </div>
-
-        <div class="mt-4">
-            {{ $packages->links('pagination::bootstrap-5') }}
         </div>
     @endif
 @endsection
