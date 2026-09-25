@@ -2,12 +2,18 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Konexa WA API (per-device, pihak ketiga)",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "API yang bisa dipakai pihak ketiga (bukan user login aplikasi) untuk mengirim pesan WhatsApp lewat SATU device tertentu. Setiap token/secret di-generate per-device dari menu Connect Device (App\\Http\\Controllers\\Chat\\WaApiKeyController). Dokumen ini WAJIB diperbarui setiap kali ada endpoint baru di bawah prefix /api/wa-api/, sesuai CLAUDE.md."
   },
   "servers": [
-    { "url": "https://app.konexa.id/api", "description": "Production" },
-    { "url": "https://staging.konexa.id/api", "description": "Staging" }
+    {
+      "url": "https://app.konexa.id/api",
+      "description": "Production"
+    },
+    {
+      "url": "https://staging.konexa.id/api",
+      "description": "Staging"
+    }
   ],
   "components": {
     "securitySchemes": {
@@ -28,7 +34,59 @@
       "ErrorResponse": {
         "type": "object",
         "properties": {
-          "error": { "type": "string", "example": "Token atau Secret Key tidak valid." }
+          "error": {
+            "type": "string",
+            "example": "Token atau Secret Key tidak valid."
+          }
+        }
+      },
+      "ValidationErrorResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "The to field is required."
+          },
+          "errors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "example": {
+              "to": [
+                "The to field is required."
+              ]
+            }
+          }
+        }
+      },
+      "RequestCounts": {
+        "type": "object",
+        "description": "Jumlah request per status.",
+        "properties": {
+          "sent": {
+            "type": "integer",
+            "example": 120
+          },
+          "blocked_package": {
+            "type": "integer",
+            "example": 0
+          },
+          "blocked_quota": {
+            "type": "integer",
+            "example": 3
+          },
+          "failed": {
+            "type": "integer",
+            "example": 1
+          },
+          "total": {
+            "type": "integer",
+            "example": 124
+          }
         }
       }
     }
@@ -37,17 +95,27 @@
     "/wa-api/v1/send-message": {
       "post": {
         "summary": "Kirim pesan WhatsApp lewat 1 device",
-        "description": "Satu-satunya kemampuan API pihak ketiga saat ini: kirim pesan teks lewat device yang dimiliki oleh token/secret ini. Tidak ada akses baca riwayat chat, tidak ada manajemen device, hanya kirim. Diimplementasikan di App\\Http\\Controllers\\Api\\WaApiSendMessageController::send().",
+        "description": "Satu-satunya kemampuan API pihak ketiga saat ini: kirim pesan teks lewat device yang dimiliki oleh token/secret ini. Tidak ada akses baca riwayat chat dan tidak ada manajemen device. Diimplementasikan di App\\Http\\Controllers\\Api\\WaApiSendMessageController::send(). Setiap pesan yang terkirim memotong kuota pengiriman pesan (broadcast_send) paket company pemilik device, sama seperti pengiriman dari dashboard. Sejak 25 September 2026 setiap request yang lolos otentikasi (terkirim, ditolak 403/429, atau gagal 500/502) dicatat di riwayat pemakaian API key (App\\Models\\WaApiRequestLog) yang bisa dilihat pemilik device di dashboard dan lewat GET /wa-api/v1/usage. Isi pesan tidak disimpan.",
         "operationId": "sendWaMessage",
-        "tags": ["WA API v1"],
-        "security": [{ "WaApiToken": [], "WaApiSecret": [] }],
+        "tags": [
+          "WA API v1"
+        ],
+        "security": [
+          {
+            "WaApiToken": [],
+            "WaApiSecret": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["to", "message"],
+                "required": [
+                  "to",
+                  "message"
+                ],
                 "properties": {
                   "to": {
                     "type": "string",
@@ -73,7 +141,10 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "status": { "type": "string", "example": "sent" },
+                    "status": {
+                      "type": "string",
+                      "example": "sent"
+                    },
                     "message": {
                       "type": "object",
                       "description": "Detail pesan dari backend Go (struktur mengikuti response InboxService::send())."
@@ -85,27 +156,186 @@
           },
           "401": {
             "description": "Header X-WA-Token / X-WA-Secret tidak ada atau tidak valid.",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "403": {
             "description": "Package company pemilik device ini sudah tidak aktif (habis masa berlaku, belum redeem voucher/beli paket baru). Ditambahkan 22 September 2026 sebagai bagian sentralisasi proteksi pengiriman WA (CLAUDE.md checklist #3) — sebelumnya endpoint ini tidak pernah mengecek status package sama sekali.",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "422": {
-            "description": "Body request tidak valid (field to/message kosong atau kepanjangan).",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+            "description": "Body request tidak valid (field to/message kosong atau kepanjangan). Format mengikuti response validasi bawaan Laravel. Request yang gagal validasi tidak dicatat di riwayat pemakaian.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
           },
           "429": {
             "description": "Kuota pengiriman broadcast paket company ini untuk periode berjalan sudah habis. Ditambahkan 22 September 2026, sama seperti 403 di atas.",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "500": {
             "description": "Company pemilik API Key ini tidak punya user pemilik yang valid (data rusak/tidak konsisten).",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "502": {
             "description": "Gagal mengirim pesan (device tidak terhubung, device tidak ditemukan, dsb). Lihat field error untuk pesan yang bisa ditindaklanjuti.",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wa-api/v1/usage": {
+      "get": {
+        "summary": "Cek paket, sisa kuota, dan jumlah pemakaian API key",
+        "description": "Read-only. Menampilkan status paket company pemilik device, sisa kuota pengiriman pesan (broadcast_send, dipakai bersama semua jalur pengiriman company, bukan hanya API), dan jumlah request API key ini per jendela waktu. Tidak memotong kuota dan tidak dicatat sebagai request pengiriman. Diimplementasikan di App\\Http\\Controllers\\Api\\WaApiUsageController::show().",
+        "operationId": "getWaApiUsage",
+        "tags": [
+          "WA API v1"
+        ],
+        "security": [
+          {
+            "WaApiToken": [],
+            "WaApiSecret": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ringkasan pemakaian.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "device_id": {
+                      "type": "string"
+                    },
+                    "package_active": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "package": {
+                      "type": "object",
+                      "nullable": true,
+                      "description": "null kalau company tidak punya paket aktif.",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "example": "Paket Bisnis"
+                        },
+                        "valid_from": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "valid_until": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    },
+                    "quota": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "metric": {
+                          "type": "string",
+                          "example": "broadcast_send"
+                        },
+                        "unlimited": {
+                          "type": "boolean",
+                          "description": "true kalau paket tidak membatasi jumlah pengiriman.",
+                          "example": false
+                        },
+                        "max": {
+                          "type": "integer",
+                          "nullable": true,
+                          "example": 3000
+                        },
+                        "used": {
+                          "type": "integer",
+                          "nullable": true,
+                          "example": 1250
+                        },
+                        "remaining": {
+                          "type": "integer",
+                          "nullable": true,
+                          "example": 1750
+                        }
+                      }
+                    },
+                    "requests": {
+                      "type": "object",
+                      "properties": {
+                        "today": {
+                          "$ref": "#/components/schemas/RequestCounts"
+                        },
+                        "this_month": {
+                          "$ref": "#/components/schemas/RequestCounts"
+                        },
+                        "current_package_period": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/RequestCounts"
+                            }
+                          ],
+                          "nullable": true,
+                          "description": "Sejak paket aktif saat ini mulai berlaku. null kalau tidak ada paket aktif."
+                        },
+                        "all_time": {
+                          "$ref": "#/components/schemas/RequestCounts"
+                        }
+                      }
+                    },
+                    "generated_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Header X-WA-Token / X-WA-Secret tidak ada atau tidak valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }

@@ -5,6 +5,9 @@ namespace App\Http\Controllers\Chat;
 use App\Http\Controllers\Concerns\ResolvesCompanyContext;
 use App\Http\Controllers\Controller;
 use App\Models\WaApiKey;
+use App\Models\WaApiRequestLog;
+use App\Services\Chat\WaApiUsageService;
+use Illuminate\Support\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -66,6 +69,56 @@ class WaApiKeyController extends Controller
      * generated yet — the page uses this to decide whether to show
      * "Generate" or the existing token/secret + "Regenerate" buttons.
      */
+    /**
+     * Riwayat & jumlah pemakaian API key device ini (App\Models\
+     * WaApiRequestLog) — setiap request pihak ketiga yang lolos
+     * otentikasi, beserta hasilnya. Di-scope ke company user yang login
+     * (sama seperti data()/generate()), jadi company lain tidak bisa
+     * melihat riwayat API key milik company ini.
+     */
+    public function history(Request $request, string $device, WaApiUsageService $usage): View
+    {
+        $company = $this->ownedCompanyOrFail($request);
+
+        $apiKey = WaApiKey::where('company_id', $company->id)
+            ->where('device_id', $device)
+            ->first();
+
+        $validated = $request->validate([
+            'status' => ['nullable', 'in:'.implode(',', array_keys(WaApiRequestLog::statusLabels()))],
+            'date_from' => ['nullable', 'date'],
+            // after_or_equal hanya dipasang kalau date_from diisi — kalau
+            // date_from kosong, Laravel akan membaca 'date_from' sebagai
+            // string tanggal literal dan menolak filter yang sebenarnya valid.
+            'date_to' => array_filter(['nullable', 'date', $request->filled('date_from') ? 'after_or_equal:date_from' : null]),
+        ]);
+
+        $logs = null;
+        $summary = null;
+
+        if ($apiKey) {
+            $logs = WaApiRequestLog::where('wa_api_key_id', $apiKey->id)
+                ->when($validated['status'] ?? null, fn ($q, $status) => $q->where('status', $status))
+                ->when($validated['date_from'] ?? null, fn ($q, $from) => $q->where('created_at', '>=', Carbon::parse($from)->startOfDay()))
+                ->when($validated['date_to'] ?? null, fn ($q, $to) => $q->where('created_at', '<=', Carbon::parse($to)->endOfDay()))
+                ->latest('created_at')
+                ->paginate(25)
+                ->withQueryString();
+
+            $summary = $usage->summary($apiKey);
+        }
+
+        return view('chat.konekdevice.api-key-history', [
+            'deviceId' => $device,
+            'devicePhone' => $request->query('phone', ''),
+            'apiKey' => $apiKey,
+            'logs' => $logs,
+            'summary' => $summary,
+            'statusLabels' => WaApiRequestLog::statusLabels(),
+            'filters' => $validated,
+        ]);
+    }
+
     public function data(Request $request, string $device): JsonResponse
     {
         $company = $this->ownedCompanyOrFail($request);

@@ -815,6 +815,7 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 // chats()/messages() feed it data).
                 Route::get('/', 'page')->name('chat.connect-device.api-key.show');
                 Route::get('/data', 'data')->name('chat.connect-device.api-key.data');
+                Route::get('/history', 'history')->name('chat.connect-device.api-key.history');
                 Route::post('/generate', 'generate')->name('chat.connect-device.api-key.generate');
                 Route::post('/regenerate-token', 'regenerateToken')->name('chat.connect-device.api-key.regenerate-token');
                 Route::post('/regenerate-secret', 'regenerateSecret')->name('chat.connect-device.api-key.regenerate-secret');

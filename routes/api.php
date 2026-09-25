@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\WaIncomingMessageWebhookController;
 use App\Http\Controllers\Api\WaMessageStatusWebhookController;
 use App\Http\Controllers\Api\WaPollVoteWebhookController;
 use App\Http\Controllers\Api\WaApiSendMessageController;
+use App\Http\Controllers\Api\WaApiUsageController;
 use App\Http\Controllers\Api\GoogleFormWebhookController;
 use App\Http\Controllers\Api\Frontend\ArticleController as FrontendArticleController;
 use App\Http\Controllers\Api\Frontend\CategoryApplicationController as FrontendCategoryApplicationController;
@@ -85,6 +86,14 @@ Route::post('/webhooks/wa/poll-vote', [WaPollVoteWebhookController::class, 'hand
 Route::post('/wa-api/v1/send-message', [WaApiSendMessageController::class, 'send'])
     ->middleware('wa.api-key')
     ->name('wa-api.send-message');
+
+// Read-only: status paket, sisa kuota broadcast_send, dan jumlah request
+// API key ini (hari ini / bulan ini / periode paket / total). Auth sama
+// dengan send-message. Lihat App\Http\Controllers\Api\WaApiUsageController
+// dan docs/api/wa-api-v1.openapi.json.
+Route::get('/wa-api/v1/usage', [WaApiUsageController::class, 'show'])
+    ->middleware('wa.api-key')
+    ->name('wa-api.usage');
 
 // Public webhook a company's own Google Apps Script (Extensions > Apps
 // Script > onFormSubmit trigger, generated on the integration's detail

@@ -56,7 +56,12 @@
                                 <button type="button" class="btn btn-outline-secondary wa-copy-btn" data-target="wa-api-key-secret"><i class="ri-file-copy-line"></i></button>
                             </div>
                         </div>
-                        <p class="text-muted fs-12 mb-3">Terakhir dipakai: <span id="wa-api-key-last-used">-</span></p>
+                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                            <p class="text-muted fs-12 mb-0">Terakhir dipakai: <span id="wa-api-key-last-used">-</span></p>
+                            <a href="{{ route('chat.connect-device.api-key.history', ['device' => $deviceId, 'phone' => $devicePhone]) }}" class="btn btn-outline-primary btn-sm">
+                                <i class="ri-history-line"></i> Riwayat &amp; Jumlah Pemakaian
+                            </a>
+                        </div>
 
                         <div class="d-flex gap-2 flex-wrap">
                             <button type="button" id="wa-api-key-regen-token-btn" class="btn btn-outline-secondary btn-sm">

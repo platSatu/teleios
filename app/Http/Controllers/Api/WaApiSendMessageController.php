@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Exceptions\PackageLimitExceededException;
 use App\Http\Controllers\Controller;
 use App\Models\WaApiKey;
+use App\Models\WaApiRequestLog;
 use App\Services\Chat\InboxService;
 use App\Services\Chat\SystemJwtService;
+use App\Services\Chat\WaApiUsageService;
 use App\Support\PhoneNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -36,7 +38,7 @@ use Throwable;
  */
 class WaApiSendMessageController extends Controller
 {
-    public function send(Request $request, SystemJwtService $jwtService, InboxService $inbox): JsonResponse
+    public function send(Request $request, SystemJwtService $jwtService, InboxService $inbox, WaApiUsageService $usage): JsonResponse
     {
         /** @var WaApiKey $apiKey */
         $apiKey = $request->attributes->get('waApiKey');
@@ -52,6 +54,17 @@ class WaApiSendMessageController extends Controller
         ]);
 
         $chatJid = $this->normalizeJid($validated['to']);
+
+        // Atribut dasar riwayat request (App\Models\WaApiRequestLog) —
+        // dicatat di SETIAP cabang hasil di bawah (terkirim / diblokir
+        // paket-kuota / gagal), supaya pemilik API key bisa melihat &
+        // menghitung semua pemakaian API-nya dari dashboard maupun lewat
+        // GET /wa-api/v1/usage. Isi pesan sengaja tidak disimpan.
+        $logAttributes = [
+            'recipient' => $chatJid,
+            'message_length' => mb_strlen($validated['message']),
+            'ip_address' => $request->ip(),
+        ];
 
         // Dicatat SEBELUM proses kirim dimulai (bukan cuma pas gagal) — supaya
         // ada jejak "request ini memang sampai & lolos otentikasi WaApiKey"
@@ -72,6 +85,10 @@ class WaApiSendMessageController extends Controller
             Log::error('WaApiSendMessageController: company pemilik API Key tidak punya user pemilik yang valid', [
                 'api_key_id' => $apiKey->id,
                 'company_id' => $apiKey->company_id,
+            ]);
+
+            $usage->record($apiKey, WaApiRequestLog::ENDPOINT_SEND_MESSAGE, WaApiRequestLog::STATUS_FAILED, 500, $logAttributes + [
+                'error' => 'Company pemilik API Key tidak memiliki user pemilik yang valid.',
             ]);
 
             return response()->json([
@@ -101,6 +118,10 @@ class WaApiSendMessageController extends Controller
                 'sent_at' => $result['sent_at'] ?? null,
             ]);
 
+            $usage->record($apiKey, WaApiRequestLog::ENDPOINT_SEND_MESSAGE, WaApiRequestLog::STATUS_SENT, 200, $logAttributes + [
+                'wa_message_id' => isset($result['id']) ? (string) $result['id'] : null,
+            ]);
+
             return response()->json([
                 'status' => 'sent',
                 'message' => $result,
@@ -127,9 +148,20 @@ class WaApiSendMessageController extends Controller
                 'reason' => $e->getMessage(),
             ]);
 
+            $isPackageInactive = $e->metricKey() === 'active_package';
+            $httpStatus = $isPackageInactive ? 403 : 429;
+
+            $usage->record(
+                $apiKey,
+                WaApiRequestLog::ENDPOINT_SEND_MESSAGE,
+                $isPackageInactive ? WaApiRequestLog::STATUS_BLOCKED_PACKAGE : WaApiRequestLog::STATUS_BLOCKED_QUOTA,
+                $httpStatus,
+                $logAttributes + ['error' => mb_substr($e->getMessage(), 0, 500)]
+            );
+
             return response()->json([
                 'error' => $e->getMessage(),
-            ], $e->metricKey() === 'active_package' ? 403 : 429);
+            ], $httpStatus);
         } catch (Throwable $e) {
             $reason = $this->describeSendFailure($e);
 
@@ -140,6 +172,10 @@ class WaApiSendMessageController extends Controller
                 'to' => $chatJid,
                 'error' => $e->getMessage(),
                 'reason' => $reason,
+            ]);
+
+            $usage->record($apiKey, WaApiRequestLog::ENDPOINT_SEND_MESSAGE, WaApiRequestLog::STATUS_FAILED, 502, $logAttributes + [
+                'error' => mb_substr($reason, 0, 500),
             ]);
 
             return response()->json([
