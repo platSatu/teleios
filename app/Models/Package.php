@@ -134,6 +134,22 @@ class Package extends Model
     }
 
     /**
+     * Deskripsi sebagai daftar fitur: satu baris = satu fitur, urutan
+     * sesuai ketikan superadmin. Tanda "-", "*" atau "•" di awal baris
+     * diabaikan, baris kosong dilewati.
+     *
+     * @return array<int, string>
+     */
+    public function featureLines(): array
+    {
+        return collect(preg_split('/\R/', (string) $this->description))
+            ->map(fn (string $line) => trim((string) preg_replace('/^[\s\-*•]+/u', '', $line)))
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    /**
      * Numeric usage ceilings this package sets (see App\Models\
      * PackageLimit / App\Services\PackageLimitService) — a package with
      * no rows here is unlimited on every metric.

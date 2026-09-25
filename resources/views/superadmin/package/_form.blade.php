@@ -45,8 +45,12 @@
 </div>
 
 <div class="mb-3">
-    <label for="description" class="form-label">Deskripsi</label>
-    <textarea name="description" id="description" class="form-control" rows="3">{{ old('description', $package->description ?? '') }}</textarea>
+    <label for="description" class="form-label">Deskripsi / Fitur</label>
+    <textarea name="description" id="description" class="form-control" rows="6"
+        placeholder="Auto-reply &amp; chatbot&#10;Form online&#10;Jadwal &amp; pengingat otomatis">{{ old('description', $package->description ?? '') }}</textarea>
+    <div class="form-text">
+        Satu baris = satu fitur. Tampil sebagai daftar centang di bawah limit paket (dashboard &amp; halaman depan), sesuai urutan yang Anda tulis.
+    </div>
 </div>
 
 <div class="row">

@@ -238,6 +238,7 @@
                                 $isFree = (float) $package->price <= 0;
                                 $savings = $group['savings'][$package->id] ?? 0;
                                 $limits = $package->limits->sortBy($limitRank)->values();
+                                $features = $package->featureLines();
                             @endphp
                             <div class="col-12 col-md-6 col-xl-4">
                                 <div class="card package-card h-100 border-0 {{ $isFeatured ? 'package-card--featured' : '' }}">
@@ -282,7 +283,7 @@
                                         </a>
 
                                         <ul class="package-feature-list list-unstyled mb-0 flex-grow-1">
-                                            @forelse ($limits as $limit)
+                                            @foreach ($limits as $limit)
                                                 @php
                                                     $metric = $limit->limitMetric;
                                                     $metricKey = strtolower($metric->key ?? '');
@@ -304,19 +305,20 @@
                                                         {{ $metric?->unit }}{{ $perMonth ? '/bulan' : '' }}
                                                     </span>
                                                 </li>
-                                            @empty
+                                            @endforeach
+                                            @foreach ($features as $feature)
+                                                <li>
+                                                    <i class="ri-checkbox-circle-line"></i>
+                                                    <span>{{ $feature }}</span>
+                                                </li>
+                                            @endforeach
+                                            @if ($limits->isEmpty() && empty($features))
                                                 <li>
                                                     <i class="ri-checkbox-circle-line"></i>
                                                     <span>Fitur lengkap sesuai kebutuhan bisnis Anda</span>
                                                 </li>
-                                            @endforelse
+                                            @endif
                                         </ul>
-
-                                        @if ($package->description)
-                                            <p class="text-muted fs-13 mt-3 mb-0">
-                                                {{ \Illuminate\Support\Str::limit($package->description, 120) }}
-                                            </p>
-                                        @endif
                                     </div>
                                 </div>
                             </div>
