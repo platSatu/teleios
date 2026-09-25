@@ -30,10 +30,10 @@
                         <thead class="table-light">
                             <tr>
                                 <th>Fitur</th>
-                                <th>Dibeli</th>
+                                <th>Jatah</th>
                                 <th>Terpakai</th>
                                 <th>Sisa</th>
-                                <th>Periode</th>
+                                <th>Periode Kuota</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -82,6 +82,9 @@
                         </tbody>
                     </table>
                 </div>
+                <p class="text-muted fs-12 mb-0 mt-3">
+                    Kuota pengiriman di-reset setiap bulan, dihitung dari tanggal paket aktif. Sisa kuota bulan lalu tidak dibawa ke bulan berikutnya.
+                </p>
             @endif
         </div>
     </div>

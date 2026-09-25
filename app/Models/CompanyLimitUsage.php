@@ -8,8 +8,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * One running usage counter — see the migration's docblock for why it's
- * scoped to (company, branch office, metric, subscription) and why it
- * only resets on a new subscription rather than a fixed calendar month.
+ * scoped to (company, branch office, metric, subscription). Sejak 25 Sep
+ * 2026 juga per periode bulanan (period_start) -- kuota di-reset tiap
+ * bulan sejak paket aktif, lihat PackageLimitService::currentPeriod().
  * Written/read exclusively through App\Services\PackageLimitService;
  * nothing else should touch `used_value` directly.
  */
@@ -53,6 +54,9 @@ class CompanyLimitUsage extends Model
                 $model->branch_office_id ?: '-',
                 $model->limit_metric_id,
                 $model->subscription_id ?: '-',
+                // Periode bulanan (lihat PackageLimitService::currentPeriod())
+                // -- satu counter per bulan.
+                $model->period_start?->format('YmdHis') ?: '-',
             ]);
         });
     }

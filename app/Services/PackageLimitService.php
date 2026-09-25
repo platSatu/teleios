@@ -16,6 +16,7 @@ use App\Notifications\PackageLimitExhaustedNotification;
 use App\Services\Chat\DeviceDirectory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -36,7 +37,11 @@ use Illuminate\Support\Facades\DB;
  *
  * Dua cara metric diukur, per LimitMetric::metric_type:
  *   - 'consumable' -- counter berjalan (CompanyLimitUsage.used_value) per
- *     subscription; reset hanya saat subscription baru aktif.
+ *     PERIODE BULANAN: max_value paket = jatah per bulan, dihitung dari
+ *     tanggal paket aktif (voucher.valid_from), bukan tanggal 1. Tiap
+ *     bulan counter baru mulai dari 0; sisa bulan lalu TIDAK dibawa
+ *     (tidak akumulasi). Paket 3 hari / 1 bulan cuma punya satu periode.
+ *     Lihat currentPeriod().
  *   - 'stock' -- dihitung live dari data sebenarnya lewat callback dari
  *     pemanggil (mis. jumlah kontak), jadi tidak pernah melenceng.
  */
@@ -201,7 +206,7 @@ class PackageLimitService
      */
     public function remaining(Company $company, string $metricKey, ?BranchOffice $branch = null, ?callable $liveCountResolver = null): ?int
     {
-        [$packageLimit, $subscription] = $this->limitAndSubscription($company, $metricKey, $branch);
+        [$packageLimit, $voucher] = $this->limitAndVoucher($company, $metricKey, $branch);
 
         if (! $packageLimit) {
             return null;
@@ -213,7 +218,7 @@ class PackageLimitService
             return max(0, $packageLimit->max_value - $used);
         }
 
-        $usage = $this->usageRow($company, $packageLimit->limitMetric, $branch, $subscription);
+        $usage = $this->usageRow($company, $packageLimit->limitMetric, $branch, $voucher);
 
         return max(0, $packageLimit->max_value - $usage->used_value);
     }
@@ -225,7 +230,7 @@ class PackageLimitService
      */
     public function assertWithinLimit(Company $company, string $metricKey, int $amount = 1, ?BranchOffice $branch = null, ?callable $liveCountResolver = null): void
     {
-        [$packageLimit, $subscription] = $this->limitAndSubscription($company, $metricKey, $branch);
+        [$packageLimit, $voucher] = $this->limitAndVoucher($company, $metricKey, $branch);
 
         if (! $packageLimit) {
             return;
@@ -248,7 +253,7 @@ class PackageLimitService
             return;
         }
 
-        $usage = $this->usageRow($company, $metric, $branch, $subscription);
+        $usage = $this->usageRow($company, $metric, $branch, $voucher);
 
         if ($usage->used_value + $amount > $packageLimit->max_value) {
             $this->notifyExhausted($company, $metric, $usage, $packageLimit->max_value);
@@ -264,14 +269,14 @@ class PackageLimitService
      */
     public function consume(Company $company, string $metricKey, int $amount = 1, ?BranchOffice $branch = null): void
     {
-        [$packageLimit, $subscription] = $this->limitAndSubscription($company, $metricKey, $branch);
+        [$packageLimit, $voucher] = $this->limitAndVoucher($company, $metricKey, $branch);
 
         if (! $packageLimit || ! $packageLimit->limitMetric->isConsumable()) {
             return;
         }
 
-        DB::transaction(function () use ($company, $packageLimit, $branch, $subscription, $amount) {
-            $this->lockOrCreateUsage($company, $packageLimit->limitMetric, $branch, $subscription)
+        DB::transaction(function () use ($company, $packageLimit, $branch, $voucher, $amount) {
+            $this->lockOrCreateUsage($company, $packageLimit->limitMetric, $branch, $voucher)
                 ->increment('used_value', $amount);
         });
     }
@@ -283,15 +288,15 @@ class PackageLimitService
      */
     public function reserve(Company $company, string $metricKey, int $amount = 1, ?BranchOffice $branch = null): void
     {
-        [$packageLimit, $subscription] = $this->limitAndSubscription($company, $metricKey, $branch);
+        [$packageLimit, $voucher] = $this->limitAndVoucher($company, $metricKey, $branch);
 
         if (! $packageLimit || ! $packageLimit->limitMetric->isConsumable()) {
             return;
         }
 
-        DB::transaction(function () use ($company, $packageLimit, $branch, $subscription, $amount) {
+        DB::transaction(function () use ($company, $packageLimit, $branch, $voucher, $amount) {
             $metric = $packageLimit->limitMetric;
-            $usage = $this->lockOrCreateUsage($company, $metric, $branch, $subscription);
+            $usage = $this->lockOrCreateUsage($company, $metric, $branch, $voucher);
 
             if ($usage->used_value + $amount > $packageLimit->max_value) {
                 $this->notifyExhausted($company, $metric, $usage, $packageLimit->max_value);
@@ -311,14 +316,14 @@ class PackageLimitService
      */
     public function release(Company $company, string $metricKey, int $amount = 1, ?BranchOffice $branch = null): void
     {
-        [$packageLimit, $subscription] = $this->limitAndSubscription($company, $metricKey, $branch);
+        [$packageLimit, $voucher] = $this->limitAndVoucher($company, $metricKey, $branch);
 
         if (! $packageLimit || ! $packageLimit->limitMetric->isConsumable()) {
             return;
         }
 
-        DB::transaction(function () use ($company, $packageLimit, $branch, $subscription, $amount) {
-            $usage = $this->usageQuery($company, $packageLimit->limitMetric, $branch, $subscription)
+        DB::transaction(function () use ($company, $packageLimit, $branch, $voucher, $amount) {
+            $usage = $this->usageQuery($company, $packageLimit->limitMetric, $branch, $voucher, $this->currentPeriod($voucher)[0])
                 ->lockForUpdate()
                 ->first();
 
@@ -330,7 +335,7 @@ class PackageLimitService
 
     /**
      * Kirim notifikasi "kuota habis" ke owner company, maksimal sekali per
-     * periode (notified_at).
+     * periode bulanan (notified_at ada di baris counter periode itu).
      */
     public function notifyExhausted(Company $company, LimitMetric $metric, CompanyLimitUsage $usage, int $maxValue): void
     {
@@ -380,7 +385,7 @@ class PackageLimitService
                 ];
             }
 
-            $usage = $this->usageRow($company, $metric, $branch, $voucher->subscription);
+            $usage = $this->usageRow($company, $metric, $branch, $voucher);
 
             return [
                 'metric' => $metric,
@@ -420,9 +425,9 @@ class PackageLimitService
     }
 
     /**
-     * @return array{0: ?PackageLimit, 1: ?Subscription}
+     * @return array{0: ?PackageLimit, 1: ?Voucher}
      */
-    protected function limitAndSubscription(Company $company, string $metricKey, ?BranchOffice $branch): array
+    protected function limitAndVoucher(Company $company, string $metricKey, ?BranchOffice $branch): array
     {
         $voucher = $this->resolveActiveVoucher($company, $branch);
 
@@ -430,32 +435,66 @@ class PackageLimitService
             return [null, null];
         }
 
-        return [$this->packageLimitFor($voucher->package, $metricKey), $voucher->subscription];
+        return [$this->packageLimitFor($voucher->package, $metricKey), $voucher];
+    }
+
+    /**
+     * Periode kuota bulanan yang sedang berjalan untuk voucher aktif:
+     * [awal, akhir). Bulan ke-n = valid_from + n bulan (addMonthsNoOverflow
+     * dari valid_from asli, jadi 31 Jan -> 28 Feb -> 31 Mar tidak
+     * bergeser). Akhir periode terakhir dipotong di valid_until.
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    public function currentPeriod(Voucher $voucher): array
+    {
+        $from = Carbon::parse($voucher->valid_from);
+        $now = now();
+        $startOf = fn (int $month) => $from->copy()->addMonthsNoOverflow($month);
+
+        $month = max(0, (int) floor($from->diffInMonths($now)));
+
+        while ($month > 0 && $startOf($month)->gt($now)) {
+            $month--;
+        }
+
+        while ($startOf($month + 1)->lte($now)) {
+            $month++;
+        }
+
+        $end = $startOf($month + 1);
+
+        if ($voucher->valid_until && $end->gt($voucher->valid_until)) {
+            $end = Carbon::parse($voucher->valid_until);
+        }
+
+        return [$startOf($month), $end];
     }
 
     protected function quotaExhausted(LimitMetric $metric, CompanyLimitUsage $usage, PackageLimit $packageLimit): PackageLimitExceededException
     {
         return new PackageLimitExceededException(
-            "Kuota {$metric->name} paket Anda untuk periode ini sudah habis ({$usage->used_value}/{$packageLimit->max_value} {$metric->unit}). Beli/perpanjang paket untuk melanjutkan.",
+            "Kuota {$metric->name} paket Anda bulan ini sudah habis ({$usage->used_value}/{$packageLimit->max_value} {$metric->unit}). Kuota terisi lagi pada ".$usage->period_end?->format('d M Y H:i').'.',
             $metric->key
         );
     }
 
     /**
-     * Counter consumable satu (company, branch, metric, subscription),
-     * dibuat saat pertama dipakai.
+     * Counter consumable satu (company, branch, metric, subscription,
+     * periode bulanan), dibuat saat pertama dipakai.
      */
-    protected function usageRow(Company $company, LimitMetric $metric, ?BranchOffice $branch, ?Subscription $subscription): CompanyLimitUsage
+    protected function usageRow(Company $company, LimitMetric $metric, ?BranchOffice $branch, Voucher $voucher): CompanyLimitUsage
     {
-        return DB::transaction(fn () => $this->lockOrCreateUsage($company, $metric, $branch, $subscription));
+        return DB::transaction(fn () => $this->lockOrCreateUsage($company, $metric, $branch, $voucher));
     }
 
-    protected function usageQuery(Company $company, LimitMetric $metric, ?BranchOffice $branch, ?Subscription $subscription): Builder
+    protected function usageQuery(Company $company, LimitMetric $metric, ?BranchOffice $branch, Voucher $voucher, Carbon $periodStart): Builder
     {
         return CompanyLimitUsage::where('company_id', $company->id)
             ->where('branch_office_id', $branch?->id)
             ->where('limit_metric_id', $metric->id)
-            ->where('subscription_id', $subscription?->id);
+            ->where('subscription_id', $voucher->subscription_id)
+            ->where('period_start', $periodStart);
     }
 
     /**
@@ -464,9 +503,11 @@ class PackageLimitService
      * yang belum ada, jadi balapan INSERT pertama ditangkap lewat unique
      * constraint usage_key (lihat migration company_limit_usages).
      */
-    protected function lockOrCreateUsage(Company $company, LimitMetric $metric, ?BranchOffice $branch, ?Subscription $subscription): CompanyLimitUsage
+    protected function lockOrCreateUsage(Company $company, LimitMetric $metric, ?BranchOffice $branch, Voucher $voucher): CompanyLimitUsage
     {
-        $find = fn () => $this->usageQuery($company, $metric, $branch, $subscription)->lockForUpdate()->first();
+        [$periodStart, $periodEnd] = $this->currentPeriod($voucher);
+
+        $find = fn () => $this->usageQuery($company, $metric, $branch, $voucher, $periodStart)->lockForUpdate()->first();
 
         if ($row = $find()) {
             return $row;
@@ -477,10 +518,10 @@ class PackageLimitService
                 'company_id' => $company->id,
                 'branch_office_id' => $branch?->id,
                 'limit_metric_id' => $metric->id,
-                'subscription_id' => $subscription?->id,
+                'subscription_id' => $voucher->subscription_id,
                 'used_value' => 0,
-                'period_start' => $subscription?->start_date,
-                'period_end' => $subscription?->end_date,
+                'period_start' => $periodStart,
+                'period_end' => $periodEnd,
             ]);
         } catch (QueryException $e) {
             // Kalah balapan baris pertama -- transaksi lain baru saja

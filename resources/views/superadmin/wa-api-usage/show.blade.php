@@ -45,7 +45,7 @@
                         <p class="text-muted small mb-3">Semua pengiriman lewat API company ini akan ditolak (HTTP 403).</p>
                     @endif
 
-                    <p class="text-muted small mb-1">Kuota Pengiriman Pesan (semua jalur, bukan hanya API)</p>
+                    <p class="text-muted small mb-1">Kuota Pengiriman Pesan Bulan Ini (semua jalur, bukan hanya API)</p>
                     @if ($summary['quota']['unlimited'])
                         <h5 class="mb-0">Tidak dibatasi</h5>
                     @else

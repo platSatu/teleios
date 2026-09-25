@@ -64,7 +64,7 @@
                                 @endif
                             </div>
                             <div class="col-12 col-md-6">
-                                <p class="text-muted small mb-1">Kuota Pengiriman Pesan Paket</p>
+                                <p class="text-muted small mb-1">Kuota Pengiriman Pesan Bulan Ini</p>
                                 @if (! $summary['quota'])
                                     <h5 class="mb-0">-</h5>
                                 @elseif ($summary['quota']['unlimited'])
@@ -83,7 +83,7 @@
                                     </div>
                                 @endif
                                 <p class="text-muted fs-12 mb-0 mt-1">
-                                    Kuota ini dipakai bersama oleh semua pengiriman company (API, broadcast, auto-reply), sesuai paket yang dibeli.
+                                    Kuota ini dipakai bersama oleh semua pengiriman branch (API, broadcast, auto-reply) dan di-reset setiap bulan sejak paket aktif.
                                 </p>
                             </div>
                         </div>
