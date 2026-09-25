@@ -35,6 +35,7 @@ use App\Http\Controllers\Superadmin\AuditLogController;
 
 use App\Http\Controllers\Superadmin\QueueMonitorController;
 use App\Http\Controllers\Superadmin\PaymentWebhookController;
+use App\Http\Controllers\Superadmin\WaApiUsageController as SuperadminWaApiUsageController;
 use App\Http\Controllers\Superadmin\DuitkuSettingController;
 
 use App\Http\Controllers\Superadmin\RoleController;
@@ -1576,6 +1577,18 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
             ->group(function () {
                 Route::get('/', 'index')->name('payment-webhooks.index');
                 Route::get('/{id}', 'show')->name('payment-webhooks.show');
+            });
+
+        // "Pemakaian WA API" di sidebar — riwayat & jumlah request WA API
+        // pihak ketiga lintas SEMUA company (App\Models\WaApiRequestLog),
+        // supaya superadmin/CS bisa menjawab pertanyaan customer soal
+        // pengiriman lewat API. Read-only, tidak menampilkan token/secret.
+        // See Superadmin\WaApiUsageController.
+        Route::prefix('wa-api-usage')
+            ->controller(SuperadminWaApiUsageController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('wa-api-usage.index');
+                Route::get('/{company}', 'show')->name('wa-api-usage.show');
             });
 
         // Kredensial merchant Duitku (Merchant Code + API Key, sandbox &

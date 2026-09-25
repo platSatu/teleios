@@ -685,6 +685,11 @@
                                     Dokumentasi API (Artikel)
                                 </a>
                             </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('wa-api-usage.index') }}" class="pe-nav-link">
+                                    Pemakaian WA API
+                                </a>
+                            </li>
                         </ul>
                     </li>
                     <li class="pe-slide pe-has-sub">

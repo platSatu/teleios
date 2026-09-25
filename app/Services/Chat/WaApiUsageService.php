@@ -109,6 +109,23 @@ class WaApiUsageService
         ];
     }
 
+    /**
+     * Paket aktif + kuota broadcast_send satu company — dipakai halaman
+     * Superadmin > Pemakaian WA API (App\Http\Controllers\Superadmin\
+     * WaApiUsageController), yang melihat per company, bukan per API key.
+     *
+     * @return array{package: ?array, quota: array}
+     */
+    public function companySummary(Company $company): array
+    {
+        $voucher = $this->packageLimits->resolveActiveVoucher($company);
+
+        return [
+            'package' => $this->packageInfo($company, $voucher),
+            'quota' => $this->quotaInfo($company),
+        ];
+    }
+
     private function packageInfo(?Company $company, $voucher): ?array
     {
         if (! $company || ! $voucher) {
