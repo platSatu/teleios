@@ -9,6 +9,7 @@ use App\Services\PackageLimitService;
 use App\Support\MenuGateCategories;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\View;
+use Illuminate\Validation\Rules\Password;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -26,6 +27,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Aturan password untuk register, reset & ganti password
+        // (Password::defaults()): minimal 8 karakter, ada huruf dan angka.
+        Password::defaults(fn () => Password::min(8)->letters()->numbers());
+
         // Sidebar (menu.blade.php) dan pemilih branch (header.blade.php)
         // di-share oleh setiap halaman dashboard, bukan dirender satu
         // controller -- view composer menghitung ulang datanya tepat

@@ -30,12 +30,13 @@ Route::prefix('auth')->middleware('guest')->group(function () {
     Route::get('register', [AuthController::class, 'showRegister'])
         ->name('register');
 
-    Route::post('register', [AuthController::class, 'register']);
+    // throttle per IP = lapis tambahan di atas batas per email+IP di AuthController.
+    Route::post('register', [AuthController::class, 'register'])->middleware('throttle:10,1');
 
     Route::get('login', [AuthController::class, 'showLogin'])
         ->name('login');
 
-    Route::post('login', [AuthController::class, 'login']);
+    Route::post('login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 
     // "Sign in/up with Google" — see AuthController::redirectToGoogle()/
     // handleGoogleCallback(). Same guest-only group as login/register
@@ -44,18 +45,21 @@ Route::prefix('auth')->middleware('guest')->group(function () {
         ->name('auth.google');
 
     Route::get('google/callback', [AuthController::class, 'handleGoogleCallback'])
+        ->middleware('throttle:20,1')
         ->name('auth.google.callback');
 
     Route::get('forgot-password', [AuthController::class, 'showForgotPassword'])
         ->name('password.request');
 
     Route::post('forgot-password', [AuthController::class, 'forgotPassword'])
+        ->middleware('throttle:6,1')
         ->name('password.email');
 
     Route::get('reset-password/{token}', [AuthController::class, 'showResetPassword'])
         ->name('password.reset');
 
     Route::post('reset-password', [AuthController::class, 'resetPassword'])
+        ->middleware('throttle:6,1')
         ->name('password.store');
 
     Route::get('verify-email', [AuthController::class, 'showResendVerification'])
@@ -74,9 +78,9 @@ Route::prefix('auth')->middleware('auth')->group(function () {
     Route::get('confirm-password', [ConfirmablePasswordController::class, 'show'])
         ->name('password.confirm');
 
-    Route::post('confirm-password', [ConfirmablePasswordController::class, 'store']);
+    Route::post('confirm-password', [ConfirmablePasswordController::class, 'store'])->middleware('throttle:6,1');
 
-    Route::put('password', [PasswordController::class, 'update'])->name('password.update');
+    Route::put('password', [PasswordController::class, 'update'])->middleware('throttle:6,1')->name('password.update');
 
     Route::post('logout', [AuthController::class, 'logout'])
         ->name('logout');

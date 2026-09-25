@@ -16,6 +16,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cookie;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\RateLimiter;
@@ -78,6 +79,30 @@ class AuthController extends Controller
     private const LOGIN_DECAY_SECONDS = 3600; // 60 minutes
 
     /**
+     * Batas percobaan login gagal per IP (lintas email) -- menahan
+     * password spraying (satu IP mencoba banyak email). Lihat login().
+     */
+    private const LOGIN_IP_MAX_ATTEMPTS = 20;
+
+    /**
+     * Batas register / kirim ulang verifikasi per IP (lintas email) dan
+     * kirim ulang verifikasi per email -- menahan pendaftaran massal dan
+     * spam email ke kotak masuk orang lain.
+     */
+    private const REGISTER_IP_MAX_ATTEMPTS = 5;
+
+    private const RESEND_EMAIL_MAX_ATTEMPTS = 3;
+
+    private const HOURLY_DECAY_SECONDS = 3600;
+
+    /**
+     * Hash bcrypt dummy: dicek saat email tidak ditemukan supaya waktu
+     * respon login sama dengan email yang ada (tidak bisa ditebak lewat
+     * timing email mana yang terdaftar).
+     */
+    private const DUMMY_PASSWORD_HASH = '$2y$12$Nmt44A2ByUV5ogQ1687XQu.JT8Fzc7JyCM54N1M4jIehCwrs1554y';
+
+    /**
      * Cap for register()/forgotPassword() — see ensureActionIsNotRateLimited().
      */
     private const EMAIL_ACTION_MAX_ATTEMPTS = 2;
@@ -121,6 +146,7 @@ class AuthController extends Controller
         ]);
 
         $this->ensureIsNotRateLimited($request);
+        $this->ensureLimit($request, 'login-ip|'.$request->ip(), self::LOGIN_IP_MAX_ATTEMPTS, 'Terlalu banyak percobaan login dari jaringan Anda.');
 
         // Single parameterized lookup by email. Eloquent/query builder
         // binds every value through PDO prepared statements — user
@@ -129,8 +155,11 @@ class AuthController extends Controller
         // what's submitted in the email field.
         $user = User::where('email', $validated['email'])->first();
 
-        if (! $user || ! Hash::check($validated['password'], $user->password)) {
+        $passwordValid = Hash::check($validated['password'], $user?->password ?? self::DUMMY_PASSWORD_HASH);
+
+        if (! $user || ! $passwordValid) {
             RateLimiter::hit($this->throttleKey($request), self::LOGIN_DECAY_SECONDS);
+            RateLimiter::hit('login-ip|'.$request->ip(), self::HOURLY_DECAY_SECONDS);
 
             throw ValidationException::withMessages([
                 'email' => trans('auth.failed'),
@@ -159,16 +188,15 @@ class AuthController extends Controller
 
     /**
      * GET /auth/google — kicks off the OAuth dance by bouncing the
-     * browser to Google's own consent screen. stateless() since this app
-     * has no long-lived "linked account" management UI yet — each click
-     * is a fresh, independent login/register attempt, so there's nothing
-     * gained from Socialite's default session-based state persistence
-     * (and it avoids state-mismatch errors if the guest session doesn't
-     * carry a cookie yet on a first-ever visit).
+     * browser to Google's own consent screen. Memakai state OAuth berbasis
+     * session (bukan stateless) supaya callback palsu dari luar ditolak.
      */
     public function redirectToGoogle()
     {
-        return Socialite::driver('google')->stateless()->redirect();
+        // Tidak stateless: parameter `state` OAuth disimpan di session dan
+        // dicek di callback, supaya orang lain tidak bisa "melogin-kan"
+        // korban ke akun Google milik penyerang (login CSRF).
+        return Socialite::driver('google')->redirect();
     }
 
     /**
@@ -198,7 +226,7 @@ class AuthController extends Controller
     public function handleGoogleCallback(Request $request): RedirectResponse
     {
         try {
-            $googleUser = Socialite::driver('google')->stateless()->user();
+            $googleUser = Socialite::driver('google')->user();
         } catch (\Throwable $e) {
             report($e);
 
@@ -206,22 +234,48 @@ class AuthController extends Controller
                 ->withErrors(['email' => 'Login dengan Google gagal atau dibatalkan. Silakan coba lagi.']);
         }
 
+        // Email Google wajib sudah diverifikasi Google -- email inilah yang
+        // dipakai untuk mencocokkan/menautkan akun yang sudah ada.
+        $googleEmailVerified = (bool) ($googleUser->user['email_verified'] ?? $googleUser->user['verified_email'] ?? false);
+
+        if (! $googleUser->getEmail() || ! $googleEmailVerified) {
+            return redirect()->route('login')
+                ->withErrors(['email' => 'Email akun Google Anda belum terverifikasi oleh Google.']);
+        }
+
         $user = User::where('google_id', $googleUser->getId())->first()
-            ?? User::where('email', $googleUser->getEmail())->first();
+            ?? User::where('email', Str::lower($googleUser->getEmail()))->first();
 
         if ($user) {
             if (! $user->google_id) {
                 $user->forceFill(['google_id' => $googleUser->getId()])->save();
             }
 
+            // Akun yang didaftarkan lewat form tapi BELUM PERNAH diverifikasi:
+            // login Google membuktikan pemilik email, jadi akun diaktifkan --
+            // dan password lamanya diganti acak, supaya siapa pun yang dulu
+            // mendaftarkan email ini (bukan pemilik aslinya) tidak bisa login
+            // dengan password tersebut ("pre-account hijacking"). Akun yang
+            // dinonaktifkan admin (email_verified_at sudah terisi) tetap diblokir.
+            if ($user->status !== 'active' && $user->email_verified_at === null) {
+                $user->forceFill([
+                    'status' => 'active',
+                    'email_verified_at' => now(),
+                    'email_verification_token' => null,
+                    'email_verification_expires_at' => null,
+                    'password' => Hash::make(Str::random(40)),
+                    'remember_token' => Str::random(60),
+                ])->save();
+            }
+
             if ($user->status !== 'active') {
                 return redirect()->route('login')
-                    ->withErrors(['email' => 'Akun Anda belum aktif. Silakan verifikasi email Anda terlebih dahulu sebelum login.']);
+                    ->withErrors(['email' => 'Akun Anda tidak aktif. Hubungi admin untuk informasi lebih lanjut.']);
             }
         } else {
             $user = User::create([
                 'name' => $googleUser->getName() ?: $googleUser->getNickname() ?: 'Google User',
-                'email' => $googleUser->getEmail(),
+                'email' => Str::lower($googleUser->getEmail()),
                 'password' => Hash::make(Str::random(40)),
                 'status' => 'active',
             ]);
@@ -364,7 +418,9 @@ class AuthController extends Controller
         // fixes, so this is really an anti-spam cap rather than a UX
         // limitation. See ensureActionIsNotRateLimited().
         $this->ensureActionIsNotRateLimited($request, 'register');
+        $this->ensureLimit($request, 'register-ip|'.$request->ip(), self::REGISTER_IP_MAX_ATTEMPTS, 'Terlalu banyak pendaftaran dari jaringan Anda.');
         RateLimiter::hit($this->actionThrottleKey($request, 'register'), self::EMAIL_ACTION_DECAY_SECONDS);
+        RateLimiter::hit('register-ip|'.$request->ip(), self::HOURLY_DECAY_SECONDS);
 
         // Snapshot which Syarat & Ketentuan version they're agreeing to
         // right now — null only in the unlikely case no 'active' row
@@ -462,11 +518,15 @@ class AuthController extends Controller
         ]);
 
         $user = User::where('email', $validated['email'])->first();
+        $emailKey = 'resend-verification|'.Str::lower($validated['email']);
 
         // Same message regardless of whether the email exists or is
         // already active — this endpoint can't be used to enumerate
-        // registered addresses.
-        if ($user && $user->status !== 'active') {
+        // registered addresses. Maks 3 email per alamat per jam, supaya
+        // tidak bisa dipakai membanjiri kotak masuk orang lain.
+        if ($user && $user->status !== 'active' && $user->email_verified_at === null
+            && ! RateLimiter::tooManyAttempts($emailKey, self::RESEND_EMAIL_MAX_ATTEMPTS)) {
+            RateLimiter::hit($emailKey, self::HOURLY_DECAY_SECONDS);
             $user->sendCustomVerificationEmail();
         }
 
@@ -504,28 +564,18 @@ class AuthController extends Controller
         $this->ensureActionIsNotRateLimited($request, 'forgot-password');
         RateLimiter::hit($this->actionThrottleKey($request, 'forgot-password'), self::EMAIL_ACTION_DECAY_SECONDS);
 
-        // Explicitly checked up front, rather than only relying on
-        // Password::sendResetLink()'s own generic INVALID_USER status —
-        // this app wants a distinct "email tidak terdaftar" message here.
-        if (! User::where('email', $validated['email'])->exists()) {
-            return back()
-                ->withInput($request->only('email'))
-                ->withErrors(['email' => 'Email tersebut tidak terdaftar.']);
-        }
-
         // Queued: User::sendPasswordResetNotification() is overridden to
         // dispatch App\Notifications\ResetPasswordNotification (implements
         // ShouldQueue) instead of Laravel's default synchronous one.
-        $status = Password::sendResetLink($validated);
-
-        if ($status !== Password::RESET_LINK_SENT) {
-            return back()
-                ->withInput($request->only('email'))
-                ->withErrors(['email' => __($status)]);
-        }
+        //
+        // Pesan SELALU sama, baik email terdaftar maupun tidak, dan baik
+        // link baru dikirim maupun masih dalam jeda 60 detik broker --
+        // supaya halaman ini tidak bisa dipakai mengecek email siapa saja
+        // yang punya akun (user enumeration).
+        Password::sendResetLink($validated);
 
         return redirect()->route('login')
-            ->with('status', 'Link reset password telah dikirim ke email Anda.');
+            ->with('status', 'Jika email tersebut terdaftar, link reset password sudah kami kirim. Silakan cek inbox atau folder spam Anda.');
     }
 
     public function showResetPassword(Request $request): View
@@ -548,6 +598,10 @@ class AuthController extends Controller
                     'password' => Hash::make($validated['password']),
                     'remember_token' => Str::random(60),
                 ])->save();
+
+                // Keluarkan semua sesi lama (mis. perangkat yang dicuri /
+                // dipakai orang lain) -- password baru hanya berlaku ke depan.
+                self::logoutAllSessions($user->id);
 
                 event(new PasswordReset($user));
             }
@@ -671,6 +725,42 @@ class AuthController extends Controller
     private function actionThrottleKey(Request $request, string $action): string
     {
         return $action.'|'.$this->throttleKey($request);
+    }
+
+    /**
+     * Throttle umum (key bebas): lempar pesan validasi kalau $key sudah
+     * mencapai $maxAttempts. Penambahan hit dilakukan pemanggil.
+     */
+    private function ensureLimit(Request $request, string $key, int $maxAttempts, string $message): void
+    {
+        if (! RateLimiter::tooManyAttempts($key, $maxAttempts)) {
+            return;
+        }
+
+        event(new Lockout($request));
+
+        $minutes = (int) ceil(RateLimiter::availableIn($key) / 60);
+
+        throw ValidationException::withMessages([
+            'email' => "{$message} Silakan coba kembali dalam {$minutes} menit ke depan.",
+        ]);
+    }
+
+    /**
+     * Hapus semua sesi login milik user (session driver 'database'),
+     * kecuali $exceptSessionId. Dipakai setelah reset / ganti password.
+     */
+    public static function logoutAllSessions(string $userId, ?string $exceptSessionId = null): void
+    {
+        if (config('session.driver') !== 'database') {
+            return;
+        }
+
+        DB::connection(config('session.connection'))
+            ->table(config('session.table', 'sessions'))
+            ->where('user_id', $userId)
+            ->when($exceptSessionId, fn ($query) => $query->where('id', '!=', $exceptSessionId))
+            ->delete();
     }
 
     /**

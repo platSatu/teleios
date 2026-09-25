@@ -193,6 +193,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // tag it.
         $middleware->web(append: [
             \App\Http\Middleware\PreventBackHistoryCache::class,
+            // Sesi user yang dinonaktifkan langsung diputus, dan header
+            // keamanan standar di semua halaman -- lihat masing-masing class.
+            \App\Http\Middleware\EnsureUserIsActive::class,
+            \App\Http\Middleware\SecurityHeaders::class,
         ]);
     })
     ->withMiddleware(function (Middleware $middleware): void {

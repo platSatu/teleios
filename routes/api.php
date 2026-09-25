@@ -191,13 +191,14 @@ Route::prefix('superadmin')->middleware('auth:sanctum')->group(function () {
 
 
 Route::get('/user', function (Request $request) {
-    return $request->user();
+    return $request->user()->only(['id', 'name', 'email']);
 })->middleware('auth:sanctum');
 
+// throttle per IP = lapis tambahan di atas batas per email+IP di controller.
 Route::post('/login', [
     \App\Http\Controllers\Api\Auth\AuthController::class,
     'login'
-]);
+])->middleware('throttle:10,1');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [
