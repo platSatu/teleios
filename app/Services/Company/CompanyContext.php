@@ -75,6 +75,39 @@ final class CompanyContext
         return $this->activeBranch;
     }
 
+    /**
+     * Halaman lanjutan (drill-down) yang tidak punya menu sendiri di
+     * sidebar ikut hak akses menu induknya: awalan route => route menu.
+     */
+    private const DRILL_DOWN = [
+        'form.header' => 'form.category.index',
+        'form.content' => 'form.category.index',
+        'form.footer' => 'form.category.index',
+        'form.setting' => 'form.category.index',
+        'form.submission' => 'form.category.index',
+        'jadwal.ruangan' => 'jadwal.branch.index',
+        'jadwal.branch-settings' => 'jadwal.branch.index',
+        'jadwal.kategori' => 'jadwal.mata-pelajaran.index',
+        'jadwal.grade' => 'jadwal.mata-pelajaran.index',
+        'jadwal.rutin' => 'jadwal.student.index',
+        'tagihan.denda-tier' => 'tagihan.category.index',
+        'inbox' => 'chat.connect-device.index',
+        'chatbot-flows' => 'chat.connect-device.index',
+        'chat.notifications' => 'chat.connect-device.index',
+    ];
+
+    /**
+     * Khusus owner -- tidak bisa diberikan ke role mana pun, walaupun
+     * superadmin mendaftarkannya di Application Menu.
+     */
+    private const OWNER_ONLY = [
+        'keuangan.withdrawal.approval',
+        'profile.company-roles',
+        'profile.company-role-menus',
+        'profile.branch-offices',
+        'profile.branch-office-units',
+    ];
+
     /** @var array<int, string>|null */
     private ?array $grantedMenuIds = null;
 
@@ -89,7 +122,8 @@ final class CompanyContext
      * "tagihan.category.index" mencakup "tagihan.category.*" -- dan yang
      * lebih panjang menang). Boleh hanya kalau menu itu diberikan ke
      * role-nya. Selain itu DITOLAK (fail-closed): tanpa role, menu belum
-     * terdaftar, atau menu nonaktif.
+     * terdaftar, menu nonaktif, atau route OWNER_ONLY. Halaman DRILL_DOWN
+     * mengikuti menu induknya.
      */
     public function canAccessRoute(?string $routeName): bool
     {
@@ -97,8 +131,15 @@ final class CompanyContext
             return true;
         }
 
-        if (! $routeName || ! $this->role) {
+        if (! $routeName || ! $this->role || self::startsWithAny($routeName, self::OWNER_ONLY)) {
             return false;
+        }
+
+        foreach (self::DRILL_DOWN as $prefix => $parentRoute) {
+            if (self::startsWithAny($routeName, [$prefix])) {
+                $routeName = $parentRoute;
+                break;
+            }
         }
 
         $matched = self::menuIdsFor($routeName);
@@ -147,5 +188,17 @@ final class CompanyContext
         }
 
         return $ids;
+    }
+
+    /** Cocok per segmen: "inbox" cocok dengan "inbox.chats", tidak dengan "inboxes.x". */
+    private static function startsWithAny(string $routeName, array $prefixes): bool
+    {
+        foreach ($prefixes as $prefix) {
+            if (str_starts_with($routeName.'.', $prefix.'.')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
