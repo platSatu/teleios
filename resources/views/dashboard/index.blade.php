@@ -4,35 +4,6 @@
 
 @section('content')
 
-@if (! $hasChatPackage)
-    {{-- Belum ada paket Chat/WhatsApp aktif di branch ini -- lihat
-         DashboardController::index(). --}}
-    <div class="card">
-        <div class="card-body text-center py-5 px-4">
-            <div class="avatar-lg bg-primary-subtle text-primary rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
-                style="width:72px;height:72px;">
-                <i class="ri-bar-chart-box-line fs-1"></i>
-            </div>
-            @if ($isSuperadmin)
-                <h4 class="mb-2">Ringkasan Chat</h4>
-                <p class="text-muted mb-0 mx-auto" style="max-width:480px;">
-                    Ringkasan percakapan, performa agent, broadcast, dan CSAT tampil di akun pelanggan yang memiliki paket WhatsApp aktif.
-                </p>
-            @else
-                <h4 class="mb-2">Belum ada data yang tersedia</h4>
-                <p class="text-muted mb-4 mx-auto" style="max-width:480px;">
-                    Ringkasan percakapan, performa agent, broadcast, dan kepuasan pelanggan (CSAT) akan tampil di sini
-                    setelah branch Anda memiliki paket WhatsApp yang aktif.
-                </p>
-                <div class="d-flex flex-wrap justify-content-center gap-2">
-                    <a href="{{ route('dashboard.package.index') }}" class="btn btn-primary"><i class="ri-shopping-bag-3-line me-1"></i> Lihat Paket</a>
-                    <a href="{{ route('dashboard.voucher-redeem.index') }}" class="btn btn-outline-primary"><i class="ri-coupon-3-line me-1"></i> Redeem Voucher</a>
-                </div>
-            @endif
-        </div>
-    </div>
-@else
-
 <link href="{{ asset('be') }}/assets/libs/apexcharts/apexcharts.css" rel="stylesheet">
 
 <div class="row">
@@ -507,7 +478,7 @@
             fetchJson(rankingUrl).then(function (data) {
                 renderDevices(data.devices);
             }).catch(function () {
-                document.getElementById('dash-rep-devices-body').innerHTML = '<tr><td colspan="3" class="text-center text-muted py-4">Data device tidak tersedia.</td></tr>';
+                document.getElementById('dash-rep-devices-body').innerHTML = '<tr><td colspan="3" class="text-center text-muted py-4">Belum ada device.</td></tr>';
             });
         }
 
@@ -517,7 +488,5 @@
         loadRanking();
     });
 </script>
-
-@endif
 
 @endsection

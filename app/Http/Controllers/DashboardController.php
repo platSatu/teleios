@@ -27,30 +27,27 @@ class DashboardController extends Controller
     /** Matches the "last 30 days" window most reporting dashboards default to. */
     private const DEFAULT_WINDOW_DAYS = 30;
 
+    private const EMPTY_SUMMARY = [
+        'response_resolution' => [
+            'total_conversations' => 0,
+            'resolved_count' => 0,
+            'avg_first_response_minutes' => null,
+            'avg_resolution_minutes' => null,
+            'first_response_breach_rate' => 0,
+            'resolution_breach_rate' => 0,
+        ],
+        'agents' => [],
+        'broadcast' => ['total' => 0, 'delivered' => 0, 'read' => 0, 'failed' => 0, 'delivery_rate' => 0, 'read_rate' => 0],
+        'csat' => ['avg_score' => null, 'sent_count' => 0, 'response_rate' => 0, 'score_distribution' => []],
+    ];
+
     public function __construct(protected ChatReportingService $reports)
     {
     }
 
-    /**
-     * Ringkasan chat hanya dimuat kalau branch yang sedang dibuka punya
-     * paket Chat/WhatsApp aktif -- aturan yang sama dengan menu Chat di
-     * sidebar (AppServiceProvider). Tanpa paket, dashboard menampilkan
-     * keadaan kosong + ajakan beli paket, bukan widget berisi "-" dan
-     * "Gagal memuat data laporan".
-     */
-    public function index(Request $request, PackageLimitService $packageLimits)
+    public function index()
     {
-        $user = $request->user();
-        $context = $user->user_type === 'SUPERADMIN'
-            ? null
-            : app(CompanyContextResolver::class)->resolve($user, session('active_company_id'));
-        $branch = $context?->activeBranch();
-
-        return view('dashboard.index', [
-            'isSuperadmin' => $user->user_type === 'SUPERADMIN',
-            'hasChatPackage' => $branch !== null
-                && $packageLimits->hasActiveCategoryPackage($context->company, JadwalReminderSetting::CHAT_CATEGORY_NAMES, $branch),
-        ]);
+        return view('dashboard.index');
     }
 
     /**
@@ -64,19 +61,32 @@ class DashboardController extends Controller
      * broadcast stats have no branch dimension on wa_message_schedules,
      * so that section is company-wide regardless.
      */
-    public function summary(Request $request): JsonResponse
+    public function summary(Request $request, PackageLimitService $packageLimits): JsonResponse
     {
         $request->validate([
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date'],
         ]);
 
-        $context = $this->companyContext($request);
         [$from, $to] = $this->resolveWindow($request);
+        $period = ['from' => $from->toDateString(), 'to' => $to->toDateString()];
+
+        $user = $request->user();
+        $context = $user->user_type === 'SUPERADMIN'
+            ? null
+            : app(CompanyContextResolver::class)->resolve($user, session('active_company_id'));
+        $branch = $context?->activeBranch();
+
+        // Belum punya company/branch/paket Chat aktif (aturan sama dengan
+        // menu Chat di sidebar): kartu dashboard tetap tampil, isinya nol.
+        if (! $branch || ! $packageLimits->hasActiveCategoryPackage($context->company, JadwalReminderSetting::CHAT_CATEGORY_NAMES, $branch)) {
+            return response()->json(['period' => $period] + self::EMPTY_SUMMARY);
+        }
+
         $branchOfficeId = $context->isLockedToBranch() ? $context->branchOffice?->id : null;
 
         return response()->json([
-            'period' => ['from' => $from->toDateString(), 'to' => $to->toDateString()],
+            'period' => $period,
             'response_resolution' => $this->reports->responseAndResolutionSummary($context->company->id, $from, $to, $branchOfficeId),
             'agents' => $this->reports->agentPerformance($context->company->id, $from, $to, $branchOfficeId)->values(),
             'broadcast' => $this->reports->broadcastDeliveryStats($context->company->id, $from, $to),
