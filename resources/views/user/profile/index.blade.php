@@ -72,6 +72,12 @@
 
         @include('components.notifikasi')
 
+        @if (blank($user->handphone) && ! session('warning'))
+            <div class="alert alert-warning mb-4">
+                <i class="ri-alert-line me-2"></i>{{ \App\Http\Middleware\EnsureHandphoneFilled::MESSAGE }}
+            </div>
+        @endif
+
         @unless ($hasActivePackage)
             <div
                 class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
@@ -209,18 +215,18 @@
                                 </div>
 
                                 <div class="mb-3">
-                                    <label for="handphone" class="form-label">Handphone (WhatsApp)</label>
+                                    <label for="handphone" class="form-label">Handphone (WhatsApp) <span class="text-danger">*</span></label>
                                     <div class="input-group">
                                         <span class="input-group-text">+62</span>
                                         <input type="text" inputmode="numeric" name="handphone" id="handphone"
                                             class="form-control @error('handphone') is-invalid @enderror"
                                             value="{{ old('handphone', $user->handphone ? substr($user->handphone, 2) : '') }}"
-                                            placeholder="81234567890" maxlength="14">
+                                            placeholder="81234567890" maxlength="14" required>
                                         @error('handphone')
                                             <div class="invalid-feedback">{{ $message }}</div>
                                         @enderror
                                     </div>
-                                    <div class="form-text">Tanpa awalan 0 atau kode negara 62 -- cukup 10-14 digit setelahnya. Dipakai untuk fitur WhatsApp (mis. cek jadwal via kata kunci). Kosongkan untuk menghapus nomor.</div>
+                                    <div class="form-text">Tanpa awalan 0 atau kode negara 62 -- cukup 10-14 digit setelahnya. Dipakai untuk fitur WhatsApp (mis. cek jadwal via kata kunci).</div>
                                 </div>
 
                                 <div class="mb-4">

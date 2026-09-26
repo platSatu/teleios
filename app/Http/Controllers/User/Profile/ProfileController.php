@@ -252,15 +252,18 @@ class ProfileController extends Controller
             // deliberately has no edit action on the owner's own row,
             // and WhatsApp-based features (e.g. the "jadwal" keyword
             // recap) silently no-op for anyone without a handphone set.
-            'handphone' => ['nullable', 'regex:/^[1-9][0-9]{9,13}$/'],
+            // Wajib, sama seperti form register -- pendaftar via Google
+            // diarahkan ke sini dulu (App\Http\Middleware\EnsureHandphoneFilled).
+            'handphone' => ['required', 'regex:/^[1-9][0-9]{9,13}$/'],
         ], [
+            'handphone.required' => 'Nomor WhatsApp wajib diisi.',
             'handphone.regex' => 'Nomor WhatsApp harus 10-14 digit angka, tanpa awalan 0 atau kode negara 62 (contoh: 81286800080).',
         ]);
 
         $validator->after(function ($validator) use ($request, $user) {
             $raw = $request->input('handphone');
 
-            if (blank($raw) || $validator->errors()->has('handphone')) {
+            if ($validator->errors()->has('handphone')) {
                 return;
             }
 
@@ -277,12 +280,7 @@ class ProfileController extends Controller
 
         $validated = $validator->validate();
 
-        // Same normalization as everywhere else — see the field's
-        // validation comment above. An empty submission CLEARS the
-        // number (explicit null) rather than leaving whatever was
-        // there before untouched, so a wrong number can actually be
-        // removed from this form too.
-        $validated['handphone'] = filled($validated['handphone'] ?? null) ? '62'.$validated['handphone'] : null;
+        $validated['handphone'] = '62'.$validated['handphone'];
 
         if ($request->hasFile('image')) {
             // Remove the old photo first so changing avatars doesn't

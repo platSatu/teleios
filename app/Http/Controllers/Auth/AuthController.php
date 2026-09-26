@@ -134,7 +134,9 @@ class AuthController extends Controller
 
     public function showLogin(): View
     {
-        return view('auth.login');
+        return view('auth.login', [
+            'currentTerms' => WebTermCondition::current(),
+        ]);
     }
 
     public function login(Request $request): RedirectResponse
@@ -283,6 +285,16 @@ class AuthController extends Controller
             $user->forceFill([
                 'google_id' => $googleUser->getId(),
                 'email_verified_at' => now(),
+            ])->save();
+        }
+
+        // Tombol Google di halaman login/register memuat pernyataan "Dengan
+        // melanjutkan via Google, Anda menyetujui S&K" -- dicatat sekali,
+        // sama seperti centang S&K di form register.
+        if (! $user->terms_accepted_at) {
+            $user->forceFill([
+                'terms_id' => WebTermCondition::current()?->id,
+                'terms_accepted_at' => now(),
             ])->save();
         }
 

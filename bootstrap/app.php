@@ -196,6 +196,9 @@ return Application::configure(basePath: dirname(__DIR__))
             // Sesi user yang dinonaktifkan langsung diputus, dan header
             // keamanan standar di semua halaman -- lihat masing-masing class.
             \App\Http\Middleware\EnsureUserIsActive::class,
+            // User tanpa no. HP (mis. daftar via Google) diarahkan ke
+            // Profile untuk melengkapinya dulu.
+            \App\Http\Middleware\EnsureHandphoneFilled::class,
             \App\Http\Middleware\SecurityHeaders::class,
         ]);
     })

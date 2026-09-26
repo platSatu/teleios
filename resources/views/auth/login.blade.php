@@ -143,6 +143,10 @@
                             class="w-16px">Sign in via Google
                     </a>
                 </div>
+                <p class="text-center text-muted fs-12 mt-2 mb-0">
+                    Dengan melanjutkan via Google, Anda menyetujui
+                    <a href="#" data-bs-toggle="modal" data-bs-target="#termsModal">Syarat dan Ketentuan</a>.
+                </p>
             </div>
         </div>
     </div>
@@ -169,6 +173,7 @@
     <!-- Auth init -->
     <script src="{{ asset('be') }}/assets/js/auth/auth.init.js"></script>
 
+    @include('auth._terms-modal')
 </body>
 
 </html>
