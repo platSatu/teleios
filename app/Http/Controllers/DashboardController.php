@@ -3,7 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\ResolvesCompanyContext;
+use App\Models\JadwalReminderSetting;
 use App\Services\Chat\ChatReportingService;
+use App\Services\Company\CompanyContextResolver;
+use App\Services\PackageLimitService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -28,9 +31,26 @@ class DashboardController extends Controller
     {
     }
 
-    public function index()
+    /**
+     * Ringkasan chat hanya dimuat kalau branch yang sedang dibuka punya
+     * paket Chat/WhatsApp aktif -- aturan yang sama dengan menu Chat di
+     * sidebar (AppServiceProvider). Tanpa paket, dashboard menampilkan
+     * keadaan kosong + ajakan beli paket, bukan widget berisi "-" dan
+     * "Gagal memuat data laporan".
+     */
+    public function index(Request $request, PackageLimitService $packageLimits)
     {
-        return view('dashboard.index');
+        $user = $request->user();
+        $context = $user->user_type === 'SUPERADMIN'
+            ? null
+            : app(CompanyContextResolver::class)->resolve($user, session('active_company_id'));
+        $branch = $context?->activeBranch();
+
+        return view('dashboard.index', [
+            'isSuperadmin' => $user->user_type === 'SUPERADMIN',
+            'hasChatPackage' => $branch !== null
+                && $packageLimits->hasActiveCategoryPackage($context->company, JadwalReminderSetting::CHAT_CATEGORY_NAMES, $branch),
+        ]);
     }
 
     /**
