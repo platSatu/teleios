@@ -55,30 +55,15 @@ class AppServiceProvider extends ServiceProvider
             $covers = fn (array $names) => $isSuperadmin
                 || ($branch && $packageLimits->hasActiveCategoryPackage($context->company, $names, $branch));
 
-            // Per-role menu filter -- null = tidak dibatasi (owner/
-            // superadmin/tanpa company), Collection route_name = hanya
-            // itu. Lihat App\Models\CompanyRoleMenu & EnsureMenuAccess.
-            $allowedChatRouteNames = null;
-
-            if ($context && ! $context->isOwner) {
-                $allowedChatRouteNames = $context->role
-                    ? \App\Models\CompanyRoleMenu::where('company_role_id', $context->role->id)
-                        ->where('status', 'active')
-                        ->with('applicationMenu:id,route_name')
-                        ->get()
-                        ->pluck('applicationMenu.route_name')
-                        ->filter()
-                        ->values()
-                    : collect();
-            }
-
             $view->with([
                 'hasActivePackage' => $isSuperadmin || ($branch && $packageLimits->activePackage($context->company, $branch) !== null),
                 'hasActiveChatPackage' => $covers(JadwalReminderSetting::CHAT_CATEGORY_NAMES),
                 'hasActiveFormPackage' => $covers(MenuGateCategories::FORM_CATEGORY_NAMES),
                 'hasActiveJadwalPackage' => $covers(MenuGateCategories::JADWAL_CATEGORY_NAMES),
                 'hasActiveTagihanPackage' => $covers(MenuGateCategories::TAGIHAN_CATEGORY_NAMES),
-                'allowedChatRouteNames' => $allowedChatRouteNames,
+                // Aturan menu per role -- sama dengan middleware
+                // 'menu.access', lihat CompanyContext::canAccessRoute().
+                'canSeeMenu' => fn (string $routeName) => ! $context || $context->canAccessRoute($routeName),
             ]);
         });
 

@@ -33,6 +33,13 @@
                     </a>
                 </li>
                 <li class="pe-menu-title">Apps</li>
+                {{-- Aturan menu per role: $canSeeMenu dari AppServiceProvider
+                     (sama dengan middleware 'menu.access', lihat
+                     CompanyContext::canAccessRoute()). Grup menu hanya
+                     tampil kalau minimal satu isinya boleh dibuka. --}}
+                @php
+                    $canSeeAny = fn(array $routeNames) => collect($routeNames)->contains(fn($routeName) => $canSeeMenu($routeName));
+                @endphp
 
                 {{--
                     Menu "Form" -- form builder Google-Forms-style per
@@ -54,7 +61,7 @@
                     tetap backstop di level route untuk pembatasan
                     per-role.
                 --}}
-                @if ($hasActiveFormPackage)
+                @if ($hasActiveFormPackage && $canSeeAny(['form.branch.index', 'form.category.index']))
                     <li class="pe-slide pe-has-sub">
                         <a href="#collapseForm" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
                             aria-controls="collapseForm">
@@ -64,16 +71,20 @@
                             <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
                         </a>
                         <ul class="pe-slide-menu collapse" id="collapseForm">
-                            <li class="pe-slide-item">
-                                <a href="{{ route('form.branch.index') }}" class="pe-nav-link">
-                                    Branch
-                                </a>
-                            </li>
-                            <li class="pe-slide-item">
-                                <a href="{{ route('form.category.index') }}" class="pe-nav-link">
-                                    Form Category
-                                </a>
-                            </li>
+                            @if ($canSeeMenu('form.branch.index'))
+                                <li class="pe-slide-item">
+                                    <a href="{{ route('form.branch.index') }}" class="pe-nav-link">
+                                        Branch
+                                    </a>
+                                </li>
+                            @endif
+                            @if ($canSeeMenu('form.category.index'))
+                                <li class="pe-slide-item">
+                                    <a href="{{ route('form.category.index') }}" class="pe-nav-link">
+                                        Form Category
+                                    </a>
+                                </li>
+                            @endif
                         </ul>
                     </li>
                 @endif
@@ -83,13 +94,8 @@
                     bidang pendidikan (musik, bahasa, dll.), lihat
                     App\Http\Controllers\Jadwal\*. Diletakkan di atas
                     "Chat" (bukan di dalamnya) karena bukan bagian dari
-                    fitur/paket Chat. Belum ada filter per-role
-                    ($canSeeChatMenu-equivalent) di sini --
-                    App\Http\Middleware\EnsureMenuAccess tetap jadi
-                    backstop di level route (lihat routes/web.php), ini
-                    cuma belum ada baris App\Models\ApplicationMenu untuk
-                    dibatasi. Tambahkan filter serupa Chat kalau nanti
-                    fitur ini butuh pembatasan per-role.
+                    fitur/paket Chat. Tiap item disaring per role lewat
+                    $canSeeMenu, sama seperti Chat.
 
                     Sejak 22 September 2026: DIBUNGKUS $hasActiveJadwalPackage
                     -- Jadwal dijual sebagai layanan terpisah dari Chat/
@@ -103,7 +109,7 @@
                     kirim reminder-nya, bukan soal akses Jadwal itu
                     sendiri.
                 --}}
-                @if ($hasActiveJadwalPackage)
+                @if ($hasActiveJadwalPackage && $canSeeAny(['jadwal.branch.index', 'jadwal.mata-pelajaran.index', 'jadwal.pengajar.index', 'jadwal.student.index', 'jadwal.kelas.index', 'jadwal.laporan.index', 'jadwal.settings.edit', 'jadwal.reschedule-requests.index', 'keuangan.dashboard.index', 'keuangan.transfer-fee.index', 'keuangan.withdrawal.index', 'keuangan.withdrawal.approval.index']))
                     <li class="pe-slide pe-has-sub">
                         <a href="#collapseJadwal" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
                             aria-controls="collapseJadwal">
@@ -113,42 +119,54 @@
                             <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
                         </a>
                         <ul class="pe-slide-menu collapse" id="collapseJadwal">
-                            <li class="pe-slide-item">
-                                <a href="{{ route('jadwal.branch.index') }}" class="pe-nav-link">
-                                    Branch
-                                </a>
-                            </li>
-                            <li class="pe-slide-item">
-                                <a href="{{ route('jadwal.mata-pelajaran.index') }}" class="pe-nav-link">
-                                    Mata Pelajaran / Bidang
-                                </a>
-                            </li>
+                            @if ($canSeeMenu('jadwal.branch.index'))
+                                <li class="pe-slide-item">
+                                    <a href="{{ route('jadwal.branch.index') }}" class="pe-nav-link">
+                                        Branch
+                                    </a>
+                                </li>
+                            @endif
+                            @if ($canSeeMenu('jadwal.mata-pelajaran.index'))
+                                <li class="pe-slide-item">
+                                    <a href="{{ route('jadwal.mata-pelajaran.index') }}" class="pe-nav-link">
+                                        Mata Pelajaran / Bidang
+                                    </a>
+                                </li>
+                            @endif
                             {{-- Pengajar sekarang punya menu sendiri (bukan
                                      cuma lewat drill-down "+ Add Pengajar" di
                                      index Kategori) -- permintaan user 3
                                      September 2026. Tanpa query string =
                                      mode global, lihat App\Http\Controllers\
                                      Jadwal\JadwalPengajarController::index(). --}}
-                            <li class="pe-slide-item">
-                                <a href="{{ route('jadwal.pengajar.index') }}" class="pe-nav-link">
-                                    Pengajar
-                                </a>
-                            </li>
-                            <li class="pe-slide-item">
-                                <a href="{{ route('jadwal.student.index') }}" class="pe-nav-link">
-                                    Student
-                                </a>
-                            </li>
-                            <li class="pe-slide-item">
-                                <a href="{{ route('jadwal.kelas.index') }}" class="pe-nav-link">
-                                    Jadwal Kelas
-                                </a>
-                            </li>
-                            <li class="pe-slide-item">
-                                <a href="{{ route('jadwal.laporan.index') }}" class="pe-nav-link">
-                                    Laporan
-                                </a>
-                            </li>
+                            @if ($canSeeMenu('jadwal.pengajar.index'))
+                                <li class="pe-slide-item">
+                                    <a href="{{ route('jadwal.pengajar.index') }}" class="pe-nav-link">
+                                        Pengajar
+                                    </a>
+                                </li>
+                            @endif
+                            @if ($canSeeMenu('jadwal.student.index'))
+                                <li class="pe-slide-item">
+                                    <a href="{{ route('jadwal.student.index') }}" class="pe-nav-link">
+                                        Student
+                                    </a>
+                                </li>
+                            @endif
+                            @if ($canSeeMenu('jadwal.kelas.index'))
+                                <li class="pe-slide-item">
+                                    <a href="{{ route('jadwal.kelas.index') }}" class="pe-nav-link">
+                                        Jadwal Kelas
+                                    </a>
+                                </li>
+                            @endif
+                            @if ($canSeeMenu('jadwal.laporan.index'))
+                                <li class="pe-slide-item">
+                                    <a href="{{ route('jadwal.laporan.index') }}" class="pe-nav-link">
+                                        Laporan
+                                    </a>
+                                </li>
+                            @endif
                             {{-- Cuma tampil kalau company punya package aktif
                                      kategori Chat/WhatsApp secara spesifik --
                                      BUKAN $hasActivePackage yang dipakai menu
@@ -162,16 +180,20 @@
                                      JadwalReminderSettingController yang juga
                                      menolak akses langsung ke route-nya. --}}
                             @if ($hasActiveChatPackage)
-                                <li class="pe-slide-item">
-                                    <a href="{{ route('jadwal.settings.edit') }}" class="pe-nav-link">
-                                        Pengaturan Pengingat
-                                    </a>
-                                </li>
-                                <li class="pe-slide-item">
-                                    <a href="{{ route('jadwal.reschedule-requests.index') }}" class="pe-nav-link">
-                                        Permintaan Reschedule
-                                    </a>
-                                </li>
+                                @if ($canSeeMenu('jadwal.settings.edit'))
+                                    <li class="pe-slide-item">
+                                        <a href="{{ route('jadwal.settings.edit') }}" class="pe-nav-link">
+                                            Pengaturan Pengingat
+                                        </a>
+                                    </li>
+                                @endif
+                                @if ($canSeeMenu('jadwal.reschedule-requests.index'))
+                                    <li class="pe-slide-item">
+                                        <a href="{{ route('jadwal.reschedule-requests.index') }}" class="pe-nav-link">
+                                            Permintaan Reschedule
+                                        </a>
+                                    </li>
+                                @endif
                             @endif
 
                             {{-- Keuangan -- Saldo Branch/Company/Reseller &
@@ -187,6 +209,7 @@
                                      sekarang ikut ter-gate
                                      $hasActiveJadwalPackage, sebelumnya
                                      tidak ada gate sama sekali. --}}
+                            @if ($canSeeAny(['keuangan.dashboard.index', 'keuangan.transfer-fee.index', 'keuangan.withdrawal.index', 'keuangan.withdrawal.approval.index']))
                             <li class="pe-slide-item pe-has-sub">
                                 <a href="#collapseJadwalKeuangan" class="pe-nav-link" data-bs-toggle="collapse"
                                     aria-expanded="false" aria-controls="collapseJadwalKeuangan">
@@ -195,28 +218,37 @@
                                     <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
                                 </a>
                                 <ul class="pe-slide-menu collapse" id="collapseJadwalKeuangan">
-                                    <li class="pe-slide-item">
-                                        <a href="{{ route('keuangan.dashboard.index') }}" class="pe-nav-link">
-                                            Dashboard Saldo
-                                        </a>
-                                    </li>
-                                    <li class="pe-slide-item">
-                                        <a href="{{ route('keuangan.transfer-fee.index') }}" class="pe-nav-link">
-                                            Transfer Fee Pengajar
-                                        </a>
-                                    </li>
-                                    <li class="pe-slide-item">
-                                        <a href="{{ route('keuangan.withdrawal.index') }}" class="pe-nav-link">
-                                            Tarik Saldo
-                                        </a>
-                                    </li>
-                                    <li class="pe-slide-item">
-                                        <a href="{{ route('keuangan.withdrawal.approval.index') }}" class="pe-nav-link">
-                                            Persetujuan Tarik Saldo
-                                        </a>
-                                    </li>
+                                    @if ($canSeeMenu('keuangan.dashboard.index'))
+                                        <li class="pe-slide-item">
+                                            <a href="{{ route('keuangan.dashboard.index') }}" class="pe-nav-link">
+                                                Dashboard Saldo
+                                            </a>
+                                        </li>
+                                    @endif
+                                    @if ($canSeeMenu('keuangan.transfer-fee.index'))
+                                        <li class="pe-slide-item">
+                                            <a href="{{ route('keuangan.transfer-fee.index') }}" class="pe-nav-link">
+                                                Transfer Fee Pengajar
+                                            </a>
+                                        </li>
+                                    @endif
+                                    @if ($canSeeMenu('keuangan.withdrawal.index'))
+                                        <li class="pe-slide-item">
+                                            <a href="{{ route('keuangan.withdrawal.index') }}" class="pe-nav-link">
+                                                Tarik Saldo
+                                            </a>
+                                        </li>
+                                    @endif
+                                    @if ($canSeeMenu('keuangan.withdrawal.approval.index'))
+                                        <li class="pe-slide-item">
+                                            <a href="{{ route('keuangan.withdrawal.approval.index') }}" class="pe-nav-link">
+                                                Persetujuan Tarik Saldo
+                                            </a>
+                                        </li>
+                                    @endif
                                 </ul>
                             </li>
+                            @endif
                         </ul>
                     </li>
                 @endif
@@ -226,7 +258,7 @@
                          Tampil hanya kalau paket branch aktif mencakup layanan
                          Tagihan -- pola sama dengan Form/Jadwal di atas; route-
                          nya sendiri dikunci 'active.package:Tagihan,Pembayaran'. --}}
-                @if ($hasActiveTagihanPackage)
+                @if ($hasActiveTagihanPackage && $canSeeAny(['tagihan.category.index', 'tagihan.pelanggan.index', 'tagihan.index', 'tagihan.laporan.index']))
                 <li class="pe-slide pe-has-sub">
                     <a href="#collapseTagihan" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
                         aria-controls="collapseTagihan">
@@ -236,26 +268,34 @@
                         <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
                     </a>
                     <ul class="pe-slide-menu collapse" id="collapseTagihan">
-                        <li class="pe-slide-item">
-                            <a href="{{ route('tagihan.category.index') }}" class="pe-nav-link">
-                                Kategori Tagihan
-                            </a>
-                        </li>
-                        <li class="pe-slide-item">
-                            <a href="{{ route('tagihan.pelanggan.index') }}" class="pe-nav-link">
-                                Pelanggan
-                            </a>
-                        </li>
-                        <li class="pe-slide-item">
-                            <a href="{{ route('tagihan.index') }}" class="pe-nav-link">
-                                Tagihan (Invoice)
-                            </a>
-                        </li>
-                        <li class="pe-slide-item">
-                            <a href="{{ route('tagihan.laporan.index') }}" class="pe-nav-link">
-                                Laporan
-                            </a>
-                        </li>
+                        @if ($canSeeMenu('tagihan.category.index'))
+                            <li class="pe-slide-item">
+                                <a href="{{ route('tagihan.category.index') }}" class="pe-nav-link">
+                                    Kategori Tagihan
+                                </a>
+                            </li>
+                        @endif
+                        @if ($canSeeMenu('tagihan.pelanggan.index'))
+                            <li class="pe-slide-item">
+                                <a href="{{ route('tagihan.pelanggan.index') }}" class="pe-nav-link">
+                                    Pelanggan
+                                </a>
+                            </li>
+                        @endif
+                        @if ($canSeeMenu('tagihan.index'))
+                            <li class="pe-slide-item">
+                                <a href="{{ route('tagihan.index') }}" class="pe-nav-link">
+                                    Tagihan (Invoice)
+                                </a>
+                            </li>
+                        @endif
+                        @if ($canSeeMenu('tagihan.laporan.index'))
+                            <li class="pe-slide-item">
+                                <a href="{{ route('tagihan.laporan.index') }}" class="pe-nav-link">
+                                    Laporan
+                                </a>
+                            </li>
+                        @endif
                     </ul>
                 </li>
                 @endif
@@ -269,15 +309,6 @@
                          AppServiceProvider::boot() since this partial is
                          shared across every dashboard page, not rendered
                          by a single controller. --}}
-                {{-- Per-role menu filter — null means unrestricted
-                         (owner/superadmin/no company context), a
-                         Collection of route_names means "only these".
-                         See AppServiceProvider's view composer and
-                         App\Models\CompanyRoleMenu. --}}
-                @php
-                    $canSeeChatMenu = fn(string $routeName) => $allowedChatRouteNames === null ||
-                        $allowedChatRouteNames->contains($routeName);
-                @endphp
                 @if ($hasActiveChatPackage)
                     <li class="pe-slide pe-has-sub">
                         <a href="#collapseChat" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
@@ -293,7 +324,7 @@
                                     Pesan Masuk
                                 </a>
                             </li> --}}
-                            @if ($canSeeChatMenu('chat.connect-device.index'))
+                            @if ($canSeeMenu('chat.connect-device.index'))
                                 <li class="pe-slide-item">
                                     <a href="{{ route('chat.connect-device.index') }}" class="pe-nav-link">
                                         Device / Inbox
@@ -312,7 +343,7 @@
                                      chat.conversations.index & controller-nya
                                      tetap ada/utuh, cuma link sidebar-nya
                                      yang disembunyikan.
-                            @if ($canSeeChatMenu('chat.conversations.index'))
+                            @if ($canSeeMenu('chat.conversations.index'))
                                 <li class="pe-slide-item">
                                     <a href="{{ route('chat.conversations.index') }}" class="pe-nav-link">
                                         Percakapan
@@ -329,7 +360,7 @@
                                      CustomerTaskController::index(). --}}
                             {{-- Dikomentari sementara atas permintaan user
                                      (22 September 2026) -- BUKAN dihapus.
-                            @if ($canSeeChatMenu('chat.tasks.index'))
+                            @if ($canSeeMenu('chat.tasks.index'))
                                 <li class="pe-slide-item">
                                     <a href="{{ route('chat.tasks.index') }}" class="pe-nav-link">
                                         Tugas &amp; Follow-up
@@ -344,7 +375,7 @@
                                      DealController::index(). --}}
                             {{-- Dikomentari sementara atas permintaan user
                                      (22 September 2026) -- BUKAN dihapus.
-                            @if ($canSeeChatMenu('chat.deals.index'))
+                            @if ($canSeeMenu('chat.deals.index'))
                                 <li class="pe-slide-item">
                                     <a href="{{ route('chat.deals.index') }}" class="pe-nav-link">
                                         Sales Pipeline
@@ -359,7 +390,7 @@
                                      CustomerSegmentController::index(). --}}
                             {{-- Dikomentari sementara atas permintaan user
                                      (22 September 2026) -- BUKAN dihapus.
-                            @if ($canSeeChatMenu('chat.segments.index'))
+                            @if ($canSeeMenu('chat.segments.index'))
                                 <li class="pe-slide-item">
                                     <a href="{{ route('chat.segments.index') }}" class="pe-nav-link">
                                         Segmentasi
@@ -374,7 +405,7 @@
                                      CustomerAutomationRuleController::index(). --}}
                             {{-- Dikomentari sementara atas permintaan user
                                      (22 September 2026) -- BUKAN dihapus.
-                            @if ($canSeeChatMenu('chat.automation-rules.index'))
+                            @if ($canSeeMenu('chat.automation-rules.index'))
                                 <li class="pe-slide-item">
                                     <a href="{{ route('chat.automation-rules.index') }}" class="pe-nav-link">
                                         Automasi
@@ -395,7 +426,7 @@
                                      Chat > Pengaturan > Pesan) so it's now
                                      Chat > Pesan directly. This list item is
                                      intentionally NOT wrapped in its own
-                                     $canSeeChatMenu(...) check — same as every
+                                     $canSeeMenu(...) check — same as every
                                      other submenu group here (e.g. "Pengaturan"
                                      below) — because it has no single route of
                                      its own to test; visibility is decided
@@ -409,14 +440,14 @@
                                     <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
                                 </a>
                                 <ul class="pe-slide-menu collapse" id="collapseMenuLavels2">
-                                    @if ($canSeeChatMenu('chat.message-schedules.index'))
+                                    @if ($canSeeMenu('chat.message-schedules.index'))
                                         <li class="pe-slide-item">
                                             <a href="{{ route('chat.message-schedules.index') }}" class="pe-nav-link">
                                                 Pesan Terjadwal
                                             </a>
                                         </li>
                                     @endif
-                                    @if ($canSeeChatMenu('chat.message-templates.index'))
+                                    @if ($canSeeMenu('chat.message-templates.index'))
                                         <li class="pe-slide-item">
                                             <a href="{{ route('chat.message-templates.index') }}" class="pe-nav-link">
                                                 WA Template
@@ -428,7 +459,7 @@
                                             </a>
                                         </li>
                                     @endif
-                                    @if ($canSeeChatMenu('chat.message-auto-replies.index'))
+                                    @if ($canSeeMenu('chat.message-auto-replies.index'))
                                         <li class="pe-slide-item">
                                             <a href="{{ route('chat.message-auto-replies.index') }}"
                                                 class="pe-nav-link">
@@ -436,7 +467,7 @@
                                             </a>
                                         </li>
                                     @endif
-                                    @if ($canSeeChatMenu('chat.message-quick-replies.index'))
+                                    @if ($canSeeMenu('chat.message-quick-replies.index'))
                                         <li class="pe-slide-item">
                                             <a href="{{ route('chat.message-quick-replies.index') }}"
                                                 class="pe-nav-link">
@@ -444,7 +475,7 @@
                                             </a>
                                         </li>
                                     @endif
-                                    @if ($canSeeChatMenu('chat.ai-bots.index'))
+                                    @if ($canSeeMenu('chat.ai-bots.index'))
                                         <li class="pe-slide-item">
                                             <a href="{{ route('chat.ai-bots.index') }}" class="pe-nav-link">
                                                 AI Bot
@@ -458,7 +489,7 @@
                                     {{-- Dikomentari sementara atas permintaan
                                              user (22 September 2026) -- BUKAN
                                              dihapus.
-                                    @if ($canSeeChatMenu('chat.opt-outs.index'))
+                                    @if ($canSeeMenu('chat.opt-outs.index'))
                                         <li class="pe-slide-item">
                                             <a href="{{ route('chat.opt-outs.index') }}" class="pe-nav-link">
                                                 Opt-out
@@ -473,7 +504,7 @@
                                              empty "Laporan" shell around just
                                              for this one working item, it's
                                              folded straight into "Pesan". --}}
-                                    @if ($canSeeChatMenu('chat.labels.index'))
+                                    @if ($canSeeMenu('chat.labels.index'))
                                         <li class="pe-slide-item">
                                             <a href="{{ route('chat.labels.index') }}" class="pe-nav-link">
                                                 Label
@@ -501,21 +532,21 @@
                                     <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
                                 </a>
                                 <ul class="pe-slide-menu collapse" id="collapseBukuTelephone">
-                                    @if ($canSeeChatMenu('chat.phone-books.index'))
+                                    @if ($canSeeMenu('chat.phone-books.index'))
                                         <li class="pe-slide-item">
                                             <a href="{{ route('chat.phone-books.index') }}" class="pe-nav-link">
                                                 Kontak
                                             </a>
                                         </li>
                                     @endif
-                                    @if ($canSeeChatMenu('chat.contacts.index'))
+                                    @if ($canSeeMenu('chat.contacts.index'))
                                         <li class="pe-slide-item">
                                             <a href="{{ route('chat.contacts.index') }}" class="pe-nav-link">
                                                 Riwayat Kontak
                                             </a>
                                         </li>
                                     @endif
-                                    @if ($canSeeChatMenu('chat.category-phone-books.index'))
+                                    @if ($canSeeMenu('chat.category-phone-books.index'))
                                         <li class="pe-slide-item">
                                             <a href="{{ route('chat.category-phone-books.index') }}"
                                                 class="pe-nav-link">
@@ -523,21 +554,21 @@
                                             </a>
                                         </li>
                                     @endif
-                                    @if ($canSeeChatMenu('chat.wa-groups.index'))
+                                    @if ($canSeeMenu('chat.wa-groups.index'))
                                         <li class="pe-slide-item">
                                             <a href="{{ route('chat.wa-groups.index') }}" class="pe-nav-link">
                                                 WA Group
                                             </a>
                                         </li>
                                     @endif
-                                    @if ($canSeeChatMenu('chat.google-contacts.index'))
+                                    @if ($canSeeMenu('chat.google-contacts.index'))
                                         <li class="pe-slide-item">
                                             <a href="{{ route('chat.google-contacts.index') }}" class="pe-nav-link">
                                                 Google Contact
                                             </a>
                                         </li>
                                     @endif
-                                    @if ($canSeeChatMenu('chat.phone-books.index'))
+                                    @if ($canSeeMenu('chat.phone-books.index'))
                                         <li class="pe-slide-item">
                                             <a href="{{ route('chat.phone-books.index', ['blacklist' => 1]) }}"
                                                 class="pe-nav-link">
@@ -563,7 +594,7 @@
                                     <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
                                 </a>
                                 <ul class="pe-slide-menu collapse" id="collapseThirdParty">
-                                    @if ($canSeeChatMenu('chat.third-party.google-form.index'))
+                                    @if ($canSeeMenu('chat.third-party.google-form.index'))
                                         <li class="pe-slide-item">
                                             <a href="{{ route('chat.third-party.google-form.index') }}"
                                                 class="pe-nav-link">
@@ -576,7 +607,7 @@
 
                             {{-- SLA, broadcast throttle, dan CSAT — lihat
                                      App\Http\Controllers\Chat\ChatSettingController. --}}
-                            @if ($canSeeChatMenu('chat.settings.edit'))
+                            @if ($canSeeMenu('chat.settings.edit'))
                                 <li class="pe-slide-item">
                                     <a href="{{ route('chat.settings.edit') }}" class="pe-nav-link">
                                         Pengaturan

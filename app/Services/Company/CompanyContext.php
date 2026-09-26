@@ -2,10 +2,12 @@
 
 namespace App\Services\Company;
 
+use App\Models\ApplicationMenu;
 use App\Models\BranchOffice;
 use App\Models\BranchOfficeUnit;
 use App\Models\Company;
 use App\Models\CompanyRole;
+use App\Models\CompanyRoleMenu;
 use App\Models\CompanyToUser;
 
 /**
@@ -71,5 +73,79 @@ final class CompanyContext
         }
 
         return $this->activeBranch;
+    }
+
+    /** @var array<int, string>|null */
+    private ?array $grantedMenuIds = null;
+
+    /**
+     * Satu-satunya aturan akses menu per role -- dipakai middleware
+     * 'menu.access' (URL), sidebar (menu.blade.php) dan tab Profile,
+     * jadi yang tersembunyi di menu pasti juga ditolak lewat URL.
+     *
+     * Owner selalu boleh. Untuk member, route dicocokkan ke menu Application
+     * Menu yang paling spesifik: route_name menu tanpa segmen terakhir
+     * menjadi awalan (mis. "tagihan.index" mencakup "tagihan.*",
+     * "tagihan.category.index" mencakup "tagihan.category.*" -- dan yang
+     * lebih panjang menang). Boleh hanya kalau menu itu diberikan ke
+     * role-nya. Selain itu DITOLAK (fail-closed): tanpa role, menu belum
+     * terdaftar, atau menu nonaktif.
+     */
+    public function canAccessRoute(?string $routeName): bool
+    {
+        if ($this->isOwner) {
+            return true;
+        }
+
+        if (! $routeName || ! $this->role) {
+            return false;
+        }
+
+        $matched = self::menuIdsFor($routeName);
+
+        if ($matched === []) {
+            return false;
+        }
+
+        $this->grantedMenuIds ??= CompanyRoleMenu::where('company_role_id', $this->role->id)
+            ->where('status', 'active')
+            ->pluck('application_menu_id')
+            ->all();
+
+        return array_intersect($matched, $this->grantedMenuIds) !== [];
+    }
+
+    /**
+     * Id menu dengan awalan terpanjang yang cocok dengan route ini (bisa
+     * lebih dari satu kalau dua menu berbagi awalan yang sama).
+     *
+     * @return array<int, string>
+     */
+    private static function menuIdsFor(string $routeName): array
+    {
+        $prefixes = once(fn () => ApplicationMenu::where('status', 'active')
+            ->whereNotNull('route_name')
+            ->pluck('route_name', 'id')
+            ->map(fn (string $name) => (str_contains($name, '.') ? substr($name, 0, strrpos($name, '.')) : $name).'.')
+            ->all());
+
+        $subject = $routeName.'.';
+        $best = 0;
+        $ids = [];
+
+        foreach ($prefixes as $id => $prefix) {
+            if (! str_starts_with($subject, $prefix) || strlen($prefix) < $best) {
+                continue;
+            }
+
+            if (strlen($prefix) > $best) {
+                $best = strlen($prefix);
+                $ids = [];
+            }
+
+            $ids[] = (string) $id;
+        }
+
+        return $ids;
     }
 }
