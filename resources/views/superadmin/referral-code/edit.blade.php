@@ -126,7 +126,7 @@
                                 <td>{{ rtrim(rtrim(number_format($item->discount_percent, 2, '.', ''), '0'), '.') }}%</td>
                                 <td>Rp {{ number_format($item->buyer_discount_amount, 0, ',', '.') }}</td>
                                 <td class="fw-semibold text-success">Rp {{ number_format($item->commission_amount, 0, ',', '.') }}</td>
-                                <td>@include('superadmin.referral-code._status')</td>
+                                <td>@include('superadmin.referral-code._status', ['cancellable' => true])</td>
                                 <td class="text-muted small">{{ $item->created_at->format('d M Y H:i') }}</td>
                             </tr>
                         @empty

@@ -296,6 +296,11 @@
                                     </a>
                                 </li>
                                 <li class="profile-item">
+                                    <a href="{{ route('referral.mine') }}" class="text-body">
+                                        <i class="ri-gift-line me-3"></i>Referral Saya
+                                    </a>
+                                </li>
+                                <li class="profile-item">
                                     <a href="{{ route('dashboard.package.usage') }}"
                                         class="text-body d-flex align-items-center justify-content-between">
                                         <span>

@@ -66,7 +66,7 @@
                                         <span class="text-muted fw-normal">Rp 0</span>
                                     @endif
                                 </td>
-                                <td>@include('superadmin.referral-code._status')</td>
+                                <td>@include('superadmin.referral-code._status', ['cancellable' => true])</td>
                                 <td class="text-muted small">{{ $item->created_at->format('d M Y H:i') }}</td>
                             </tr>
                         @empty

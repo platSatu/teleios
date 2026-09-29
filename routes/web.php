@@ -118,6 +118,7 @@ use App\Http\Controllers\User\Settings\PinController;
 use App\Http\Controllers\User\Profile\BranchOfficeController as UserBranchOfficeController;
 use App\Http\Controllers\User\Profile\BranchOfficeUnitController as UserBranchOfficeUnitController;
 use App\Http\Controllers\User\History\HistoryUserController;
+use App\Http\Controllers\User\Referral\ReferralController as UserReferralController;
 
 use App\Http\Controllers\Chat\ConnectDeviceController;
 use App\Http\Controllers\Chat\WaApiKeyController;
@@ -1382,6 +1383,10 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
     // mengajar, tarik saldo), lihat WalletDashboardController.
     Route::get('/wallet/dashboard', [WalletDashboardController::class, 'index'])
         ->name('wallet.dashboard.index');
+
+    // "Referral Saya" -- kode, customer & komisi milik user yang login.
+    Route::get('/referral', [UserReferralController::class, 'index'])->name('referral.mine');
+    Route::put('/referral/discount', [UserReferralController::class, 'updateDiscount'])->name('referral.mine.discount');
 
 });
 

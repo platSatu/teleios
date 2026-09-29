@@ -8,6 +8,7 @@ use App\Models\Setting;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Services\Wallet\WalletLedgerService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -131,6 +132,21 @@ class ReferralService
         }
 
         return $usage;
+    }
+
+    /**
+     * Total komisi per status untuk query ReferralCodeUsage tertentu.
+     *
+     * @return array{available: float, pending: float}
+     */
+    public function totals(Builder $query): array
+    {
+        $sums = $query->selectRaw('status, SUM(commission_amount) as total')->groupBy('status')->pluck('total', 'status');
+
+        return [
+            'available' => (float) ($sums[self::STATUS_AVAILABLE] ?? 0),
+            'pending' => (float) ($sums[self::STATUS_PENDING] ?? 0),
+        ];
     }
 
     /** Cairkan semua komisi yang masa tahannya sudah lewat. */

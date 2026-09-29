@@ -44,7 +44,7 @@ class ReferralCodeController extends Controller
         return view('superadmin.referral-code.index', compact('referralCodes', 'settings'));
     }
 
-    public function edit(string $id): View
+    public function edit(string $id, ReferralService $referrals): View
     {
         $referralCode = ReferralCode::with('user')->findOrFail($id);
 
@@ -53,7 +53,7 @@ class ReferralCodeController extends Controller
             ->latest()
             ->get();
 
-        $totals = $this->commissionTotals(ReferralCodeUsage::where('referral_code_id', $id));
+        $totals = $referrals->totals(ReferralCodeUsage::where('referral_code_id', $id));
         $settings = ReferralService::settings();
 
         return view('superadmin.referral-code.edit', compact('referralCode', 'usages', 'totals', 'settings'));
@@ -67,7 +67,7 @@ class ReferralCodeController extends Controller
      * successfully applied at checkout — which only happens after
      * validateReferral() confirms the user isn't the code's own owner.
      */
-    public function usageHistory(Request $request): View
+    public function usageHistory(Request $request, ReferralService $referrals): View
     {
         $query = ReferralCodeUsage::query()
             ->when($request->filled('search'), function ($q) use ($request) {
@@ -80,7 +80,7 @@ class ReferralCodeController extends Controller
                 });
             });
 
-        $totals = $this->commissionTotals(clone $query);
+        $totals = $referrals->totals(clone $query);
 
         $usages = $query->with(['referralCode.user', 'usedBy', 'subscription.package'])
             ->latest()
@@ -168,17 +168,6 @@ class ReferralCodeController extends Controller
         ]);
 
         return back()->with('success', 'Komisi dibatalkan dan tidak akan dicairkan.');
-    }
-
-    /** @return array{available: float, pending: float} */
-    private function commissionTotals($query): array
-    {
-        $sums = $query->selectRaw('status, SUM(commission_amount) as total')->groupBy('status')->pluck('total', 'status');
-
-        return [
-            'available' => (float) ($sums[ReferralService::STATUS_AVAILABLE] ?? 0),
-            'pending' => (float) ($sums[ReferralService::STATUS_PENDING] ?? 0),
-        ];
     }
 
     public function block(string $id): RedirectResponse
