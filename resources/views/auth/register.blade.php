@@ -32,6 +32,14 @@
     <!-- App Css-->
     <link href="{{ asset('be') }}/assets/css/app.min.css" id="app-style" rel="stylesheet" type="text/css">
 
+    <!-- Card auth di layar lebar dibatasi max-height 670px (app.min.css) sehingga
+         catatan persetujuan Google terpotong; biarkan tinggi card mengikuti isi. -->
+    <style>
+        @media (min-width: 1200px) {
+            .main-wrapper { max-height: none; }
+        }
+    </style>
+
     <!-- Cloudflare Turnstile (captcha) -->
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
