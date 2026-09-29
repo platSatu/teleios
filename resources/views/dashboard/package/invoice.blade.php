@@ -72,7 +72,10 @@
                             @if (($subscription->metadata['discount_amount'] ?? 0) > 0)
                                 <tr>
                                     <td class="text-muted">
-                                        Diskon ({{ rtrim(rtrim(number_format($subscription->metadata['discount_percent'] ?? 0, 2, '.', ''), '0'), '.') }}%)
+                                        Diskon
+                                        @if (($subscription->metadata['discount_percent'] ?? 0) > 0)
+                                            ({{ rtrim(rtrim(number_format($subscription->metadata['discount_percent'], 2, '.', ''), '0'), '.') }}%)
+                                        @endif
                                         @if (!empty($subscription->metadata['kode_voucher']))
                                             <span class="badge bg-light text-dark border ms-1">{{ $subscription->metadata['kode_voucher'] }}</span>
                                         @endif

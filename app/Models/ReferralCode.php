@@ -31,11 +31,13 @@ class ReferralCode extends Model
         'user_id',
         'code',
         'percentage',
+        'buyer_discount_amount',
         'status',
     ];
 
     protected $casts = [
         'percentage' => 'decimal:2',
+        'buyer_discount_amount' => 'decimal:2',
     ];
 
     protected static function boot()

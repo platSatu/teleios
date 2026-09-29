@@ -8,7 +8,6 @@ use App\Models\Company;
 use App\Models\Package;
 use App\Models\PaymentTransaction;
 use App\Models\ReferralCode;
-use App\Models\ReferralCodeUsage;
 use App\Models\Setting;
 use App\Models\Subscription;
 use App\Models\TransactionStatusHistory;
@@ -19,6 +18,7 @@ use App\Models\VoucherUserRedemption;
 use App\Models\Wallet;
 use App\Notifications\PackagePurchasedNotification;
 use App\Services\Package\BranchSubscriptionService;
+use App\Services\Referral\ReferralService;
 use App\Services\Wallet\WalletLedgerService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -46,18 +46,16 @@ use RuntimeException;
  * Dashboard\VoucherRedeemController for the redeem step, which is a
  * deliberately separate action from the purchase itself.
  *
- * Referral codes work differently from promo codes: entering one is a
- * ONE-TIME action. The first time a user enters a valid referral code,
- * two things happen: they get the usual one-time price discount, AND
- * they're permanently linked to that referrer (users.referrer_id — see
- * migration 2026_07_30_200000). From then on, every future purchase this
- * user makes automatically pays the referrer a commission (their
- * referral_codes.percentage, default 20%) — no code re-entry needed —
- * for as long as the referral code stays active and this user's own
- * account isn't deactivated. See payReferralCommission() below.
+ * Referral: semua aturannya (diskon Rupiah sekali di pembelian pertama,
+ * komisi berulang, masa tahan komplain, anti-curang) ada di
+ * App\Services\Referral\ReferralService -- controller ini hanya memanggilnya.
  */
 class PackageCheckoutController extends Controller
 {
+    public function __construct(private readonly ReferralService $referrals)
+    {
+    }
+
     public function show(Request $request, Package $package, BranchSubscriptionService $branchSubscriptions): View|RedirectResponse
     {
         abort_unless($package->status === 'active', 404);
@@ -103,9 +101,8 @@ class PackageCheckoutController extends Controller
         // lihat komentar konstanta REFERRAL_COOKIE_NAME di sana untuk
         // alasannya). Ini CUMA jadi nilai default input di
         // checkout.blade.php supaya user tidak perlu ketik manual —
-        // bukan validasi maupun penguncian apa pun. validateReferral()/
-        // store() di bawah tetap jalan persis seperti sebelum ini ada,
-        // sama sekali tidak berubah. Tidak relevan lagi begitu user
+        // bukan validasi maupun penguncian apa pun -- ReferralService::
+        // validate() di store() tetap penentunya. Tidak relevan lagi begitu user
         // sudah terkunci ke satu referrer ($linkedReferrer di atas).
         $suggestedReferralCode = $linkedReferrer ? null : $request->cookie('referral_code');
 
@@ -120,12 +117,33 @@ class PackageCheckoutController extends Controller
         return response()->json($result);
     }
 
+    /**
+     * Pratinjau diskon referral. Model kode tidak dikirim ke browser (berisi
+     * data pemilik & persentase komisi) -- hanya pesan & nominal diskon.
+     */
     public function applyReferral(Request $request, Package $package): JsonResponse
     {
-        $code = $request->string('code')->trim()->value();
-        $result = $this->validateReferral($code, Auth::user());
+        $user = Auth::user();
+        $result = $this->referrals->validate($request->string('code')->trim()->value(), $user);
 
-        return response()->json($result);
+        if (! $result['valid']) {
+            return response()->json($result);
+        }
+
+        $promoPercent = $this->promoPercent($request->string('promo')->trim()->value(), $user->id);
+        $base = (float) $package->price - round((float) $package->price * $promoPercent / 100, 2);
+        $firstPurchase = ! $user->referrer_id;
+        $discount = $this->referrals->quote($result['data'], $base, $firstPurchase)['discount'];
+
+        return response()->json([
+            'valid' => true,
+            'message' => match (true) {
+                ! $firstPurchase => 'Anda sudah terhubung dengan kode ini. Diskon referral hanya berlaku di pembelian pertama.',
+                $discount > 0 => 'Kode referral valid! Anda dapat diskon Rp '.number_format($discount, 0, ',', '.').'.',
+                default => 'Kode referral valid.',
+            },
+            'discount_amount' => $discount,
+        ]);
     }
 
     public function store(Request $request, Package $package, BranchSubscriptionService $branchSubscriptions): RedirectResponse
@@ -170,16 +188,6 @@ class PackageCheckoutController extends Controller
         $voucherUser = null;
         $discountPercent = 0;
 
-        // $referralCodeForDiscount: only set when the user freshly typed
-        // a code THIS time — that's what earns them the one-time price
-        // discount below. $referralCodeForCommission: the code that
-        // should pay the referrer a commission on THIS purchase, which
-        // also covers the "auto-continue" case (no input needed) once a
-        // user is already linked to a referrer from a previous purchase.
-        $referralCodeForDiscount = null;
-        $referralCodeForCommission = null;
-        $isNewReferralLink = false;
-
         if ($promoCode !== '') {
             $promoResult = $this->validatePromo($promoCode, $user->id);
 
@@ -188,36 +196,33 @@ class PackageCheckoutController extends Controller
             }
 
             $voucherUser = $promoResult['data'];
-            $discountPercent += (float) $voucherUser->percentase;
+            $discountPercent = min((float) $voucherUser->percentase, 100);
         }
 
+        $price = (float) $package->price;
+        $promoDiscount = round($price * $discountPercent / 100, 2);
+
+        // Referral: kode yang diketik sekarang, atau otomatis kode pemilik
+        // yang sudah terhubung (komisi berulang). Diskon hanya untuk
+        // pembelian pertama (saat baru terhubung) -- lihat ReferralService.
+        $referralCode = null;
+        $isNewReferralLink = false;
+
         if ($referralCodeInput !== '') {
-            $referralResult = $this->validateReferral($referralCodeInput, $user);
+            $referralResult = $this->referrals->validate($referralCodeInput, $user);
 
             if (! $referralResult['valid']) {
                 return back()->withInput()->with('error', $referralResult['message']);
             }
 
-            $referralCodeForDiscount = $referralResult['data'];
-            $referralCodeForCommission = $referralCodeForDiscount;
-            $discountPercent += (float) $referralCodeForDiscount->percentage;
+            $referralCode = $referralResult['data'];
             $isNewReferralLink = ! $user->referrer_id;
         } elseif ($user->referrer_id) {
-            // No code typed this time, but this user is already
-            // permanently linked to a referrer from an earlier purchase
-            // — that referrer still earns commission on this purchase,
-            // automatically, exactly as requested ("cukup input sekali").
-            $referralCodeForCommission = ReferralCode::where('user_id', $user->referrer_id)
-                ->where('status', 'active')
-                ->first();
+            $referralCode = ReferralCode::where('user_id', $user->referrer_id)->where('status', 'active')->first();
         }
 
-        // Additive/stacked when both codes are valid, capped at 100% so
-        // the price can never go negative.
-        $discountPercent = min($discountPercent, 100);
-
-        $price = (float) $package->price;
-        $discountAmount = round($price * $discountPercent / 100, 2);
+        $referralQuote = $referralCode ? $this->referrals->quote($referralCode, $price - $promoDiscount, $isNewReferralLink) : null;
+        $discountAmount = round($promoDiscount + ($referralQuote['discount'] ?? 0), 2);
         $finalPrice = max(0, round($price - $discountAmount, 2));
 
         $wallet = $user->wallet;
@@ -250,7 +255,7 @@ class PackageCheckoutController extends Controller
         try {
             $subscription = DB::transaction(function () use (
                 $package, $user, $wallet, $price, $discountPercent, $discountAmount, $finalPrice,
-                $voucherUser, $referralCodeForDiscount, $referralCodeForCommission, $isNewReferralLink,
+                $voucherUser, $referralCode, $referralQuote, $isNewReferralLink,
                 $company, $branch, $branchSubscriptions
             ) {
                 // Re-check the promo quota INSIDE the transaction, under a
@@ -295,7 +300,8 @@ class PackageCheckoutController extends Controller
                         'discount_percent' => $discountPercent,
                         'discount_amount' => $discountAmount,
                         'kode_voucher' => $voucherUser?->kode_voucher,
-                        'kode_referral' => $referralCodeForDiscount?->code,
+                        'kode_referral' => $isNewReferralLink ? $referralCode->code : null,
+                        'referral_discount' => $referralQuote['discount'] ?? 0,
                     ],
                 ]);
 
@@ -356,25 +362,14 @@ class PackageCheckoutController extends Controller
                     ]);
                 }
 
-                // First time this user ever enters a valid referral code:
-                // permanently link them to that referrer. Every purchase
-                // from here on (this one included, via
-                // $referralCodeForCommission below) pays that referrer a
-                // commission automatically — no code re-entry needed.
-                if ($isNewReferralLink && $referralCodeForDiscount) {
-                    $user->update(['referrer_id' => $referralCodeForDiscount->user_id]);
+                // Pertama kali terhubung: kunci customer ke pemilik kode
+                // (permanen), lalu catat komisinya -- lihat ReferralService.
+                if ($isNewReferralLink) {
+                    $user->update(['referrer_id' => $referralCode->user_id]);
                 }
 
-                if ($referralCodeForCommission) {
-                    $commissionAmount = $this->payReferralCommission($referralCodeForCommission, $user, $subscription);
-
-                    ReferralCodeUsage::create([
-                        'referral_code_id' => $referralCodeForCommission->id,
-                        'used_by_user_id' => $user->id,
-                        'subscription_id' => $subscription->id,
-                        'discount_percent' => $referralCodeForCommission->percentage,
-                        'commission_amount' => $commissionAmount,
-                    ]);
+                if ($referralCode) {
+                    $this->referrals->record($referralCode, $user, $subscription, $referralQuote, $isNewReferralLink);
                 }
 
                 // Purchase cashback/point straight back to the BUYER's
@@ -396,7 +391,7 @@ class PackageCheckoutController extends Controller
                         'branch_office_id' => $branch->id,
                         'amount' => $finalPrice,
                         'kode_voucher' => $voucherUser?->kode_voucher,
-                        'kode_referral' => $referralCodeForCommission?->code,
+                        'kode_referral' => $referralCode?->code,
                     ],
                     'ip_address' => request()->ip(),
                     'user_agent' => request()->userAgent(),
@@ -512,93 +507,12 @@ class PackageCheckoutController extends Controller
         ];
     }
 
-    /**
-     * @return array{valid: bool, message: string, data?: ReferralCode, discount_percent?: float}
-     */
-    private function validateReferral(string $code, User $user): array
+    /** Persen diskon kode promo (0 kalau kosong/tidak valid) -- untuk pratinjau referral. */
+    private function promoPercent(string $code, string $userId): float
     {
-        if ($code === '') {
-            return ['valid' => false, 'message' => 'Masukkan kode referral.'];
-        }
+        $result = $code !== '' ? $this->validatePromo($code, $userId) : ['valid' => false];
 
-        $referralCode = ReferralCode::where('code', $code)->first();
-
-        if (! $referralCode) {
-            return ['valid' => false, 'message' => 'Kode referral tidak ditemukan.'];
-        }
-
-        if ($referralCode->status !== 'active') {
-            return ['valid' => false, 'message' => 'Kode referral tidak aktif / diblokir.'];
-        }
-
-        if ($referralCode->user_id === $user->id) {
-            return ['valid' => false, 'message' => 'Tidak bisa memakai kode referral milik sendiri.'];
-        }
-
-        // Referral is a one-time link (see users.referrer_id): once set,
-        // it can't be swapped to a different referrer by typing another
-        // code — that would let someone "steal" a referral mid-way
-        // through a user's lifetime. Re-entering the SAME code they're
-        // already linked to is harmless and just falls through as valid.
-        if ($user->referrer_id && $user->referrer_id !== $referralCode->user_id) {
-            return ['valid' => false, 'message' => 'Anda sudah terhubung dengan kode referral lain sebelumnya dan tidak bisa menggantinya.'];
-        }
-
-        return [
-            'valid' => true,
-            'message' => "Kode referral valid! Diskon {$this->formatPercent($referralCode->percentage)}%.",
-            'data' => $referralCode,
-            'discount_percent' => (float) $referralCode->percentage,
-        ];
-    }
-
-    /**
-     * Pays the referrer their commission for one purchase made by a user
-     * they referred. Returns the rupiah amount actually credited (0 if
-     * nothing was paid, e.g. referred user's account is inactive, the
-     * referral code got blocked, the referrer has no wallet, or there's
-     * simply nothing to take a percentage of).
-     *
-     * "Komisi stop ketika user tersebut off" is enforced by the
-     * $referredUser->status check below — no cron job needed, since
-     * commission only ever gets paid at the moment of an actual
-     * purchase; if the user has no active subscription and isn't buying
-     * anything, there's naturally no commission event to begin with.
-     */
-    private function payReferralCommission(ReferralCode $referralCode, User $referredUser, Subscription $subscription): float
-    {
-        if ($referralCode->status !== 'active') {
-            return 0.0;
-        }
-
-        if ($referredUser->status !== 'active') {
-            return 0.0;
-        }
-
-        $commissionAmount = round((float) $subscription->amount * (float) $referralCode->percentage / 100, 2);
-
-        if ($commissionAmount <= 0) {
-            return 0.0;
-        }
-
-        $referrer = $referralCode->user ?? User::find($referralCode->user_id);
-        $referrerWallet = $referrer?->wallet;
-
-        if (! $referrerWallet) {
-            return 0.0;
-        }
-
-        WalletLedgerService::credit(
-            $referrerWallet,
-            $commissionAmount,
-            Subscription::class,
-            $subscription->id,
-            "Komisi referral {$this->formatPercent($referralCode->percentage)}% dari pembelian {$referredUser->name}",
-            $referredUser->id,
-            'REFERRAL_COMMISSION'
-        );
-
-        return $commissionAmount;
+        return $result['valid'] ? min((float) $result['data']->percentase, 100) : 0.0;
     }
 
     /**

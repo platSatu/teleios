@@ -34,6 +34,12 @@ return Application::configure(basePath: dirname(__DIR__))
             ->everyMinute()
             ->withoutOverlapping();
 
+        // Cairkan komisi referral yang masa tahan/komplainnya sudah lewat --
+        // lihat App\Services\Referral\ReferralService.
+        $schedule->command('referral:release-commissions')
+            ->hourly()
+            ->withoutOverlapping();
+
         // Pengingat WA Jadwal Kelas -- lihat App\Console\Commands\
         // DispatchDueJadwalReminders. Sengaja terpisah total dari
         // wa-schedules:dispatch-due di atas (beda tabel, beda job,

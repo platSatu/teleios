@@ -118,15 +118,14 @@ class User extends Authenticatable
 
             // Unique referral code, auto-generated the moment a user
             // registers (same 1:1-with-user pattern as Wallet above).
-            // Default commission 20%, editable/blockable later by
-            // superadmin via Superadmin\ReferralCodeController.
+            // Komisi & diskon kosong = ikut default Pengaturan Referral
+            // (App\Services\Referral\ReferralService), bisa di-override
+            // per kode oleh superadmin via Superadmin\ReferralCodeController.
             ReferralCode::create([
 
                 'user_id' => $user->id,
 
                 'code' => ReferralCode::generateUniqueCode($user->name),
-
-                'percentage' => 20.00,
 
                 'status' => 'active',
 

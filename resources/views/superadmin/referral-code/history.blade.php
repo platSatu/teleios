@@ -13,10 +13,14 @@
                 </a>
             </div>
 
-            <div class="alert alert-success d-flex align-items-center justify-content-between mb-3">
-                <span><i class="ri-hand-coin-line me-1"></i> Total Komisi Terbayar</span>
-                <strong>Rp {{ number_format($totalCommission, 0, ',', '.') }}</strong>
-            </div>
+            @if (session('success'))
+                <div class="alert alert-success">{{ session('success') }}</div>
+            @endif
+            @if (session('error'))
+                <div class="alert alert-danger">{{ session('error') }}</div>
+            @endif
+
+            @include('superadmin.referral-code._totals')
 
             <form method="GET" class="mb-3">
                 <div class="input-group" style="max-width: 320px;">
@@ -34,7 +38,9 @@
                             <th>Dipakai Oleh</th>
                             <th>Package Dibeli</th>
                             <th>Rate</th>
+                            <th>Diskon Customer</th>
                             <th>Komisi (Rp)</th>
+                            <th>Status</th>
                             <th>Waktu</th>
                         </tr>
                     </thead>
@@ -52,6 +58,7 @@
                                 </td>
                                 <td>{{ $item->subscription?->package?->name ?? '-' }}</td>
                                 <td>{{ rtrim(rtrim(number_format($item->discount_percent, 2, '.', ''), '0'), '.') }}%</td>
+                                <td>Rp {{ number_format($item->buyer_discount_amount, 0, ',', '.') }}</td>
                                 <td class="fw-semibold text-success">
                                     @if ($item->commission_amount > 0)
                                         Rp {{ number_format($item->commission_amount, 0, ',', '.') }}
@@ -59,11 +66,12 @@
                                         <span class="text-muted fw-normal">Rp 0</span>
                                     @endif
                                 </td>
+                                <td>@include('superadmin.referral-code._status')</td>
                                 <td class="text-muted small">{{ $item->created_at->format('d M Y H:i') }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="text-center text-muted py-4">Belum ada pemakaian kode referral.</td>
+                                <td colspan="9" class="text-center text-muted py-4">Belum ada pemakaian kode referral.</td>
                             </tr>
                         @endforelse
                     </tbody>

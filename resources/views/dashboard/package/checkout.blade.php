@@ -147,7 +147,7 @@
                         <span id="discount-promo-amount">- Rp 0</span>
                     </div>
                     <div class="price-row discount d-none" id="row-discount-referral">
-                        <span class="text-muted">Diskon Referral (<span id="discount-referral-percent">0</span>%)</span>
+                        <span class="text-muted">Diskon Referral</span>
                         <span id="discount-referral-amount">- Rp 0</span>
                     </div>
 
@@ -211,14 +211,14 @@
 
         var state = {
             promo: null,   // { percent }
-            referral: null // { percent }
+            referral: null // { amount } -- nominal dari server (sudah dibatasi)
         };
 
         function formatRupiah(value) {
             return 'Rp ' + Math.round(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
         }
 
-        function fetchJson(url, code) {
+        function fetchJson(url, code, extra) {
             return fetch(url, {
                 method: 'POST',
                 headers: {
@@ -226,7 +226,7 @@
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': csrfToken,
                 },
-                body: JSON.stringify({ code: code }),
+                body: JSON.stringify(Object.assign({ code: code }, extra || {})),
             }).then(function (res) { return res.json(); });
         }
 
@@ -252,10 +252,9 @@
                 promoRow.classList.add('d-none');
             }
 
-            if (state.referral) {
-                var referralAmount = PRICE * (state.referral.percent / 100);
+            if (state.referral && state.referral.amount > 0) {
+                var referralAmount = Math.min(state.referral.amount, total);
                 total -= referralAmount;
-                document.getElementById('discount-referral-percent').textContent = state.referral.percent;
                 document.getElementById('discount-referral-amount').textContent = '- ' + formatRupiah(referralAmount);
                 referralRow.classList.remove('d-none');
             } else {
@@ -265,6 +264,9 @@
             total = Math.max(0, total);
             document.getElementById('summary-total').textContent = formatRupiah(total);
         }
+
+        // Tidak ada di DOM kalau user sudah terhubung ke referrer.
+        var btnApplyReferral = document.getElementById('btn-apply-referral');
 
         document.getElementById('btn-apply-promo').addEventListener('click', function () {
             var code = document.getElementById('kode_voucher').value.trim();
@@ -283,13 +285,16 @@
                     document.getElementById('input_kode_voucher').value = '';
                 }
                 recalculate();
+                // Diskon referral dihitung dari harga setelah promo -- segarkan.
+                if (state.referral && btnApplyReferral) {
+                    btnApplyReferral.click();
+                }
             });
         });
 
         // Referral input/button don't exist in the DOM at all once the
         // user is already linked to a referrer (see the linkedReferrer
         // check above) — nothing to wire up in that case.
-        var btnApplyReferral = document.getElementById('btn-apply-referral');
         if (btnApplyReferral) {
             btnApplyReferral.addEventListener('click', function () {
                 var code = document.getElementById('kode_referral').value.trim();
@@ -298,10 +303,12 @@
                     return;
                 }
 
-                fetchJson('{{ route('dashboard.package.checkout.apply-referral', $package->id) }}', code).then(function (data) {
+                fetchJson('{{ route('dashboard.package.checkout.apply-referral', $package->id) }}', code, {
+                    promo: document.getElementById('input_kode_voucher').value
+                }).then(function (data) {
                     setFeedback('feedback-referral', data.valid, data.message);
                     if (data.valid) {
-                        state.referral = { percent: data.discount_percent };
+                        state.referral = { amount: Number(data.discount_amount) || 0 };
                         document.getElementById('input_kode_referral').value = code;
                     } else {
                         state.referral = null;

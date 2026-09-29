@@ -1507,6 +1507,8 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
                 // Must come before /{id}/edit below, otherwise
                 // "usage-history" would be captured as {id}.
                 Route::get('/usage-history', 'usageHistory')->name('referral-code.usage-history');
+                Route::put('/settings', 'updateSettings')->name('referral-code.settings.update');
+                Route::post('/usage/{usageId}/cancel', 'cancelUsage')->name('referral-code.usage.cancel');
                 Route::get('/{id}/edit', 'edit')->name('referral-code.edit');
                 Route::put('/{id}', 'update')->name('referral-code.update');
                 Route::post('/{id}/block', 'block')->name('referral-code.block');
@@ -2133,5 +2135,6 @@ Route::prefix('tagihan/{branchSlug}/{token}')
 // App\Http\Controllers\Form\FormHeaderController::RESERVED_SLUGS
 // (pertahanan lapis kedua di sisi pembuatan slug).
 Route::get('/{slug}', [PublicFormController::class, 'show'])->name('form.public.show');
-Route::post('/{slug}', [PublicFormController::class, 'store'])->name('form.public.store');
+// Maks 10 kiriman per menit per IP (anti-spam); lapis lain di PublicFormController.
+Route::post('/{slug}', [PublicFormController::class, 'store'])->middleware('throttle:10,1')->name('form.public.store');
 

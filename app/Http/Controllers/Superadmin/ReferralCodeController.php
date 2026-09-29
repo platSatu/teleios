@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\ReferralCode;
 use App\Models\ReferralCodeUsage;
+use App\Models\Setting;
+use App\Services\Referral\ReferralService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -37,7 +39,9 @@ class ReferralCodeController extends Controller
             ->paginate(20)
             ->withQueryString();
 
-        return view('superadmin.referral-code.index', compact('referralCodes'));
+        $settings = ReferralService::settings();
+
+        return view('superadmin.referral-code.index', compact('referralCodes', 'settings'));
     }
 
     public function edit(string $id): View
@@ -49,9 +53,10 @@ class ReferralCodeController extends Controller
             ->latest()
             ->get();
 
-        $totalCommission = $usages->sum('commission_amount');
+        $totals = $this->commissionTotals(ReferralCodeUsage::where('referral_code_id', $id));
+        $settings = ReferralService::settings();
 
-        return view('superadmin.referral-code.edit', compact('referralCode', 'usages', 'totalCommission'));
+        return view('superadmin.referral-code.edit', compact('referralCode', 'usages', 'totals', 'settings'));
     }
 
     /**
@@ -75,20 +80,24 @@ class ReferralCodeController extends Controller
                 });
             });
 
-        $totalCommission = (clone $query)->sum('commission_amount');
+        $totals = $this->commissionTotals(clone $query);
 
         $usages = $query->with(['referralCode.user', 'usedBy', 'subscription.package'])
             ->latest()
             ->paginate(20)
             ->withQueryString();
 
-        return view('superadmin.referral-code.history', compact('usages', 'totalCommission'));
+        return view('superadmin.referral-code.history', compact('usages', 'totals'));
     }
 
     public function update(Request $request, string $id): RedirectResponse
     {
+        // Kosong = ikut default Pengaturan Referral.
         $validated = $request->validate([
-            'percentage' => ['required', 'numeric', 'min:0', 'max:100'],
+            'percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'buyer_discount_amount' => ['nullable', 'numeric', 'min:0', 'max:'.ReferralService::setting('referral_max_buyer_discount')],
+        ], [
+            'buyer_discount_amount.max' => 'Diskon untuk customer maksimal Rp :max (lihat Pengaturan Referral).',
         ]);
 
         $referralCode = ReferralCode::findOrFail($id);
@@ -100,7 +109,76 @@ class ReferralCodeController extends Controller
 
         return redirect()
             ->route('referral-code.index')
-            ->with('success', 'Persentase referral berhasil diperbarui.');
+            ->with('success', 'Komisi & diskon referral berhasil diperbarui.');
+    }
+
+    /** Pengaturan default referral (berlaku untuk kode yang tidak di-override). */
+    public function updateSettings(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'referral_commission_percent' => ['required', 'numeric', 'min:0', 'max:100'],
+            'referral_buyer_discount' => ['required', 'numeric', 'min:0', 'lte:referral_max_buyer_discount'],
+            'referral_max_buyer_discount' => ['required', 'numeric', 'min:0'],
+            'referral_hold_days' => ['required', 'integer', 'min:0', 'max:365'],
+        ], [
+            'referral_buyer_discount.lte' => 'Diskon default tidak boleh melebihi batas maksimal diskon.',
+        ]);
+
+        $before = ReferralService::settings();
+
+        foreach ($validated as $key => $value) {
+            Setting::set($key, (string) $value);
+        }
+
+        AuditLog::create([
+            'actor_type' => Auth::user() ? Auth::user()::class : null,
+            'actor_id' => Auth::id(),
+            'action' => 'referral_setting.update',
+            'entity_type' => Setting::class,
+            'entity_id' => 'referral_setting',
+            'old_value' => $before,
+            'new_value' => $validated,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'created_at' => now(),
+        ]);
+
+        return redirect()->route('referral-code.index')->with('success', 'Pengaturan referral berhasil disimpan.');
+    }
+
+    /** Batalkan komisi yang masih tertahan (ada komplain/refund). */
+    public function cancelUsage(Request $request, string $usageId, ReferralService $referrals): RedirectResponse
+    {
+        $validated = $request->validate(['cancel_reason' => ['required', 'string', 'max:255']]);
+
+        if (! $referrals->cancel($usageId, $validated['cancel_reason'])) {
+            return back()->with('error', 'Komisi ini tidak bisa dibatalkan (sudah dicairkan atau sudah dibatalkan).');
+        }
+
+        AuditLog::create([
+            'actor_type' => Auth::user() ? Auth::user()::class : null,
+            'actor_id' => Auth::id(),
+            'action' => 'referral_commission.cancel',
+            'entity_type' => ReferralCodeUsage::class,
+            'entity_id' => $usageId,
+            'new_value' => $validated,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'created_at' => now(),
+        ]);
+
+        return back()->with('success', 'Komisi dibatalkan dan tidak akan dicairkan.');
+    }
+
+    /** @return array{available: float, pending: float} */
+    private function commissionTotals($query): array
+    {
+        $sums = $query->selectRaw('status, SUM(commission_amount) as total')->groupBy('status')->pluck('total', 'status');
+
+        return [
+            'available' => (float) ($sums[ReferralService::STATUS_AVAILABLE] ?? 0),
+            'pending' => (float) ($sums[ReferralService::STATUS_PENDING] ?? 0),
+        ];
     }
 
     public function block(string $id): RedirectResponse

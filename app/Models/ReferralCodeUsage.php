@@ -27,12 +27,22 @@ class ReferralCodeUsage extends Model
         'used_by_user_id',
         'subscription_id',
         'discount_percent',
+        'buyer_discount_amount',
         'commission_amount',
+        'status',
+        'available_at',
+        'credited_at',
+        'cancelled_at',
+        'cancel_reason',
     ];
 
     protected $casts = [
         'discount_percent' => 'decimal:2',
         'commission_amount' => 'decimal:2',
+        'buyer_discount_amount' => 'decimal:2',
+        'available_at' => 'datetime',
+        'credited_at' => 'datetime',
+        'cancelled_at' => 'datetime',
     ];
 
     public function referralCode(): BelongsTo

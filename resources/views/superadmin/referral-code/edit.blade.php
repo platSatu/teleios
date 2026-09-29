@@ -11,6 +11,9 @@
     @if (session('success'))
         <div class="alert alert-success">{{ session('success') }}</div>
     @endif
+    @if (session('error'))
+        <div class="alert alert-danger">{{ session('error') }}</div>
+    @endif
     @if ($errors->any())
         <div class="alert alert-danger">
             <ul class="mb-0">
@@ -64,15 +67,22 @@
         <div class="col-lg-6">
             <div class="card">
                 <div class="card-body">
-                    <h5 class="mb-3">Persentase Komisi</h5>
+                    <h5 class="mb-1">Komisi &amp; Diskon Khusus</h5>
+                    <p class="text-muted small mb-3">Kosongkan untuk mengikuti default Pengaturan Referral.</p>
                     <form action="{{ route('referral-code.update', $referralCode->id) }}" method="POST">
                         @csrf
                         @method('PUT')
                         <div class="mb-3">
-                            <label for="percentage" class="form-label">Persentase (%) <span class="text-danger">*</span></label>
+                            <label for="percentage" class="form-label">Komisi (%)</label>
                             <input type="number" step="0.01" min="0" max="100" name="percentage" id="percentage" class="form-control"
-                                value="{{ old('percentage', $referralCode->percentage) }}" required>
-                            <div class="form-text">Default 20%. Persentase komisi yang didapat user ini dari setiap referral.</div>
+                                value="{{ old('percentage', $referralCode->percentage) }}" placeholder="Default {{ rtrim(rtrim(number_format($settings['referral_commission_percent'], 2, '.', ''), '0'), '.') }}%">
+                            <div class="form-text">Didapat dari setiap pembayaran/perpanjangan customer selama masih berlangganan.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="buyer_discount_amount" class="form-label">Diskon untuk customer (Rp)</label>
+                            <input type="number" step="1" min="0" max="{{ $settings['referral_max_buyer_discount'] }}" name="buyer_discount_amount" id="buyer_discount_amount" class="form-control"
+                                value="{{ old('buyer_discount_amount', $referralCode->buyer_discount_amount) }}" placeholder="Default Rp {{ number_format($settings['referral_buyer_discount'], 0, ',', '.') }}">
+                            <div class="form-text">Hanya pembelian pertama, dipotong dari komisi. Maksimal Rp {{ number_format($settings['referral_max_buyer_discount'], 0, ',', '.') }}.</div>
                         </div>
                         <button type="submit" class="btn btn-primary">Simpan</button>
                     </form>
@@ -90,10 +100,7 @@
                 </a>
             </div>
 
-            <div class="alert alert-success d-flex align-items-center justify-content-between mb-3">
-                <span><i class="ri-hand-coin-line me-1"></i> Total Komisi Diterima dari Kode Ini</span>
-                <strong>Rp {{ number_format($totalCommission, 0, ',', '.') }}</strong>
-            </div>
+            @include('superadmin.referral-code._totals')
 
             <div class="table-responsive">
                 <table class="table table-sm table-centered align-middle mb-0">
@@ -102,7 +109,9 @@
                             <th>Dipakai Oleh</th>
                             <th>Package Dibeli</th>
                             <th>Rate</th>
+                            <th>Diskon Customer</th>
                             <th>Komisi (Rp)</th>
+                            <th>Status</th>
                             <th>Waktu</th>
                         </tr>
                     </thead>
@@ -115,12 +124,14 @@
                                 </td>
                                 <td>{{ $item->subscription?->package?->name ?? '-' }}</td>
                                 <td>{{ rtrim(rtrim(number_format($item->discount_percent, 2, '.', ''), '0'), '.') }}%</td>
+                                <td>Rp {{ number_format($item->buyer_discount_amount, 0, ',', '.') }}</td>
                                 <td class="fw-semibold text-success">Rp {{ number_format($item->commission_amount, 0, ',', '.') }}</td>
+                                <td>@include('superadmin.referral-code._status')</td>
                                 <td class="text-muted small">{{ $item->created_at->format('d M Y H:i') }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="text-center text-muted py-3">Kode ini belum pernah dipakai.</td>
+                                <td colspan="7" class="text-center text-muted py-3">Kode ini belum pernah dipakai.</td>
                             </tr>
                         @endforelse
                     </tbody>
