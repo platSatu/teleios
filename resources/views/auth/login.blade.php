@@ -4,9 +4,9 @@
 <head>
 
     <meta charset="utf-8" />
-    <title>Sign In | Bizbos - Login</title>
+    <title>Sign In | {{ config('app.name') }} - Login</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta name="description" content="Masuk ke akun Bizbos untuk mengakses dashboard, mengelola data, memantau aktivitas, dan menggunakan berbagai fitur yang dirancang untuk meningkatkan produktivitas Anda." />
+    <meta name="description" content="Masuk ke akun {{ config('app.name') }} untuk mengakses dashboard, mengelola data, memantau aktivitas, dan menggunakan berbagai fitur yang dirancang untuk meningkatkan produktivitas Anda." />
     <meta content="SRBThemes" name="bizbos" />
 
     <!-- layout setup -->
@@ -41,14 +41,14 @@
         <div
             class="main-wrapper border bg-white rounded-4 d-flex flex-column flex-lg-row gap-xl-5 position-relative overflow-hidden w-100 shadow">
             <div class="decoration-section m-5 bg-dark-subtle rounded-3 me-0 mb-0 mb-lg-5 mb-0 mb-lg-5 overflow-hidden">
-                <img src="{{ asset('be') }}/images/login.jpg" alt="Konexa" class="w-100 h-100" style="object-fit: cover;">
+                <img src="{{ asset('be') }}/images/login.jpg" alt="{{ config('app.name') }}" class="w-100 h-100" style="object-fit: cover;">
             </div>
             <div class="login-section bg-white rounded-4 p-6 px-xl-12">
                 <a href="{{ route('login') }}"
                     class="d-flex justify-content-end align-items-center gap-2 logo-main mt-lg-2 mb-10">
-                    <img height="33" width="33" class="logo-dark" alt="Logo Bizbos"
+                    <img height="33" width="33" class="logo-dark" alt="Logo {{ config('app.name') }}"
                         src="{{ asset('be') }}/assets/images/favicon.png">
-                    <h3 class="mb-0 lh-base fw-semibold">Bizbos</h3>
+                    <h3 class="mb-0 lh-base fw-semibold">{{ config('app.name') }}</h3>
                 </a>
                 <div class="mb-6">
                     <h5 class="mb-2">Welcome Back</h5>

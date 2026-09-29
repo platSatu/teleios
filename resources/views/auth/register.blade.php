@@ -4,9 +4,9 @@
 <head>
 
     <meta charset="utf-8" />
-    <title>Sign Up | Bizbos - Register</title>
+    <title>Sign Up | {{ config('app.name') }} - Register</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta name="description" content="Daftar akun Bizbos sekarang untuk mengakses dashboard yang aman, mengelola data dengan lebih mudah, memantau aktivitas, dan meningkatkan produktivitas dalam satu platform." />
+    <meta name="description" content="Daftar akun {{ config('app.name') }} sekarang untuk mengakses dashboard yang aman, mengelola data dengan lebih mudah, memantau aktivitas, dan meningkatkan produktivitas dalam satu platform." />
     <meta content="SRBThemes" name="bizbos" />
 
     <!-- layout setup -->
@@ -41,17 +41,17 @@
         <div
             class="main-wrapper border bg-white rounded-4 d-flex flex-column flex-lg-row gap-xl-5 position-relative overflow-hidden w-100 shadow">
             <div class="decoration-section m-5 bg-dark-subtle rounded-3 me-0 mb-0 mb-lg-5 overflow-hidden">
-                <img src="{{ asset('be') }}/images/login.jpg" alt="Konexa" class="w-100 h-100" style="object-fit: cover;">
+                <img src="{{ asset('be') }}/images/login.jpg" alt="{{ config('app.name') }}" class="w-100 h-100" style="object-fit: cover;">
             </div>
             <div class="login-section bg-white rounded-4 p-6 px-xl-12">
                 {{-- <a href="{{ route('login') }}"
                     class="d-flex justify-content-end align-items-center gap-2 logo-main mt-lg-2 mb-3">
                     <img height="33" width="33" class="logo-dark" alt="Dark Logo"
                         src="{{ asset('be') }}/assets/images/favicon.png">
-                    <h3 class="mb-0 lh-base fw-semibold">Konexa</h3>
+                    <h3 class="mb-0 lh-base fw-semibold">{{ config('app.name') }}</h3>
                 </a> --}}
                 {{-- <div class="mb-8">
-                    <h5 class="mb-2">Join Konexa Now</h5>
+                    <h5 class="mb-2">Join {{ config('app.name') }} Now</h5>
                     <p class="text-muted mb-0">
                         Getting started is quick and easy. Create your account to securely access your dashboard, organize your data, and take advantage of features built to simplify your workflow.
                     </p>

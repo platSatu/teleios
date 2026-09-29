@@ -37,10 +37,10 @@
     @endphp
 
     <meta charset="utf-8" />
-    <title>{{ $pageTitle }} | Bizbos | Dashboard </title>
+    <title>{{ $pageTitle }} | {{ config('app.name') }} | Dashboard </title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta content="Konexa Dashboard adalah platform manajemen yang membantu Anda mengelola data, memantau aktivitas, dan meningkatkan produktivitas melalui dashboard yang cepat, aman, dan mudah digunakan." name="description" />
-    <meta name="keywords" content="Konexa, Dashboard, Manajemen, Sistem Informasi, Monitoring, Data, Laporan, Aplikasi Bisnis, ERP, CRM" />
+    <meta content="{{ config('app.name') }} Dashboard adalah platform manajemen yang membantu Anda mengelola data, memantau aktivitas, dan meningkatkan produktivitas melalui dashboard yang cepat, aman, dan mudah digunakan." name="description" />
+    <meta name="keywords" content="{{ config('app.name') }}, Dashboard, Manajemen, Sistem Informasi, Monitoring, Data, Laporan, Aplikasi Bisnis, ERP, CRM" />
     <meta content="SRBThemes" name="author" />
     <meta name="csrf-token" content="{{ csrf_token() }}">
 

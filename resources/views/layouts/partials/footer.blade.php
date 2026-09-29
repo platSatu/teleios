@@ -5,7 +5,7 @@
                  document.write(new Date().getFullYear())
              </script> © PT KREACIPTA SOLUSI DIGITAL
              <div class="text-sm-end d-none d-sm-block">
-                 Design & Develop by Bizbos
+                 Design & Develop by {{ config('app.name') }}
              </div>
          </div>
      </div>
