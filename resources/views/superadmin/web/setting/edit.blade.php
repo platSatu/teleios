@@ -7,7 +7,7 @@
                 <div class="card-body">
                     <h4 class="mb-1">Pengaturan Web</h4>
                     <p class="text-muted mb-4">
-                        Pengaturan satu baris ini (favicon, logo, meta tags, kontak, GTM/GA, Google Maps) dipakai
+                        Pengaturan satu baris ini (favicon, logo, meta tags, kontak, GTM/GA, pixel iklan, Google Maps) dipakai
                         publik di frontend fe-konexa lewat API — lihat App\Models\WebSetting.
                     </p>
 
@@ -119,6 +119,27 @@
                                             <div class="col-md-6 mb-3">
                                                 <label for="google_analytics" class="form-label">Google Analytics ID</label>
                                                 <input type="text" name="google_analytics" id="google_analytics" class="form-control" value="{{ old('google_analytics', $setting->google_analytics) }}" placeholder="G-XXXXXXXXXX">
+                                            </div>
+                                        </div>
+
+                                        <h6 class="text-muted mb-1">Pixel Iklan (Retargeting)</h6>
+                                        <p class="form-text mt-0 mb-3">Pengunjung website akan ditandai supaya iklan Bizbos bisa tampil lagi di sosial media mereka. Kosongkan kalau belum dipakai.</p>
+
+                                        <div class="row">
+                                            <div class="col-md-4 mb-3">
+                                                <label for="meta_pixel_id" class="form-label">Meta Pixel ID</label>
+                                                <input type="text" name="meta_pixel_id" id="meta_pixel_id" class="form-control" inputmode="numeric" value="{{ old('meta_pixel_id', $setting->meta_pixel_id) }}" placeholder="123456789012345">
+                                                <div class="form-text">Instagram &amp; Facebook.</div>
+                                            </div>
+                                            <div class="col-md-4 mb-3">
+                                                <label for="tiktok_pixel_id" class="form-label">TikTok Pixel ID</label>
+                                                <input type="text" name="tiktok_pixel_id" id="tiktok_pixel_id" class="form-control" value="{{ old('tiktok_pixel_id', $setting->tiktok_pixel_id) }}" placeholder="C1A2B3C4D5E6F7G8H9I0">
+                                                <div class="form-text">TikTok.</div>
+                                            </div>
+                                            <div class="col-md-4 mb-3">
+                                                <label for="google_ads_id" class="form-label">Google Ads ID</label>
+                                                <input type="text" name="google_ads_id" id="google_ads_id" class="form-control" value="{{ old('google_ads_id', $setting->google_ads_id) }}" placeholder="AW-123456789">
+                                                <div class="form-text">YouTube, Google Search &amp; Display.</div>
                                             </div>
                                         </div>
 

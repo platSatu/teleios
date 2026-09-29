@@ -47,8 +47,13 @@ class SettingController extends Controller
             'email' => ['nullable', 'email', 'max:255'],
             'address' => ['nullable', 'string', 'max:1000'],
             'company_name' => ['nullable', 'string', 'max:255'],
-            'google_tag' => ['nullable', 'string', 'max:50'],
-            'google_analytics' => ['nullable', 'string', 'max:50'],
+            // ID ini dicetak ke <script> di fe-konexa, jadi dibatasi ke
+            // format resmi masing-masing platform (bukan string bebas).
+            'google_tag' => ['nullable', 'string', 'max:50', 'regex:/^GTM-[A-Z0-9]+$/'],
+            'google_analytics' => ['nullable', 'string', 'max:50', 'regex:/^G-[A-Z0-9]+$/'],
+            'meta_pixel_id' => ['nullable', 'regex:/^\d{10,20}$/'],
+            'tiktok_pixel_id' => ['nullable', 'regex:/^[A-Z0-9]{15,30}$/'],
+            'google_ads_id' => ['nullable', 'regex:/^AW-\d{6,15}$/'],
             'gmaps' => ['nullable', 'string', 'max:2000'],
             'instagram_url' => ['nullable', 'url', 'max:255'],
             'facebook_url' => ['nullable', 'url', 'max:255'],
@@ -60,6 +65,12 @@ class SettingController extends Controller
             'icon_tiktok' => ['nullable', 'image', 'max:1024'],
             'tiktok_url' => ['nullable', 'url', 'max:255'],
             'running_text' => ['nullable', 'string', 'max:500'],
+        ], [
+            'google_tag.regex' => 'Format Google Tag Manager ID harus seperti GTM-XXXXXXX.',
+            'google_analytics.regex' => 'Format Google Analytics ID harus seperti G-XXXXXXXXXX.',
+            'meta_pixel_id.regex' => 'Meta Pixel ID berisi 10-20 digit angka saja.',
+            'tiktok_pixel_id.regex' => 'TikTok Pixel ID berisi huruf besar & angka saja (mis. C1A2B3C4D5E6F7G8H9I0).',
+            'google_ads_id.regex' => 'Format Google Ads ID harus seperti AW-123456789.',
         ]);
 
         if ($request->hasFile('favicon')) {

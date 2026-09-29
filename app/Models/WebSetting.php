@@ -8,7 +8,8 @@ use Illuminate\Support\Str;
 
 /**
  * Singleton settings row — site-wide favicon/logo, meta tags, contact
- * info, and Google Tag Manager/Analytics/Maps integration, consumed by
+ * info, Google Tag Manager/Analytics/Maps and ad pixel (Meta, TikTok,
+ * Google Ads) IDs, consumed by
  * fe-konexa's public frontend (see App\Http\Controllers\Api\Frontend\
  * WebSettingController). Same singleton shape as
  * App\Models\AiModerationSetting — always accessed through current(),
@@ -34,6 +35,9 @@ class WebSetting extends Model
         'company_name',
         'google_tag',
         'google_analytics',
+        'meta_pixel_id',
+        'tiktok_pixel_id',
+        'google_ads_id',
         'gmaps',
         'instagram_url',
         'facebook_url',
