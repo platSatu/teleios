@@ -5,6 +5,8 @@ namespace App\Helpers;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 use Intervention\Image\ImageManager;
+use Intervention\Image\Interfaces\EncodedImageInterface;
+use Intervention\Image\Interfaces\ImageInterface;
 
 /**
  * Shared image resize/store helper for the public web content catalog
@@ -47,19 +49,7 @@ class WebImageUploader
 
         $image->scaleDown(width: $maxWidth);
 
-        $extension = strtolower($file->getClientOriginalExtension()) ?: 'jpg';
-        $filename = (string) Str::uuid().'.'.$extension;
-
-        $subdirectory = trim($subdirectory, '/');
-        $directory = public_path('web/images/'.$subdirectory);
-
-        if (! is_dir($directory)) {
-            mkdir($directory, 0755, true);
-        }
-
-        $image->save($directory.'/'.$filename);
-
-        return $subdirectory.'/'.$filename;
+        return self::store($image, $file, $subdirectory);
     }
 
     /**
@@ -78,9 +68,21 @@ class WebImageUploader
 
         $image->cover($width, $height);
 
-        $extension = strtolower($file->getClientOriginalExtension()) ?: 'jpg';
-        $filename = (string) Str::uuid().'.'.$extension;
+        return self::store($image, $file, $subdirectory);
+    }
 
+    /** Kualitas kompresi JPG/WebP -- 80 hampir tak terlihat bedanya, ukuran jauh lebih kecil. */
+    public const QUALITY = 80;
+
+    /**
+     * Simpan gambar yang sudah di-resize dengan kompresi (sejak 29 Sep
+     * 2026, untuk kecepatan halaman bizbos.id): JPG dikompres, PNG/WebP
+     * disimpan sebagai WebP (transparansi tetap). Folder "settings"
+     * (favicon, logo, gambar share, ikon sosmed) tetap format aslinya
+     * supaya aman dipakai favicon & preview link. GIF/SVG disimpan apa adanya.
+     */
+    private static function store(ImageInterface $image, UploadedFile $file, string $subdirectory): string
+    {
         $subdirectory = trim($subdirectory, '/');
         $directory = public_path('web/images/'.$subdirectory);
 
@@ -88,9 +90,29 @@ class WebImageUploader
             mkdir($directory, 0755, true);
         }
 
-        $image->save($directory.'/'.$filename);
+        $extension = strtolower($file->getClientOriginalExtension()) ?: 'jpg';
+        [$extension, $encoded] = self::encode($image, $extension, $subdirectory === 'settings');
+
+        $filename = (string) Str::uuid().'.'.$extension;
+        $encoded ? $encoded->save($directory.'/'.$filename) : $image->save($directory.'/'.$filename);
 
         return $subdirectory.'/'.$filename;
+    }
+
+    /**
+     * Encode sesuai aturan di store(). Dipakai juga oleh command
+     * web:optimize-images untuk gambar lama.
+     *
+     * @return array{0: string, 1: EncodedImageInterface|null} [ekstensi baru, hasil encode atau null = simpan apa adanya]
+     */
+    public static function encode(ImageInterface $image, string $extension, bool $keepFormat = false): array
+    {
+        return match (true) {
+            in_array($extension, ['jpg', 'jpeg'], true) => [$extension, $image->toJpeg(quality: self::QUALITY)],
+            $extension === 'webp' => ['webp', $image->toWebp(quality: self::QUALITY)],
+            $extension === 'png' && ! $keepFormat => ['webp', $image->toWebp(quality: self::QUALITY)],
+            default => [$extension, null],
+        };
     }
 
     /**
