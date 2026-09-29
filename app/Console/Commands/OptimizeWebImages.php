@@ -21,7 +21,8 @@ class OptimizeWebImages extends Command
     protected $signature = 'web:optimize-images
         {--dry-run : Tampilkan saja, tidak mengubah apa pun}
         {--min-kb=150 : Hanya proses file di atas ukuran ini}
-        {--max-width=1600 : Lebar maksimal gambar}';
+        {--max-width=1600 : Lebar maksimal gambar}
+        {--webp : JPG juga diubah ke WebP (biasanya jauh lebih kecil)}';
 
     protected $description = 'Kompres ulang gambar Web Content yang besar supaya bizbos.id lebih cepat';
 
@@ -59,7 +60,10 @@ class OptimizeWebImages extends Command
             try {
                 $image = $manager->read($full);
                 $image->scaleDown(width: $maxWidth);
-                [$newExtension, $encoded] = WebImageUploader::encode($image, $extension, str_starts_with($path, 'settings/'));
+                $keepFormat = str_starts_with($path, 'settings/');
+                [$newExtension, $encoded] = $this->option('webp') && ! $keepFormat && in_array($extension, ['jpg', 'jpeg'], true)
+                    ? ['webp', $image->toWebp(quality: WebImageUploader::QUALITY)]
+                    : WebImageUploader::encode($image, $extension, $keepFormat);
             } catch (Throwable $e) {
                 $this->warn("Lewati {$path}: {$e->getMessage()}");
 
