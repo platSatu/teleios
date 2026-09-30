@@ -151,50 +151,68 @@ class DepositController extends Controller
      * Closes out a PENDING deposit without ever reaching Duitku —
      * either the user pressed "Batalkan" on checkout(), or that page's
      * own countdown timer ran out and auto-submitted the same form.
-     * Safe to call more than once / on a non-PENDING deposit: it's a
-     * no-op past the status check, so a stray double-submit (e.g. the
-     * timer firing right as the user also clicks "Batalkan") can't
-     * throw or double-log.
+     *
+     * Hanya boleh SEBELUM invoice Duitku dibuat (provider_transaction_id
+     * masih kosong). Setelah itu user mungkin sudah membayar -- misalnya
+     * timer di tab lama ikut submit padahal pembayaran berjalan di tab
+     * lain -- jadi deposit dibiarkan menunggu callback / habis waktu
+     * sendiri (ProcessDepositExpiry). Update-nya bersyarat (atomic), jadi
+     * tidak bisa menimpa status SUCCESS dari callback yang datang
+     * bersamaan, dan double-submit cukup jadi no-op.
      */
     public function cancelCheckout(Deposit $deposit): RedirectResponse
     {
         abort_unless($deposit->user_id === Auth::id(), 403);
 
-        if ($deposit->status === 'PENDING') {
-            DB::transaction(function () use ($deposit) {
-                $oldStatus = $deposit->status;
+        $reason = 'Dibatalkan sebelum lanjut ke Duitku (waktu konfirmasi habis atau dibatalkan manual).';
 
-                $deposit->update([
-                    'status' => 'FAILED',
-                    'failure_reason' => 'Dibatalkan sebelum lanjut ke Duitku (waktu konfirmasi habis atau dibatalkan manual).',
-                ]);
+        $cancelled = DB::transaction(function () use ($deposit, $reason) {
+            $claimed = Deposit::whereKey($deposit->id)
+                ->where('status', 'PENDING')
+                ->whereNull('provider_transaction_id')
+                ->update(['status' => 'FAILED', 'failure_reason' => $reason]);
 
-                TransactionStatusHistory::create([
-                    'entity_type' => Deposit::class,
-                    'entity_id' => $deposit->id,
-                    'old_status' => $oldStatus,
-                    'new_status' => 'FAILED',
-                    'changed_by' => Auth::id(),
-                ]);
+            if ($claimed === 0) {
+                return false;
+            }
 
-                AuditLog::create([
-                    'actor_type' => 'USER',
-                    'actor_id' => Auth::id(),
-                    'action' => 'CANCEL_DEPOSIT_CHECKOUT',
-                    'entity_type' => 'Deposit',
-                    'entity_id' => $deposit->id,
-                    'old_value' => ['status' => $oldStatus],
-                    'new_value' => ['status' => 'FAILED'],
-                    'ip_address' => request()->ip(),
-                    'user_agent' => request()->userAgent(),
-                    'created_at' => now(),
-                ]);
-            });
+            TransactionStatusHistory::create([
+                'entity_type' => Deposit::class,
+                'entity_id' => $deposit->id,
+                'old_status' => 'PENDING',
+                'new_status' => 'FAILED',
+                'changed_by' => Auth::id(),
+            ]);
+
+            AuditLog::create([
+                'actor_type' => 'USER',
+                'actor_id' => Auth::id(),
+                'action' => 'CANCEL_DEPOSIT_CHECKOUT',
+                'entity_type' => 'Deposit',
+                'entity_id' => $deposit->id,
+                'old_value' => ['status' => 'PENDING'],
+                'new_value' => ['status' => 'FAILED'],
+                'ip_address' => request()->ip(),
+                'user_agent' => request()->userAgent(),
+                'created_at' => now(),
+            ]);
+
+            return true;
+        });
+
+        if ($cancelled) {
+            return redirect()
+                ->route('deposit.topup')
+                ->with('error', 'Deposit dibatalkan. Tidak ada saldo yang terpotong, dan Anda bisa membuat deposit baru kapan saja.');
         }
 
-        return redirect()
-            ->route('deposit.topup')
-            ->with('error', 'Deposit dibatalkan.');
+        $history = redirect()->route('deposit.history');
+
+        return match ($deposit->refresh()->status) {
+            'PENDING' => $history->with('success', 'Deposit ini sudah diteruskan ke Duitku, jadi tidak kami batalkan. Kalau Anda sudah membayar, saldo akan masuk otomatis. Kalau belum, tagihannya akan berakhir sendiri saat waktunya habis.'),
+            'SUCCESS' => $history->with('success', 'Pembayaran deposit ini sudah kami terima dan saldo Anda sudah bertambah.'),
+            default => $history->with('error', 'Deposit ini sudah tidak menunggu pembayaran.'),
+        };
     }
 
     /**
@@ -295,16 +313,16 @@ class DepositController extends Controller
         return match ($deposit->status) {
             'SUCCESS' => redirect()
                 ->route('deposit.history')
-                ->with('success', 'Pembayaran berhasil. Saldo wallet telah ditambahkan.'),
+                ->with('success', 'Terima kasih, pembayaran Anda sudah kami terima dan saldo wallet sudah bertambah.'),
             'FAILED' => redirect()
                 ->route('deposit.history')
-                ->with('error', 'Pembayaran gagal atau dibatalkan.'),
+                ->with('error', 'Pembayaran ini belum berhasil atau sudah dibatalkan. Kalau ternyata dana Anda sudah terpotong, saldo tetap akan masuk otomatis begitu Duitku mengonfirmasinya.'),
             'EXPIRED' => redirect()
                 ->route('deposit.history')
-                ->with('error', 'Waktu pembayaran sudah habis. Silakan buat deposit baru.'),
+                ->with('error', 'Waktu pembayaran sudah habis. Silakan buat deposit baru. Kalau Anda sempat membayar sebelum waktunya habis, saldo tetap akan masuk otomatis.'),
             default => redirect()
                 ->route('deposit.history')
-                ->with('success', 'Pembayaran sedang diproses Duitku. Saldo akan otomatis bertambah begitu pembayaran dikonfirmasi.'),
+                ->with('success', 'Pembayaran Anda sedang dikonfirmasi oleh Duitku. Saldo akan bertambah otomatis, biasanya hanya dalam beberapa menit.'),
         };
     }
 

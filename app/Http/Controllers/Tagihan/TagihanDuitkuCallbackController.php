@@ -128,6 +128,24 @@ class TagihanDuitkuCallbackController extends Controller
 
         $resultCode = $notification['resultCode'] ?? null;
 
+        // Sama dengan DuitkuCallbackController: resultCode tidak ikut
+        // ditandatangani, jadi klaim "lunas" dipastikan dulu langsung ke
+        // Duitku -- di luar transaction supaya lock tidak tertahan
+        // panggilan jaringan. Belum terkonfirmasi = balas non-OK, Duitku
+        // mengirim ulang nanti.
+        if ($resultCode === '00' && $penerima->status !== TagihanPenerima::STATUS_LUNAS
+            && ($reason = $duitku->unconfirmedPaymentReason((string) $penerima->order_number, (int) round((float) ($notification['amount'] ?? 0))))) {
+            Log::warning('tagihan-duitku-callback: payment not confirmed by Duitku, not marking lunas', [
+                'webhook_id' => $webhook->id,
+                'tagihan_penerima_id' => $penerima->id,
+                'reason' => $reason,
+            ]);
+
+            $webhook->update(['event_type' => 'TAGIHAN_PAYMENT_ERROR', 'processing_error' => $reason]);
+
+            return response('Payment not confirmed', 409);
+        }
+
         Log::info('tagihan-duitku-callback: matched tagihan_penerima, processing', [
             'webhook_id' => $webhook->id,
             'tagihan_penerima_id' => $penerima->id,
@@ -139,13 +157,26 @@ class TagihanDuitkuCallbackController extends Controller
             $outcome = DB::transaction(function () use ($penerima, $notification, $resultCode, $webhook) {
                 $locked = TagihanPenerima::whereKey($penerima->id)->lockForUpdate()->first();
 
-                if (! $locked || $locked->status !== TagihanPenerima::STATUS_BELUM_BAYAR) {
+                // Pembayaran yang sudah dikonfirmasi Duitku tetap dicatat lunas
+                // walau tagihannya sempat kadaluarsa/dibatalkan -- uangnya
+                // benar-benar sudah diterima. Yang sudah lunas tidak pernah
+                // diproses ulang (saldo branch tidak mungkin dobel).
+                if (! $locked
+                    || $locked->status === TagihanPenerima::STATUS_LUNAS
+                    || ($resultCode !== '00' && $locked->status !== TagihanPenerima::STATUS_BELUM_BAYAR)) {
                     return ['status' => 'ignored', 'penerima' => $locked];
                 }
 
                 $penerima = $locked;
                 $oldStatus = $penerima->status;
                 $outcomeStatus = 'pending';
+
+                // Yang dikreditkan ke saldo branch = nominal yang BENAR-BENAR
+                // dibayar (amount di callback, ikut ditandatangani Duitku),
+                // bukan hitungan ulang tagihan + denda saat ini -- denda bisa
+                // sudah naik setelah invoice dibuat.
+                $paidAmount = round((float) ($notification['amount'] ?? 0), 2);
+                $expectedAmount = round((float) $penerima->amount + (float) $penerima->denda_amount, 2);
 
                 if ($resultCode === '00') {
                     $outcomeStatus = 'success';
@@ -161,7 +192,7 @@ class TagihanDuitkuCallbackController extends Controller
                         'provider' => 'DUITKU',
                         'provider_transaction_id' => $notification['reference'] ?? null,
                         'payment_method' => $notification['paymentCode'] ?? null,
-                        'amount' => (float) $penerima->amount + (float) $penerima->denda_amount,
+                        'amount' => $paidAmount,
                         'currency' => 'IDR',
                         'status' => 'SUCCESS',
                         'response_payload' => $notification,
@@ -175,7 +206,7 @@ class TagihanDuitkuCallbackController extends Controller
                         'entity_type' => 'TagihanPenerima',
                         'entity_id' => $penerima->id,
                         'old_value' => ['status' => $oldStatus],
-                        'new_value' => ['status' => TagihanPenerima::STATUS_LUNAS],
+                        'new_value' => ['status' => TagihanPenerima::STATUS_LUNAS, 'paid_amount' => $paidAmount, 'expected_amount' => $expectedAmount],
                         'ip_address' => request()->ip(),
                         'user_agent' => request()->userAgent(),
                         'created_at' => now(),
@@ -186,7 +217,7 @@ class TagihanDuitkuCallbackController extends Controller
                     // di TagihanPenerima (lihat migration create_tagihan_
                     // penerima_table.php), jadi tidak perlu guard null di
                     // sini seperti attachment_path yang memang nullable.
-                    $totalDibayar = (float) $penerima->amount + (float) $penerima->denda_amount;
+                    $totalDibayar = $paidAmount;
 
                     // Guard >0 -- WalletLedgerService::credit() melempar
                     // RuntimeException untuk amount<=0, yang kalau tidak
@@ -287,7 +318,7 @@ class TagihanDuitkuCallbackController extends Controller
         }
 
         if ($outcome['status'] === 'ignored') {
-            Log::info('tagihan-duitku-callback: ignored — tagihan_penerima already left belum_bayar (duplicate/late callback)', [
+            Log::info('tagihan-duitku-callback: ignored — tagihan_penerima already processed (duplicate/late callback)', [
                 'webhook_id' => $webhook->id,
                 'tagihan_penerima_id' => $penerima->id,
             ]);
@@ -296,7 +327,7 @@ class TagihanDuitkuCallbackController extends Controller
                 'event_type' => 'TAGIHAN_PAYMENT_IGNORED_DUPLICATE',
                 'processed' => true,
                 'processed_at' => now(),
-                'processing_error' => 'Ignored — tagihan_penerima already left belum_bayar (duplicate/late callback)',
+                'processing_error' => 'Diabaikan — tagihan ini sudah selesai diproses sebelumnya (callback ganda/terlambat)',
             ]);
         }
 

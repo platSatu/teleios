@@ -7,6 +7,7 @@ use App\Models\DuitkuSetting;
 use App\Models\TagihanPenerima;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
+use Throwable;
 
 /**
  * Talks to Duitku's POP integration directly via Laravel's HTTP client —
@@ -191,24 +192,54 @@ class DuitkuService
 
         $valid = hash_equals($expected, (string) $notification['signature']);
 
-        // Diagnostic kept temporarily post-fix to confirm the new
-        // formula matches on the next real callback — safe to remove
-        // once a live transaction logs $valid === true.
+        // Sengaja TIDAK mencatat signature yang "benar" atau potongan API
+        // key saat gagal: log itu bisa dipakai memalsukan callback.
         if (! $valid) {
-            \Illuminate\Support\Facades\Log::warning('duitku-callback: signature mismatch detail', [
-                'received_signature' => $notification['signature'],
-                'expected_signature' => $expected,
-                'merchantCode_from_notification' => $notification['merchantCode'],
-                'merchantCode_configured' => $this->merchantCode,
-                'amount_from_notification' => $notification['amount'],
+            \Illuminate\Support\Facades\Log::warning('duitku-callback: signature mismatch', [
                 'merchantOrderId' => $notification['merchantOrderId'],
-                'apiKey_length_configured' => strlen($this->apiKey),
-                'apiKey_first4_configured' => substr($this->apiKey, 0, 4),
-                'apiKey_last4_configured' => substr($this->apiKey, -4),
+                'merchantCode_matches_config' => $notification['merchantCode'] === $this->merchantCode,
             ]);
         }
 
         return $valid;
+    }
+
+    /**
+     * Tanda tangan callback Duitku hanya mencakup merchantCode + amount +
+     * merchantOrderId -- resultCode (lunas/gagal) TIDAK ikut ditandatangani.
+     * Jadi sebelum saldo ditambah, server bertanya langsung ke Duitku
+     * (Check Transaction POP, signature md5(merchantCode + merchantOrderId
+     * + apiKey)) apakah order ini benar-benar sudah lunas dengan nominal
+     * yang sama. Dipakai bersama oleh DuitkuCallbackController dan
+     * TagihanDuitkuCallbackController.
+     *
+     * Mengembalikan null kalau lunas & nominal cocok; selain itu alasan
+     * singkat untuk dicatat di payment_webhooks (dibaca superadmin).
+     */
+    public function unconfirmedPaymentReason(string $merchantOrderId, int $amount): ?string
+    {
+        try {
+            $response = Http::timeout(15)->post($this->apiBaseUrl() . '/api/merchant/transactionStatus', [
+                'merchantCode' => $this->merchantCode,
+                'merchantOrderId' => $merchantOrderId,
+                'signature' => md5($this->merchantCode . $merchantOrderId . $this->apiKey),
+            ]);
+        } catch (Throwable) {
+            return 'Duitku belum bisa dihubungi untuk memastikan pembayaran. Duitku akan mengirim ulang callback-nya.';
+        }
+
+        $data = $response->json() ?? [];
+
+        if (($data['statusCode'] ?? null) !== '00') {
+            return 'Menurut Duitku pembayaran ini belum lunas (status ' . ($data['statusCode'] ?? 'HTTP ' . $response->status()) . '), jadi saldo belum ditambahkan.';
+        }
+
+        if (($data['merchantOrderId'] ?? $merchantOrderId) !== $merchantOrderId
+            || (int) round((float) ($data['amount'] ?? 0)) !== $amount) {
+            return 'Nominal atau nomor order dari Duitku tidak sama dengan callback, jadi saldo tidak ditambahkan.';
+        }
+
+        return null;
     }
 
     /**

@@ -130,7 +130,40 @@ class DuitkuCallbackController extends Controller
             'reference_id' => $deposit->id,
         ]);
 
+        // Nominal di callback (ikut ditandatangani Duitku) wajib sama dengan
+        // nominal deposit -- kalau beda, saldo TIDAK ditambahkan.
+        if ((int) round((float) ($notification['amount'] ?? 0)) !== (int) round((float) $deposit->amount)) {
+            Log::warning('duitku-callback: amount mismatch, not crediting', [
+                'webhook_id' => $webhook->id,
+                'deposit_id' => $deposit->id,
+                'callback_amount' => $notification['amount'] ?? null,
+                'deposit_amount' => $deposit->amount,
+            ]);
+
+            $webhook->update(['event_type' => 'PAYMENT_ERROR', 'processing_error' => 'Amount mismatch']);
+
+            return response('OK', 200);
+        }
+
         $resultCode = $notification['resultCode'] ?? null;
+
+        // Tanda tangan callback tidak mencakup resultCode, jadi klaim "lunas"
+        // wajib dipastikan langsung ke Duitku dulu (lihat DuitkuService::
+        // unconfirmedPaymentReason). Sengaja di LUAR transaction: panggilan
+        // jaringan tidak boleh menahan lock baris deposit. Kalau belum
+        // terkonfirmasi, balas non-OK supaya Duitku mengirim ulang nanti.
+        if ($resultCode === '00' && $deposit->status !== 'SUCCESS'
+            && ($reason = $duitku->unconfirmedPaymentReason($deposit->reference_number, (int) round((float) $deposit->amount)))) {
+            Log::warning('duitku-callback: payment not confirmed by Duitku, not crediting', [
+                'webhook_id' => $webhook->id,
+                'deposit_id' => $deposit->id,
+                'reason' => $reason,
+            ]);
+
+            $webhook->update(['event_type' => 'PAYMENT_ERROR', 'processing_error' => $reason]);
+
+            return response('Payment not confirmed', 409);
+        }
 
         Log::info('duitku-callback: matched deposit, processing', [
             'webhook_id' => $webhook->id,
@@ -139,27 +172,33 @@ class DuitkuCallbackController extends Controller
             'resultCode' => $resultCode,
         ]);
 
+        // Pembayaran yang SUDAH dikonfirmasi Duitku di atas tetap dikreditkan
+        // walau deposit-nya sempat EXPIRED/FAILED (mis. user bayar tepat di
+        // menit terakhir, atau tab lama membatalkan) -- uangnya benar-benar
+        // sudah diterima. Satu-satunya yang tidak pernah diproses ulang
+        // adalah deposit yang sudah SUCCESS.
+        //
         // Idempotency: Duitku can and does resend the same callback
         // (network hiccups, no ack received in time, etc.), and two
         // deliveries can genuinely overlap in time. A deposit that's
-        // already left PENDING must never be re-processed — otherwise a
+        // already SUCCESS must never be re-processed — otherwise a
         // resent "success" callback would credit the wallet twice for
         // one real payment. The plain ->status check alone isn't
         // enough to guard against that: without a row lock, two
-        // concurrent requests can both read status === 'PENDING'
+        // concurrent requests can both read a not-yet-SUCCESS status
         // before either commits its update. So the fetch is redone
         // HERE, inside the transaction, with lockForUpdate() — a
         // second request that arrives while the first is still
         // running blocks on this lock, and once it's granted (after
         // the first commits), MySQL's locking-read semantics guarantee
-        // it re-reads the now-committed 'SUCCESS'/'FAILED' status
+        // it re-reads the now-committed 'SUCCESS' status
         // rather than the stale snapshot from before the first request
         // started.
         try {
             $outcome = DB::transaction(function () use ($deposit, $notification, $resultCode, $webhook) {
                 $locked = Deposit::whereKey($deposit->id)->lockForUpdate()->first();
 
-                if (! $locked || $locked->status !== 'PENDING') {
+                if (! $locked || $locked->status === 'SUCCESS' || ($resultCode !== '00' && $locked->status !== 'PENDING')) {
                     return ['status' => 'ignored', 'deposit' => $locked];
                 }
 
@@ -174,6 +213,7 @@ class DuitkuCallbackController extends Controller
                         'payment_method' => $notification['paymentCode'] ?? $deposit->payment_method,
                         'provider_transaction_id' => $notification['reference'] ?? $deposit->provider_transaction_id,
                         'paid_at' => now(),
+                        'failure_reason' => null,
                     ]);
 
                     PaymentTransaction::create([
@@ -292,8 +332,8 @@ class DuitkuCallbackController extends Controller
                 return ['status' => $outcomeStatus, 'deposit' => $deposit];
             });
         } catch (Throwable $e) {
-            // Transaction rolled back automatically — deposit is still
-            // PENDING, so this is safe for Duitku to retry. Nothing
+            // Transaction rolled back automatically — deposit keeps its
+            // previous status, so this is safe for Duitku to retry. Nothing
             // partial was committed (status, PaymentTransaction, wallet
             // credit, AuditLog all-or-nothing together).
             Log::error('duitku-callback: exception while processing callback, transaction rolled back', [
@@ -313,7 +353,7 @@ class DuitkuCallbackController extends Controller
         }
 
         match ($outcome['status']) {
-            'ignored' => Log::info('duitku-callback: ignored — deposit already left PENDING (duplicate/late callback)', [
+            'ignored' => Log::info('duitku-callback: ignored — deposit already processed (duplicate/late callback)', [
                 'webhook_id' => $webhook->id,
                 'deposit_id' => $deposit->id,
             ]),
@@ -339,12 +379,12 @@ class DuitkuCallbackController extends Controller
                 'event_type' => 'PAYMENT_IGNORED_DUPLICATE',
                 'processed' => true,
                 'processed_at' => now(),
-                'processing_error' => 'Ignored — deposit already left PENDING (duplicate/late callback)',
+                'processing_error' => 'Diabaikan — deposit ini sudah selesai diproses sebelumnya (callback ganda/terlambat)',
             ]);
         }
 
         // "Terima kasih, deposit Anda sudah diterima" — only on the
-        // specific callback that actually flipped PENDING -> SUCCESS
+        // specific callback that actually flipped the deposit to SUCCESS
         // (never on a retried/duplicate callback, since those return
         // 'ignored' above and never reach here). Queued
         // (DepositReceivedNotification implements ShouldQueue), so this
