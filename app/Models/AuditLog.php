@@ -54,6 +54,28 @@ class AuditLog extends Model
 
 
     /**
+     * Catat satu aksi oleh user yang sedang login (atau null = sistem).
+     * user_agent dipotong ke 255 karakter sesuai kolomnya.
+     */
+    public static function record(string $action, string $entityType, string $entityId, ?array $old = null, ?array $new = null, ?User $actor = null): self
+    {
+        $actor ??= auth()->user();
+
+        return self::create([
+            'actor_type' => $actor ? $actor::class : null,
+            'actor_id' => $actor?->getKey(),
+            'action' => $action,
+            'entity_type' => $entityType,
+            'entity_id' => $entityId,
+            'old_value' => $old,
+            'new_value' => $new,
+            'ip_address' => request()->ip(),
+            'user_agent' => mb_substr((string) request()->userAgent(), 0, 255),
+            'created_at' => now(),
+        ]);
+    }
+
+    /**
      * Relasi actor jika actor adalah user
      */
     public function user()

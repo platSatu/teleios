@@ -15,6 +15,7 @@ use App\Http\Controllers\Superadmin\VoucherController;
 
 use App\Http\Controllers\Superadmin\VoucherUserController;
 
+use App\Http\Controllers\Superadmin\BankAccountController as SuperadminBankAccountController;
 use App\Http\Controllers\Superadmin\ReferralCodeController;
 
 use App\Http\Controllers\Superadmin\PointSettingController;
@@ -185,6 +186,7 @@ use App\Http\Controllers\Dashboard\ActiveBranchController;
 use App\Http\Controllers\Dashboard\PackageCheckoutController;
 use App\Http\Controllers\Dashboard\VoucherRedeemController;
 use App\Http\Controllers\Dashboard\WalletTransferController;
+use App\Http\Controllers\Wallet\BankAccountController;
 use App\Http\Controllers\Wallet\WalletWithdrawalController;
 use App\Http\Controllers\Wallet\WalletDashboardController;
 use Illuminate\Support\Facades\Route;
@@ -1378,6 +1380,17 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
             Route::post('/{id}/cancel', 'cancel')->name('wallet.withdrawal.cancel');
         });
 
+    // "Rekening Pencairan" -- rekening terdaftar tujuan Tarik Saldo pribadi,
+    // lihat App\Services\Wallet\BankAccountService.
+    Route::prefix('wallet/bank-account')
+        ->controller(BankAccountController::class)
+        ->group(function () {
+            Route::get('/', 'index')->name('wallet.bank-account.index');
+            Route::post('/', 'store')->name('wallet.bank-account.store');
+            Route::post('/check', 'check')->name('wallet.bank-account.check');
+            Route::delete('/check', 'cancelCheck')->name('wallet.bank-account.cancel');
+        });
+
     // "Riwayat Saldo" in the profile dropdown -- personal Wallet
     // histori gabungan (top up, transfer, komisi referral, fee
     // mengajar, tarik saldo), lihat WalletDashboardController.
@@ -1499,6 +1512,20 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
                 Route::get('/{id}/edit', 'edit')->name('voucher-user.edit');
                 Route::put('/{id}', 'update')->name('voucher-user.update');
                 Route::delete('/{id}', 'destroy')->name('voucher-user.destroy');
+            });
+
+        // Verifikasi & riwayat rekening pencairan user, lihat
+        // App\Services\Wallet\BankAccountService.
+        Route::prefix('bank-account')
+            ->controller(SuperadminBankAccountController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('bank-account-review.index');
+                Route::put('/settings', 'updateSettings')->name('bank-account-review.settings.update');
+                Route::get('/user/{userId}', 'history')->name('bank-account-review.history');
+                Route::post('/user/{userId}/reset-name', 'resetName')->name('bank-account-review.reset-name');
+                Route::post('/{id}/approve', 'approve')->name('bank-account-review.approve');
+                Route::post('/{id}/reject', 'reject')->name('bank-account-review.reject');
+                Route::post('/{id}/reveal', 'reveal')->name('bank-account-review.reveal');
             });
 
         // Per-user referral codes (auto-created at registration — see

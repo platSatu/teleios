@@ -150,6 +150,12 @@ class User extends Authenticatable
         );
     }
 
+    /** Rekening pencairan (riwayat lengkap), lihat App\Services\Wallet\BankAccountService. */
+    public function bankAccounts()
+    {
+        return $this->hasMany(BankAccount::class);
+    }
+
     /** PIN transaksi sudah dibuat (lihat Concerns\VerifiesTransactionPin). */
     public function hasTransactionPin(): bool
     {

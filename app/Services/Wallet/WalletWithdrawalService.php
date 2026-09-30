@@ -38,6 +38,7 @@ class WalletWithdrawalService
         ?string $purpose,
         ?string $companyId,
         ?string $branchOfficeId,
+        ?string $bankAccountId = null,
     ): WalletWithdrawal {
         if ($amount <= 0) {
             throw new RuntimeException('Jumlah tarik saldo harus lebih besar dari 0.');
@@ -45,11 +46,16 @@ class WalletWithdrawalService
 
         // Cek kasar (bukan reservasi/hold) -- pengecekan yang benar-benar
         // atomic & tidak bisa ditembus tetap ada di WalletLedgerService::
-        // debit() nanti saat approveAndProcess(). Ini cuma mencegah
-        // permintaan yang jelas-jelas tidak masuk akal masuk antrean
-        // approval duluan.
-        if ($amount > (float) $wallet->balance) {
-            throw new RuntimeException('Saldo tidak mencukupi. Saldo tersedia: Rp '.number_format((float) $wallet->balance, 0, ',', '.'));
+        // debit() nanti saat approveAndProcess(). Saldo tersedia sudah
+        // dikurangi penarikan lain yang masih antre/diproses, supaya
+        // beberapa permintaan tidak bisa bersama-sama melebihi saldo.
+        $inFlight = (float) WalletWithdrawal::where('wallet_id', $wallet->id)
+            ->whereIn('status', [WalletWithdrawal::STATUS_PENDING_APPROVAL, WalletWithdrawal::STATUS_APPROVED, WalletWithdrawal::STATUS_PROCESSING])
+            ->sum('amount');
+        $available = (float) $wallet->balance - $inFlight;
+
+        if ($amount > $available) {
+            throw new RuntimeException('Saldo tidak mencukupi. Saldo tersedia: Rp '.number_format(max(0, $available), 0, ',', '.').($inFlight > 0 ? ' (sudah dikurangi penarikan yang sedang diproses).' : '.'));
         }
 
         return WalletWithdrawal::create([
@@ -57,6 +63,7 @@ class WalletWithdrawalService
             'requested_by' => $requestedBy->id,
             'company_id' => $companyId,
             'branch_office_id' => $branchOfficeId,
+            'bank_account_id' => $bankAccountId,
             'amount' => $amount,
             'bank_code' => $bankCode,
             'bank_account' => $bankAccount,
@@ -68,11 +75,7 @@ class WalletWithdrawalService
 
     public function approveAndProcess(WalletWithdrawal $withdrawal, User $approver): WalletWithdrawal
     {
-        if (! $withdrawal->isPending()) {
-            throw new RuntimeException('Permintaan ini sudah diproses sebelumnya.');
-        }
-
-        $withdrawal->update([
+        $this->claimPending($withdrawal, [
             'status' => WalletWithdrawal::STATUS_APPROVED,
             'approved_by' => $approver->id,
             'approved_at' => now(),
@@ -83,33 +86,25 @@ class WalletWithdrawalService
 
     public function reject(WalletWithdrawal $withdrawal, User $approver, string $reason): WalletWithdrawal
     {
-        if (! $withdrawal->isPending()) {
-            throw new RuntimeException('Permintaan ini sudah diproses sebelumnya.');
-        }
-
-        $withdrawal->update([
+        $this->claimPending($withdrawal, [
             'status' => WalletWithdrawal::STATUS_REJECTED,
             'approved_by' => $approver->id,
             'approved_at' => now(),
             'rejection_reason' => $reason,
         ]);
 
-        return $withdrawal;
+        return $withdrawal->fresh();
     }
 
     public function cancel(WalletWithdrawal $withdrawal, User $canceller): WalletWithdrawal
     {
-        if (! $withdrawal->isPending()) {
-            throw new RuntimeException('Hanya permintaan yang masih menunggu persetujuan yang bisa dibatalkan.');
-        }
-
         if ($withdrawal->requested_by !== $canceller->id) {
             throw new RuntimeException('Hanya pemohon sendiri yang bisa membatalkan permintaan ini.');
         }
 
-        $withdrawal->update(['status' => WalletWithdrawal::STATUS_CANCELLED]);
+        $this->claimPending($withdrawal, ['status' => WalletWithdrawal::STATUS_CANCELLED], 'Hanya permintaan yang masih menunggu persetujuan yang bisa dibatalkan.');
 
-        return $withdrawal;
+        return $withdrawal->fresh();
     }
 
     /**
@@ -146,6 +141,23 @@ class WalletWithdrawalService
     }
 
     /**
+     * Ubah status HANYA kalau masih pending_approval, dalam satu query
+     * atomic -- kalau dua aksi (setujui/tolak/batal) datang bersamaan,
+     * hanya satu yang menang, jadi dana tidak pernah terkirim dua kali
+     * dan permintaan yang sedang dibayar tidak bisa berubah jadi ditolak.
+     */
+    private function claimPending(WalletWithdrawal $withdrawal, array $changes, string $error = 'Permintaan ini sudah diproses sebelumnya.'): void
+    {
+        $claimed = WalletWithdrawal::whereKey($withdrawal->id)
+            ->where('status', WalletWithdrawal::STATUS_PENDING_APPROVAL)
+            ->update($changes + ['updated_at' => now()]);
+
+        if (! $claimed) {
+            throw new RuntimeException($error);
+        }
+    }
+
+    /**
      * Eksekusi beneran: inquiry lalu transfer ke Duitku, baru debit
      * Wallet kalau transfer dengan tegas sukses. Kegagalan di titik
      * MANAPUN (inquiry ditolak, transfer ditolak, exception jaringan)
@@ -159,9 +171,13 @@ class WalletWithdrawalService
         try {
             $duitku = DuitkuDisbursementService::make();
             $amount = (int) round((float) $withdrawal->amount);
-            $purpose = $withdrawal->purpose ?: 'Tarik Saldo Konexa';
+            $purpose = $withdrawal->purpose ?: 'Tarik Saldo '.config('app.name');
 
-            $inquiry = $duitku->inquiry($withdrawal->bank_code, $withdrawal->bank_account, $amount, $purpose);
+            // Rekening terdaftar: nomor lengkap diambil dari bank_accounts (terenkripsi),
+            // wallet_withdrawals hanya menyimpan versi tersamar.
+            $bankAccount = $withdrawal->bankAccount?->account_number ?? $withdrawal->bank_account;
+
+            $inquiry = $duitku->inquiry($withdrawal->bank_code, $bankAccount, $amount, $purpose);
 
             if (($inquiry['responseCode'] ?? null) !== '00' || ! $inquiry['disburseId']) {
                 throw new RuntimeException(
@@ -169,10 +185,18 @@ class WalletWithdrawalService
                 );
             }
 
+            // Rekening terdaftar: nama di bank saat ini harus tetap sama
+            // dengan nama saat rekening didaftarkan.
+            if ($withdrawal->bank_account_id && ! BankAccountService::sameName($inquiry['accountName'], $withdrawal->account_name)) {
+                throw new RuntimeException(
+                    'Nama pemilik rekening di bank ('.($inquiry['accountName'] ?: '-').') tidak sama dengan rekening terdaftar ('.$withdrawal->account_name.'). Dana tidak dikirim.'
+                );
+            }
+
             $transfer = $duitku->transfer(
                 $inquiry['disburseId'],
                 $withdrawal->bank_code,
-                $withdrawal->bank_account,
+                $bankAccount,
                 $amount,
                 $inquiry['accountName'] ?: $withdrawal->account_name,
                 $purpose,

@@ -22,50 +22,49 @@
 
                 <p class="text-muted small mb-3">Permintaan Anda perlu disetujui admin sebelum dana benar-benar dikirim ke rekening tujuan.</p>
 
-                <form method="POST" action="{{ route('wallet.withdrawal.store') }}" class="row g-3">
-                    @csrf
-                    <div class="col-md-4">
-                        <label class="form-label">Jumlah (Rp)</label>
-                        <input type="number" name="amount" class="form-control @error('amount') is-invalid @enderror" min="10000" step="1" value="{{ old('amount') }}" required>
-                        @error('amount')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Bank Tujuan</label>
-                        @if(count($banks))
-                            <select name="bank_code" class="form-select @error('bank_code') is-invalid @enderror" required>
-                                <option value="">-- Pilih Bank --</option>
-                                @foreach($banks as $bank)
-                                    <option value="{{ $bank['bankCode'] }}" @selected(old('bank_code') === $bank['bankCode'])>{{ $bank['bankName'] }}</option>
-                                @endforeach
-                            </select>
-                        @else
-                            <input type="text" name="bank_code" class="form-control @error('bank_code') is-invalid @enderror" placeholder="Kode bank (mis. 014)" value="{{ old('bank_code') }}" required>
+                @if (! $bankAccount)
+                    <div class="alert alert-warning mb-0">
+                        Anda belum punya rekening pencairan yang aktif. Tambahkan dulu supaya bisa tarik saldo.
+                        <a href="{{ route('wallet.bank-account.index') }}" class="alert-link">+ Tambah Rekening</a>
+                        @if ($nextBankAccount?->state() === 'scheduled')
+                            <div class="small mt-1">Rekening {{ $nextBankAccount->masked() }} aktif mulai {{ $nextBankAccount->active_at->translatedFormat('d M Y, H:i') }}.</div>
                         @endif
-                        @error('bank_code')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Nomor Rekening</label>
-                        <input type="text" name="bank_account" class="form-control @error('bank_account') is-invalid @enderror" value="{{ old('bank_account') }}" required>
-                        @error('bank_account')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Nama Pemilik Rekening</label>
-                        <input type="text" name="account_name" class="form-control @error('account_name') is-invalid @enderror" value="{{ old('account_name') }}" required>
-                        @error('account_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Catatan (opsional)</label>
-                        <input type="text" name="purpose" class="form-control" value="{{ old('purpose') }}">
-                    </div>
-                    <div class="col-md-6">
-                        <x-transaction-pin-input />
-                    </div>
-                    <div class="col-12">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="ri-send-plane-line"></i> Ajukan Tarik Saldo
-                        </button>
-                    </div>
-                </form>
+                @else
+                    <form method="POST" action="{{ route('wallet.withdrawal.store') }}" class="row g-3">
+                        @csrf
+                        <div class="col-12">
+                            <div class="border rounded-3 p-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                <div>
+                                    <div class="text-muted small">Dikirim ke</div>
+                                    <div class="fw-semibold">{{ $bankAccount->masked() }} a.n. {{ $bankAccount->account_name }}</div>
+                                </div>
+                                <a href="{{ route('wallet.bank-account.index') }}" class="btn btn-sm btn-outline-secondary">Ganti</a>
+                            </div>
+                            @if ($nextBankAccount?->state() === 'scheduled')
+                                <div class="form-text">Rekening baru Anda ({{ $nextBankAccount->masked() }}) aktif mulai {{ $nextBankAccount->active_at->translatedFormat('d M Y, H:i') }}. Sampai saat itu, penarikan tetap dikirim ke rekening di atas.</div>
+                            @endif
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Jumlah Penarikan (Rp)</label>
+                            <input type="number" name="amount" class="form-control @error('amount') is-invalid @enderror" min="10000" step="1" value="{{ old('amount') }}" required>
+                            <div class="form-text">Minimal Rp 10.000</div>
+                            @error('amount')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Catatan (opsional)</label>
+                            <input type="text" name="purpose" class="form-control" maxlength="255" placeholder="mis. Komisi September" value="{{ old('purpose') }}">
+                        </div>
+                        <div class="col-md-4">
+                            <x-transaction-pin-input />
+                        </div>
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="ri-send-plane-line"></i> Ajukan Penarikan
+                            </button>
+                        </div>
+                    </form>
+                @endif
             </div>
         </div>
 
@@ -88,7 +87,7 @@
                                 <tr>
                                     <td>{{ $row->created_at->translatedFormat('d M Y H:i') }}</td>
                                     <td class="text-end">Rp {{ number_format((float) $row->amount, 0, ',', '.') }}</td>
-                                    <td>{{ $row->bank_code }} — {{ $row->bank_account }}</td>
+                                    <td>{{ $row->bankAccount?->masked() ?? $row->bank_code.' ****'.substr($row->bank_account, -4) }}</td>
                                     <td>
                                         @php
                                             $badgeClass = match($row->status) {

@@ -643,6 +643,11 @@
                                 </a>
                             </li>
                             <li class="pe-slide-item">
+                                <a href="{{ route('bank-account-review.index') }}" class="pe-nav-link">
+                                    Verifikasi Rekening
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
                                 <a href="{{ route('point-setting.edit') }}" class="pe-nav-link">
                                     Point / Cashback Setting
                                 </a>

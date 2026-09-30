@@ -5,13 +5,12 @@ namespace App\Http\Controllers\Wallet;
 use App\Http\Controllers\Concerns\VerifiesTransactionPin;
 use App\Http\Controllers\Controller;
 use App\Models\WalletWithdrawal;
-use App\Services\Payment\DuitkuDisbursementService;
+use App\Services\Wallet\BankAccountService;
 use App\Services\Wallet\WalletWithdrawalService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use RuntimeException;
-use Throwable;
 
 /**
  * "Tarik Saldo" untuk Wallet PRIBADI logged-in user (pengajar & reseller
@@ -28,8 +27,10 @@ class WalletWithdrawalController extends Controller
 {
     use VerifiesTransactionPin;
 
-    public function __construct(protected WalletWithdrawalService $service)
-    {
+    public function __construct(
+        protected WalletWithdrawalService $service,
+        protected BankAccountService $bankAccounts,
+    ) {
     }
 
     public function index(Request $request): View
@@ -38,31 +39,23 @@ class WalletWithdrawalController extends Controller
         $wallet = $user->wallet;
 
         $riwayat = $wallet
-            ? WalletWithdrawal::where('wallet_id', $wallet->id)->latest()->limit(20)->get()
+            ? WalletWithdrawal::with('bankAccount')->where('wallet_id', $wallet->id)->latest()->limit(20)->get()
             : collect();
 
-        // Daftar bank buat dropdown "Bank Tujuan" -- gagal-aman kalau
-        // kredensial Duitku Disbursement belum diisi superadmin (lihat
-        // DuitkuDisbursementService::make()), form tetap tampil, cuma
-        // dropdown-nya kosong/fallback ke input manual di view.
-        $banks = [];
-
-        try {
-            $banks = DuitkuDisbursementService::make()->listBanks();
-        } catch (Throwable $e) {
-            // Sengaja diam -- lihat komentar di atas.
-        }
-
-        return view('wallet.withdrawal.index', compact('wallet', 'riwayat', 'banks'));
+        // Dana selalu dikirim ke rekening terdaftar (lihat BankAccountService),
+        // tidak lagi diketik ulang setiap kali tarik saldo.
+        return view('wallet.withdrawal.index', [
+            'wallet' => $wallet,
+            'riwayat' => $riwayat,
+            'bankAccount' => $this->bankAccounts->current($user),
+            'nextBankAccount' => $this->bankAccounts->latestSubmission($user),
+        ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
             'amount' => ['required', 'numeric', 'min:10000'],
-            'bank_code' => ['required', 'string', 'max:10'],
-            'bank_account' => ['required', 'string', 'max:50'],
-            'account_name' => ['required', 'string', 'max:255'],
             'purpose' => ['nullable', 'string', 'max:255'],
         ]);
 
@@ -75,6 +68,13 @@ class WalletWithdrawalController extends Controller
 
         if (! $wallet) {
             return back()->with('error', 'Wallet Anda tidak ditemukan.');
+        }
+
+        $account = $this->bankAccounts->current($user);
+
+        if (! $account) {
+            return redirect()->route('wallet.bank-account.index')
+                ->with('error', 'Anda belum punya rekening pencairan yang aktif. Tambahkan dulu supaya bisa tarik saldo.');
         }
 
         // Resolusi company/branch buat routing approval (lihat
@@ -90,15 +90,16 @@ class WalletWithdrawalController extends Controller
                 $wallet,
                 $user,
                 (float) $validated['amount'],
-                $validated['bank_code'],
-                $validated['bank_account'],
-                $validated['account_name'],
+                $account->bank_code,
+                '****'.$account->account_last4, // nomor lengkap tetap hanya di bank_accounts (terenkripsi)
+                $account->account_name,
                 $validated['purpose'] ?? null,
                 $membership?->company_id,
                 $membership?->branch_office_id,
+                $account->id,
             );
         } catch (RuntimeException $e) {
-            return back()->withInput()->with('error', $e->getMessage());
+            return back()->withInput($request->except('pin'))->with('error', $e->getMessage());
         }
 
         return redirect()

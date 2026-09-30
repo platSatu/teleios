@@ -43,6 +43,7 @@ class WalletWithdrawal extends Model
         'requested_by',
         'company_id',
         'branch_office_id',
+        'bank_account_id',
         'amount',
         'bank_code',
         'bank_account',
@@ -84,6 +85,12 @@ class WalletWithdrawal extends Model
     public function branchOffice(): BelongsTo
     {
         return $this->belongsTo(BranchOffice::class);
+    }
+
+    /** Rekening terdaftar yang dipakai (hanya tarik saldo pribadi). */
+    public function bankAccount(): BelongsTo
+    {
+        return $this->belongsTo(BankAccount::class);
     }
 
     public function approvedBy(): BelongsTo

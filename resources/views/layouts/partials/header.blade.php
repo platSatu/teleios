@@ -333,6 +333,14 @@
                                     </a>
                                 </li>
                                 <li class="profile-item">
+                                    <a href="{{ route('wallet.bank-account.index') }}"
+                                        class="text-body d-flex align-items-center justify-content-between">
+                                        <span>
+                                            <i class="ri-bank-card-line me-3"></i>Rekening Saya
+                                        </span>
+                                    </a>
+                                </li>
+                                <li class="profile-item">
                                     <a href="{{ route('wallet.dashboard.index') }}"
                                         class="text-body d-flex align-items-center justify-content-between">
                                         <span>
