@@ -250,7 +250,13 @@ class DuitkuDisbursementService
 
         $decoded = $this->post('/listBank', $payload);
 
-        return $decoded['Banks'] ?? [];
+        // Jangan diam-diam mengembalikan daftar kosong -- kredensial salah,
+        // IP server belum di-whitelist di Duitku, dll. harus terlihat alasannya.
+        if (($decoded['responseCode'] ?? null) !== '00' || empty($decoded['Banks'])) {
+            throw new RuntimeException('Duitku listBank gagal: '.($decoded['responseDesc'] ?? 'respons kosong').' (kode '.($decoded['responseCode'] ?? '?').')');
+        }
+
+        return $decoded['Banks'];
     }
 
     /**

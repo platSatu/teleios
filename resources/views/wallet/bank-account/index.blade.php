@@ -122,14 +122,27 @@
                             @csrf
                             <div class="col-md-6">
                                 <label class="form-label" for="bank_code">Bank</label>
-                                <select name="bank_code" id="bank_code" class="form-select" required>
-                                    <option value="">Pilih bank tujuan</option>
-                                    @foreach ($banks as $bank)
-                                        <option value="{{ $bank['bankCode'] }}" @selected(old('bank_code') === $bank['bankCode'])>{{ $bank['bankName'] }}</option>
-                                    @endforeach
-                                </select>
-                                @if (! count($banks))
+                                @if (count($banks))
+                                    @php($popular = collect($banks)->whereIn('bankCode', \App\Services\Wallet\BankAccountService::POPULAR_BANKS))
+                                    <input type="search" class="form-control form-control-sm mb-2" id="bank-search" placeholder="Cari bank, mis. BCA" autocomplete="off">
+                                    <select name="bank_code" id="bank_code" class="form-select" required>
+                                        <option value="">Pilih bank tujuan</option>
+                                        @foreach ([['Bank Populer', $popular], ['Semua Bank (A-Z)', collect($banks)->diffKeys($popular)]] as [$group, $items])
+                                            @if ($items->isNotEmpty())
+                                                <optgroup label="{{ $group }}">
+                                                    @foreach ($items as $bank)
+                                                        <option value="{{ $bank['bankCode'] }}" @selected(old('bank_code') === $bank['bankCode'])>{{ $bank['bankName'] }}</option>
+                                                    @endforeach
+                                                </optgroup>
+                                            @endif
+                                        @endforeach
+                                    </select>
+                                @else
+                                    <select class="form-select" disabled><option>Pilih bank tujuan</option></select>
                                     <div class="form-text text-danger">Daftar bank belum bisa dimuat. Silakan coba beberapa menit lagi.</div>
+                                    @if ($bankListError)
+                                        <div class="form-text text-muted">Info superadmin: {{ $bankListError }}</div>
+                                    @endif
                                 @endif
                             </div>
                             <div class="col-md-6">
@@ -152,6 +165,29 @@
     </div>
 
     <script>
+        // Cari bank: sembunyikan opsi yang tidak cocok (dibangun ulang supaya jalan juga di Safari/iOS).
+        (function () {
+            var search = document.getElementById('bank-search');
+            var select = document.getElementById('bank_code');
+            if (! search || ! select) return;
+
+            var groups = Array.from(select.querySelectorAll('optgroup')).map(function (group) {
+                return { group: group, options: Array.from(group.children) };
+            });
+
+            search.addEventListener('input', function () {
+                var keyword = search.value.trim().toLowerCase();
+                groups.forEach(function (item) {
+                    var matches = item.options.filter(function (option) {
+                        return option.textContent.toLowerCase().includes(keyword) || option.selected;
+                    });
+                    item.group.replaceChildren.apply(item.group, matches);
+                    item.group.disabled = matches.length === 0;
+                    item.group.style.display = matches.length ? '' : 'none';
+                });
+            });
+        })();
+
         document.getElementById('bank-confirm')?.addEventListener('change', function () {
             document.getElementById('bank-save').disabled = ! this.checked;
         });

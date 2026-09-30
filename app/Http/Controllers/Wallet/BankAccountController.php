@@ -39,6 +39,7 @@ class BankAccountController extends Controller
             'check' => $check,
             'blockedReason' => $check ? null : $this->accounts->blockedReason($user),
             'banks' => $check ? [] : $this->accounts->banks(),
+            'bankListError' => $user->user_type === 'SUPERADMIN' ? $this->accounts->bankListError : null,
             'verifiedName' => $user->verified_bank_name,
             'settings' => BankAccountService::settings(),
         ]);

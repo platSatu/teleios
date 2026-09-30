@@ -38,7 +38,13 @@ class BankAccountService
         'bank_account_change_days' => 30,
     ];
 
+    /** Kode bank yang ditaruh paling atas di dropdown, sesuai urutan ini. */
+    public const POPULAR_BANKS = ['014', '002', '008', '009', '451', '022', '013', '011', '200', '028', '016', '542', '535'];
+
     private const CHECK_TTL_MINUTES = 10;
+
+    /** Alasan terakhir daftar bank gagal dimuat (ditampilkan ke superadmin saja). */
+    public ?string $bankListError = null;
 
     private const INQUIRY_AMOUNT = 10000;
 
@@ -73,6 +79,10 @@ class BankAccountService
     }
 
     /** @return array<int, array{bankCode: string, bankName: string}> */
+    /**
+     * Daftar bank dari Duitku: bank populer di atas, sisanya urut abjad.
+     * Disimpan 1 jam; kalau gagal tidak disimpan supaya langsung dicoba lagi.
+     */
     public function banks(): array
     {
         if ($banks = Cache::get('duitku:disbursement-banks')) {
@@ -82,14 +92,16 @@ class BankAccountService
         try {
             $banks = DuitkuDisbursementService::make()->listBanks();
         } catch (Throwable $e) {
-            report($e);
+            Log::warning('bank-account: daftar bank gagal dimuat', ['error' => $e->getMessage()]);
+            $this->bankListError = $e->getMessage();
 
             return [];
         }
 
-        if ($banks) {
-            Cache::put('duitku:disbursement-banks', $banks, 3600);
-        }
+        $rank = array_flip(self::POPULAR_BANKS);
+        usort($banks, fn ($a, $b) => [$rank[$a['bankCode']] ?? PHP_INT_MAX, $a['bankName']] <=> [$rank[$b['bankCode']] ?? PHP_INT_MAX, $b['bankName']]);
+
+        Cache::put('duitku:disbursement-banks', $banks, 3600);
 
         return $banks;
     }
