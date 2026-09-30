@@ -107,12 +107,12 @@
                                                 $badgeClass = match($row->status) {
                                                     'success' => 'bg-success-subtle text-success',
                                                     'failed', 'rejected' => 'bg-danger-subtle text-danger',
-                                                    'processing', 'approved' => 'bg-info-subtle text-info',
+                                                    'processing', 'approved', 'needs_review' => 'bg-info-subtle text-info',
                                                     'cancelled' => 'bg-secondary-subtle text-secondary',
                                                     default => 'bg-warning-subtle text-warning',
                                                 };
                                             @endphp
-                                            <span class="badge {{ $badgeClass }} text-capitalize">{{ str_replace('_', ' ', $row->status) }}</span>
+                                            <span class="badge {{ $badgeClass }}">{{ $row->statusLabel() }}</span>
                                         </td>
                                         <td>{{ $row->requestedBy->name ?? '-' }}</td>
                                     </tr>

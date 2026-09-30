@@ -681,6 +681,8 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::get('/', 'index')->name('keuangan.withdrawal.approval.index');
                 Route::post('/{id}/approve', 'approve')->name('keuangan.withdrawal.approval.approve');
                 Route::post('/{id}/reject', 'reject')->name('keuangan.withdrawal.approval.reject');
+                Route::post('/{id}/check', 'checkStatus')->name('keuangan.withdrawal.approval.check');
+                Route::post('/{id}/resolve', 'resolve')->name('keuangan.withdrawal.approval.resolve');
             });
     });
 

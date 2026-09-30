@@ -118,6 +118,84 @@
             </div>
         </div>
 
+        @if($review->isNotEmpty())
+            <div class="card mb-3 border-warning">
+                <div class="card-body">
+                    <h5 class="mb-1">Perlu Dicek ({{ $review->count() }})</h5>
+                    <p class="text-muted small mb-3">Hasil transfer ke Duitku belum pasti (respons tidak jelas atau koneksi terputus). Saldo user <strong>masih ditahan</strong>. Cek di dashboard Duitku › Laporan Disbursement, lalu tandai hasilnya.</p>
+                    <div class="table-responsive">
+                        <table class="table table-centered align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Tanggal</th>
+                                    <th>Sumber</th>
+                                    <th class="text-end">Jumlah</th>
+                                    <th>Bank Tujuan</th>
+                                    <th>Keterangan</th>
+                                    <th class="text-end">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($review as $row)
+                                    <tr>
+                                        <td>{{ $row->created_at->translatedFormat('d M Y H:i') }}</td>
+                                        <td>{{ $row->sourceLabel() }}</td>
+                                        <td class="text-end">Rp {{ number_format((float) $row->amount, 0, ',', '.') }}</td>
+                                        <td>{{ $row->bank_code }} — {{ $row->bank_account }}<div class="text-muted small">{{ $row->account_name }}</div></td>
+                                        <td class="text-muted small">
+                                            {{ $row->failure_reason ?? 'Proses berhenti di tengah jalan.' }}
+                                            @if($row->duitku_cust_ref_number)
+                                                <div>Ref: {{ $row->duitku_cust_ref_number }}</div>
+                                            @endif
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="d-flex gap-1 justify-content-end">
+                                                <form method="POST" action="{{ route('keuangan.withdrawal.approval.check', $row->id) }}">
+                                                    @csrf
+                                                    <button type="submit" class="btn btn-sm btn-outline-secondary text-nowrap">Cek Status ke Duitku</button>
+                                                </form>
+                                                <button type="button" class="btn btn-sm btn-warning text-nowrap" data-bs-toggle="modal" data-bs-target="#resolveModal{{ $row->id }}">Tandai Hasil</button>
+                                            </div>
+
+                                            <div class="modal fade text-start" id="resolveModal{{ $row->id }}" tabindex="-1">
+                                                <div class="modal-dialog">
+                                                    <form class="modal-content" method="POST" action="{{ route('keuangan.withdrawal.approval.resolve', $row->id) }}">
+                                                        @csrf
+                                                        <div class="modal-header">
+                                                            <h5 class="modal-title">Tandai Hasil Transfer</h5>
+                                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                            <p class="mb-3">Rp {{ number_format((float) $row->amount, 0, ',', '.') }} ke {{ $row->bank_code }} — {{ $row->bank_account }}</p>
+                                                            <div class="form-check mb-2">
+                                                                <input class="form-check-input" type="radio" name="sent" value="1" id="sent1-{{ $row->id }}" required>
+                                                                <label class="form-check-label" for="sent1-{{ $row->id }}"><strong>Dana SUDAH terkirim</strong> (tercatat sukses di Duitku) — saldo user tetap terpotong.</label>
+                                                            </div>
+                                                            <div class="form-check mb-3">
+                                                                <input class="form-check-input" type="radio" name="sent" value="0" id="sent0-{{ $row->id }}">
+                                                                <label class="form-check-label" for="sent0-{{ $row->id }}"><strong>Dana TIDAK terkirim</strong> (gagal/tidak ada di Duitku) — saldo user dikembalikan.</label>
+                                                            </div>
+                                                            <label class="form-label">Catatan hasil pengecekan</label>
+                                                            <textarea name="note" class="form-control mb-3" rows="2" maxlength="500" required placeholder="mis. Status di Duitku: Success, ref 123456789"></textarea>
+                                                            <x-transaction-pin-input :id="'pin-resolve-'.$row->id" />
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+                                                            <button type="submit" class="btn btn-warning">Simpan</button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        @endif
+
         <div class="card">
             <div class="card-body">
                 <h5 class="mb-3">Riwayat</h5>
@@ -151,12 +229,12 @@
                                             $badgeClass = match($row->status) {
                                                 'success' => 'bg-success-subtle text-success',
                                                 'failed', 'rejected' => 'bg-danger-subtle text-danger',
-                                                'processing', 'approved' => 'bg-info-subtle text-info',
+                                                'processing', 'approved', 'needs_review' => 'bg-info-subtle text-info',
                                                 'cancelled' => 'bg-secondary-subtle text-secondary',
                                                 default => 'bg-warning-subtle text-warning',
                                             };
                                         @endphp
-                                        <span class="badge {{ $badgeClass }} text-capitalize">{{ str_replace('_', ' ', $row->status) }}</span>
+                                        <span class="badge {{ $badgeClass }}">{{ $row->statusLabel() }}</span>
                                     </td>
                                     <td class="text-muted small">
                                         {{ $row->rejection_reason ?? $row->failure_reason ?? '-' }}

@@ -68,7 +68,10 @@ class WithdrawalApprovalController extends Controller
             ->limit(30)
             ->get();
 
-        return view('keuangan.withdrawal.approval', compact('pending', 'riwayat'));
+        // Hasil transfer belum pasti -- saldo masih ditahan sampai dicek.
+        $review = (clone $query)->needingReview()->oldest()->get();
+
+        return view('keuangan.withdrawal.approval', compact('pending', 'riwayat', 'review'));
     }
 
     public function approve(Request $request, string $id): RedirectResponse
@@ -117,6 +120,45 @@ class WithdrawalApprovalController extends Controller
         }
 
         return back()->with('success', 'Permintaan tarik saldo ditolak.');
+    }
+
+    /** Tanyakan status transfer yang belum pasti ke Duitku (hanya baca). */
+    public function checkStatus(Request $request, string $id): RedirectResponse
+    {
+        $withdrawal = WalletWithdrawal::findOrFail($id);
+        abort_unless($this->authorize($request, $withdrawal), 403);
+
+        try {
+            return back()->with('success', $this->service->checkReview($withdrawal));
+        } catch (RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    /** Tandai hasil transfer yang belum pasti setelah dicek di Duitku (wajib PIN). */
+    public function resolve(Request $request, string $id): RedirectResponse
+    {
+        $validated = $request->validate([
+            'sent' => ['required', 'in:0,1'],
+            'note' => ['required', 'string', 'max:500'],
+        ], ['note.required' => 'Tulis catatan hasil pengecekan di Duitku.']);
+
+        $withdrawal = WalletWithdrawal::findOrFail($id);
+        abort_unless($this->authorize($request, $withdrawal), 403);
+
+        if ($failed = $this->failedTransactionPin($request)) {
+            return $failed;
+        }
+
+        try {
+            $this->service->resolveReview($withdrawal, $validated['sent'] === '1', $request->user(), $validated['note']);
+        } catch (RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', $validated['sent'] === '1'
+            ? 'Ditandai berhasil terkirim. Saldo user tetap terpotong.'
+            : 'Ditandai tidak terkirim. Saldo user sudah dikembalikan.');
     }
 
     private function authorize(Request $request, WalletWithdrawal $withdrawal): bool

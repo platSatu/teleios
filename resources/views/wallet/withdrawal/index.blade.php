@@ -20,7 +20,7 @@
                     </div>
                 </div>
 
-                <p class="text-muted small mb-3">Permintaan Anda perlu disetujui admin sebelum dana benar-benar dikirim ke rekening tujuan.</p>
+                <p class="text-muted small mb-3">Saldo langsung ditahan saat Anda mengajukan, lalu dikirim ke rekening setelah disetujui admin. Kalau ditolak, dibatalkan, atau gagal, saldo otomatis dikembalikan.</p>
 
                 @if (! $bankAccount)
                     <div class="alert alert-warning mb-0">
@@ -93,14 +93,20 @@
                                             $badgeClass = match($row->status) {
                                                 'success' => 'bg-success-subtle text-success',
                                                 'failed', 'rejected' => 'bg-danger-subtle text-danger',
-                                                'processing', 'approved' => 'bg-info-subtle text-info',
+                                                'processing', 'approved', 'needs_review' => 'bg-info-subtle text-info',
                                                 'cancelled' => 'bg-secondary-subtle text-secondary',
                                                 default => 'bg-warning-subtle text-warning',
                                             };
                                         @endphp
-                                        <span class="badge {{ $badgeClass }} text-capitalize">{{ str_replace('_', ' ', $row->status) }}</span>
+                                        <span class="badge {{ $badgeClass }}">{{ $row->statusLabel() }}</span>
                                         @if($row->status === 'rejected' && $row->rejection_reason)
                                             <div class="text-muted small">{{ $row->rejection_reason }}</div>
+                                        @endif
+                                        @if($row->status === 'needs_review')
+                                            <div class="text-muted small">Hasil transfer sedang dicek tim kami. Saldo masih ditahan.</div>
+                                        @endif
+                                        @if($row->refunded_at)
+                                            <div class="text-success small">Saldo sudah dikembalikan.</div>
                                         @endif
                                         @if($row->status === 'failed' && $row->failure_reason)
                                             <div class="text-muted small">{{ $row->failure_reason }}</div>
