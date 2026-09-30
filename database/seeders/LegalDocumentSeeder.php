@@ -12,9 +12,10 @@ use RuntimeException;
 /**
  * Dokumen legal website: Syarat & Ketentuan (modul web_term_conditions --
  * dipakai popup register & /syarat-dan-ketentuan fe-konexa) dan 6 dokumen
- * pendukung sebagai Halaman tipe Dokumen (/page/{slug}, kolom footer
- * "Legal"). Isi Markdown ada di database/seeders/legal/{slug}.md; {app}
- * dan {company} diganti saat seeding.
+ * pendukung sebagai Halaman tipe Dokumen (/page/{slug}). Semua halaman
+ * ber-footer_group "Legal" tampil bersama di sidebar dokumen fe-konexa;
+ * di footer hanya S&K dan Kebijakan Privasi. Isi Markdown ada di
+ * database/seeders/legal/{slug}.md; {app} dan {company} diganti saat seeding.
  *
  * Aman dijalankan ulang: hanya MEMBUAT yang belum ada (dicek per slug /
  * nama), tidak pernah menimpa isi yang sudah diedit lewat Superadmin.
@@ -28,16 +29,19 @@ class LegalDocumentSeeder extends Seeder
 
     private const TERMS_SLUG = 'syarat-dan-ketentuan';
 
-    private const TERMS_NAME = 'Syarat dan Ketentuan Layanan';
+    private const TERMS_NAME = 'Syarat & Ketentuan';
 
-    /** slug => [judul, ringkasan (subtitle & meta description)] -- urutan = urutan di footer. */
+    /** Halaman yang juga tampil sebagai link di footer (selain S&K). */
+    private const FOOTER_SLUGS = ['kebijakan-privasi'];
+
+    /** slug => [judul, ringkasan (subtitle & meta description)] -- urutan = urutan di sidebar. */
     private const PAGES = [
         'kebijakan-privasi' => ['Kebijakan Privasi', 'Bagaimana kami mengumpulkan, menggunakan, dan melindungi data pribadi Anda.'],
-        'kebijakan-penggunaan' => ['Kebijakan Penggunaan yang Dilarang', 'Aturan penggunaan layanan dan pengiriman pesan WhatsApp yang aman dan bertanggung jawab.'],
-        'ketentuan-saldo' => ['Ketentuan Saldo, Top Up & Tarik Saldo', 'Cara kerja saldo, top up, transfer, dan penarikan dana.'],
-        'kebijakan-refund' => ['Kebijakan Pembelian & Refund', 'Ketentuan pembelian paket, kode aktivasi, dan pengembalian dana.'],
-        'ketentuan-referral' => ['Ketentuan Program Referral', 'Cara mendapatkan komisi, masa tahan, dan aturan program referral.'],
-        'pemrosesan-data' => ['Perjanjian Pemrosesan Data', 'Pembagian tanggung jawab atas data pelanggan yang Anda kelola di layanan kami.'],
+        'kebijakan-penggunaan' => ['Kebijakan Penggunaan', 'Aturan penggunaan layanan dan pengiriman pesan WhatsApp yang bertanggung jawab.'],
+        'ketentuan-saldo' => ['Ketentuan Saldo', 'Cara kerja saldo, top up, transfer, dan penarikan dana.'],
+        'kebijakan-refund' => ['Kebijakan Refund', 'Ketentuan pembelian paket, kode aktivasi, dan pengembalian dana.'],
+        'ketentuan-referral' => ['Program Referral', 'Cara mendapatkan komisi, masa tahan, dan aturan program referral.'],
+        'pemrosesan-data' => ['Pemrosesan Data', 'Pembagian tanggung jawab atas data pelanggan yang Anda kelola di layanan kami.'],
     ];
 
     public function run(): void
@@ -51,7 +55,7 @@ class LegalDocumentSeeder extends Seeder
                 'subtitle' => $summary,
                 'content' => $this->document($slug),
                 'meta_description' => $summary,
-                'show_in_footer' => true,
+                'show_in_footer' => in_array($slug, self::FOOTER_SLUGS, true),
                 'footer_group' => self::FOOTER_GROUP,
                 'footer_order' => $order + 1,
                 'status' => 'active',
@@ -64,7 +68,7 @@ class LegalDocumentSeeder extends Seeder
         // dibuat lewat Web > Footer (tampil paling atas di kolom itu).
         WebFooter::firstOrCreate(
             ['group_name' => self::FOOTER_GROUP, 'link' => '/'.self::TERMS_SLUG],
-            ['name' => 'Syarat dan Ketentuan', 'column_width' => 'col-md-3', 'target_blank' => false, 'sort_order' => 0, 'status' => 'active'],
+            ['name' => self::TERMS_NAME, 'column_width' => 'col-md-3', 'target_blank' => false, 'sort_order' => 0, 'status' => 'active'],
         );
     }
 

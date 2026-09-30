@@ -1,99 +1,57 @@
-Kami di **{company}** ("Kami") menghargai kepercayaan Anda. Kebijakan Privasi ini menjelaskan data pribadi apa yang kami kumpulkan saat Anda menggunakan {app}, bagaimana kami menggunakannya, kepada siapa data dibagikan, dan hak-hak Anda. Kebijakan ini disusun dengan mengacu pada Undang-Undang Nomor 27 Tahun 2022 tentang Pelindungan Data Pribadi dan peraturan terkait.
+Kebijakan Privasi ini menjelaskan bagaimana **{company}** ("Kami") mengumpulkan, menggunakan, dan melindungi data pribadi Anda saat menggunakan {app}, dengan mengacu pada UU No. 27 Tahun 2022 tentang Pelindungan Data Pribadi.
 
 ## 1. Data yang Kami Kumpulkan
 
-**Data yang Anda berikan langsung**
+- **Data akun**: nama, email, nomor HP/WhatsApp, foto profil, serta password dan PIN (tersimpan terenkripsi).
+- **Data usaha**: company, branch, dan anggota tim.
+- **Data keuangan**: rekening penarikan (nomor rekening terenkripsi) dan riwayat transaksi.
+- **Data otomatis**: log login (waktu, IP, perangkat), log aktivitas, log kunjungan, dan cookie.
+- **Data dari pihak ketiga**: data Google bila Anda menghubungkan akun Google, serta status pembayaran dan verifikasi rekening dari Mitra Pembayaran (Duitku).
+- **Data pelanggan yang Anda unggah** (kontak, pesan, siswa, formulir, Tagihan): Anda pengendali datanya, Kami pemroses. Lihat **Pemrosesan Data**.
 
-- Data akun: nama, email, nomor HP/WhatsApp, foto profil, password (disimpan dalam bentuk terenkripsi), dan PIN transaksi (disimpan dalam bentuk terenkripsi).
-- Data usaha: nama company, branch, unit, serta anggota tim yang Anda undang.
-- Data keuangan: rekening bank tujuan penarikan (nomor rekening disimpan terenkripsi), riwayat top up, pembelian, transfer, dan penarikan.
-- Pesan yang Anda kirim ke kami melalui halaman Kontak atau Help Center.
+## 2. Penggunaan Data
 
-**Data yang Anda unggah untuk menjalankan usaha Anda**
+Data digunakan untuk:
 
-- Kontak, buku telepon, daftar pelanggan, isi percakapan dan pesan WhatsApp, template pesan, data siswa/pengajar (Jadwal), jawaban formulir (Form), serta data pelanggan Tagihan.
-- Untuk data ini, **Anda adalah pengendali data** dan kami bertindak sebagai pemroses data. Lihat **Perjanjian Pemrosesan Data**.
-
-**Data yang terkumpul otomatis**
-
-- Log login (waktu, alamat IP, jenis perangkat/browser), log aktivitas penting (audit log), dan log kunjungan website.
-- Cookie yang diperlukan untuk login, keamanan, dan pencatatan kode referral.
-
-**Data dari pihak ketiga**
-
-- Jika Anda masuk atau menghubungkan akun dengan Google: nama, email, foto profil, dan (jika Anda izinkan) kontak atau data Google Form.
-- Dari Mitra Pembayaran (Duitku): status pembayaran, nomor referensi, dan hasil verifikasi nama pemilik rekening.
-
-## 2. Tujuan Penggunaan Data
-
-Kami menggunakan data Anda untuk:
-
-1. membuat dan mengelola akun serta memverifikasi identitas;
-2. menjalankan Layanan yang Anda pilih (mengirim pesan, menyimpan kontak, memproses jadwal, formulir, dan tagihan);
-3. memproses pembayaran, saldo, komisi, dan penarikan dana;
-4. menjaga keamanan akun, mencegah penipuan dan penyalahgunaan;
-5. mengirim notifikasi layanan (misalnya verifikasi email, pengingat masa aktif, status transaksi);
+1. membuat akun dan memverifikasi identitas;
+2. menjalankan Layanan yang Anda pilih;
+3. memproses pembayaran, saldo, komisi, dan penarikan;
+4. menjaga keamanan dan mencegah penipuan;
+5. mengirim notifikasi layanan;
 6. menanggapi pertanyaan dan keluhan;
-7. meningkatkan kualitas Layanan melalui analisis penggunaan secara agregat;
+7. meningkatkan Layanan secara agregat;
 8. memenuhi kewajiban hukum.
 
-Kami **tidak menjual** data pribadi Anda. Kami tidak menggunakan data pelanggan yang Anda unggah untuk kepentingan kami sendiri di luar menjalankan Layanan untuk Anda.
+Kami **tidak menjual** data pribadi Anda.
 
-## 3. Dasar Pemrosesan
+## 3. Pihak yang Menerima Data
 
-Kami memproses data berdasarkan: persetujuan Anda, pelaksanaan perjanjian (Syarat dan Ketentuan), pemenuhan kewajiban hukum, serta kepentingan yang sah seperti keamanan dan pencegahan penipuan.
+Data hanya dibagikan sebatas perlu kepada: **Mitra Pembayaran (Duitku)**, **penyedia server dan email**, **Google dan penyedia AI** (bila fiturnya Anda aktifkan), **WhatsApp** sebagai saluran pesan, dan **instansi berwenang** bila diwajibkan hukum.
 
-## 4. Pihak yang Menerima Data
+## 4. Keamanan Data
 
-Data hanya dibagikan sebatas yang diperlukan kepada:
+Kami melindungi data dengan enkripsi password, PIN, dan nomor rekening; koneksi HTTPS; pembatasan akses internal; batas percobaan login dan PIN; serta pencatatan aktivitas. Jaga juga kerahasiaan password dan PIN Anda.
 
-- **Mitra Pembayaran (Duitku)** untuk memproses pembayaran, verifikasi rekening, dan transfer dana;
-- **penyedia infrastruktur** (server, hosting, email) yang membantu menjalankan Layanan;
-- **Google** dan **penyedia AI**, hanya jika Anda mengaktifkan fitur yang terhubung dengan layanan tersebut;
-- **WhatsApp**, sebagai saluran pengiriman pesan yang Anda gunakan;
-- **aparat atau instansi berwenang**, jika diwajibkan oleh hukum.
+## 5. Penyimpanan Data
 
-Setiap pihak tersebut wajib menjaga kerahasiaan dan keamanan data sesuai perjanjian atau ketentuan yang berlaku.
+Data disimpan selama akun aktif dan selama diperlukan. Catatan transaksi keuangan disimpan sesuai jangka waktu yang diwajibkan peraturan. Data yang tidak lagi diperlukan dihapus atau dianonimkan.
 
-## 5. Keamanan Data
+## 6. Hak Anda
 
-Kami menerapkan langkah pengamanan yang wajar, antara lain: enkripsi password, PIN, dan nomor rekening; koneksi terenkripsi (HTTPS); pembatasan hak akses internal; batas percobaan login dan PIN; serta pencatatan aktivitas penting. Meski demikian, tidak ada sistem yang sepenuhnya bebas risiko. Jaga kerahasiaan password dan PIN Anda.
+Anda berhak **mengakses**, **memperbaiki**, dan **meminta penghapusan** data, **menarik persetujuan**, serta **mengajukan keberatan** atas pemrosesan tertentu. Permintaan diajukan melalui halaman **Kontak**, dan kami akan memverifikasi identitas Anda terlebih dahulu.
 
-## 6. Penyimpanan Data
+## 7. Kebocoran Data
 
-1. Data disimpan selama akun Anda aktif dan selama diperlukan untuk tujuan di atas.
-2. Catatan transaksi keuangan disimpan sesuai jangka waktu yang diwajibkan peraturan perundang-undangan, termasuk setelah akun ditutup.
-3. Data yang sudah tidak diperlukan akan dihapus atau dianonimkan.
+Bila terjadi kegagalan pelindungan data, kami memberi tahu Pengguna terdampak dan lembaga berwenang paling lambat **3 x 24 jam**, beserta langkah penanganannya.
 
-## 7. Hak Anda
+## 8. Cookie
 
-Sesuai UU Pelindungan Data Pribadi, Anda berhak untuk:
+Cookie dipakai untuk sesi login, keamanan, pencatatan kode referral, dan statistik kunjungan, serta piksel iklan bila diaktifkan. Anda dapat mengaturnya lewat browser, namun sebagian fitur mungkin tidak berfungsi.
 
-1. mendapatkan informasi tentang pemrosesan data Anda;
-2. mengakses dan memperoleh salinan data Anda;
-3. memperbaiki data yang tidak akurat;
-4. meminta penghapusan data atau penutupan akun, kecuali data yang wajib kami simpan menurut hukum;
-5. menarik persetujuan, dengan konsekuensi fitur tertentu mungkin tidak dapat digunakan;
-6. mengajukan keberatan atas pemrosesan tertentu.
+## 9. Anak di Bawah Umur
 
-Permintaan dapat diajukan melalui halaman **Kontak**. Kami akan memverifikasi identitas Anda terlebih dahulu dan menanggapi dalam jangka waktu yang ditentukan peraturan.
+Layanan tidak ditujukan untuk anak di bawah 18 tahun. Data siswa di bawah umur pada fitur Jadwal menjadi tanggung jawab Pengguna, termasuk persetujuan orang tua atau wali.
 
-## 8. Kebocoran Data
+## 10. Perubahan dan Kontak
 
-Apabila terjadi kegagalan pelindungan data pribadi, kami akan memberitahukan secara tertulis kepada Pengguna yang terdampak dan kepada lembaga yang berwenang paling lambat **3 x 24 jam**, sesuai ketentuan UU Pelindungan Data Pribadi, beserta langkah penanganan yang kami lakukan.
-
-## 9. Cookie
-
-Website dan aplikasi kami menggunakan cookie yang diperlukan untuk menjaga sesi login, keamanan (misalnya pencegahan CSRF), pencatatan kode referral dari link yang Anda klik, dan statistik kunjungan. Jika pengiklanan diaktifkan, kami dapat menggunakan piksel iklan untuk mengukur efektivitas kampanye. Anda dapat mengatur cookie melalui pengaturan browser, namun beberapa fitur mungkin tidak berfungsi.
-
-## 10. Anak di Bawah Umur
-
-Layanan tidak ditujukan untuk anak di bawah 18 tahun. Data siswa di bawah umur yang dikelola melalui fitur Jadwal menjadi tanggung jawab Pengguna selaku pengendali data, termasuk memperoleh persetujuan dari orang tua atau wali.
-
-## 11. Perubahan Kebijakan
-
-Kebijakan ini dapat diperbarui sewaktu-waktu. Tanggal pembaruan terakhir tercantum di bagian bawah halaman ini. Perubahan penting akan kami informasikan melalui website, aplikasi, atau email.
-
-## 12. Kontak
-
-Pertanyaan atau permintaan terkait data pribadi dapat disampaikan melalui halaman **Kontak** di website kami dengan memilih topik yang sesuai.
+Kebijakan ini dapat diperbarui, dan tanggal pembaruan tercantum di bawah halaman. Pertanyaan terkait data pribadi dapat disampaikan melalui halaman **Kontak**.

@@ -9,7 +9,8 @@ use Illuminate\Http\JsonResponse;
 
 /**
  * Halaman dinamis untuk fe-konexa (/page/{slug}). Hanya status active.
- * index() = daftar link navbar/footer; show() = isi satu halaman (Dokumen:
+ * index() = daftar link navbar/footer + halaman ber-grup (sidebar dokumen
+ * sejenis, mis. grup "Legal"); show() = isi satu halaman (Dokumen:
  * teks Markdown mentah, dirender aman di fe-konexa; Landing: section dengan
  * format yang sama seperti beranda). Gated VerifyFrontendApiKey.
  */
@@ -19,7 +20,7 @@ class PageController extends Controller
     {
         $pages = WebPage::query()
             ->where('status', 'active')
-            ->where(fn ($query) => $query->where('show_in_navbar', true)->orWhere('show_in_footer', true))
+            ->where(fn ($query) => $query->where('show_in_navbar', true)->orWhere('show_in_footer', true)->orWhereNotNull('footer_group'))
             ->orderBy('title')
             ->get(['title', 'slug', 'show_in_navbar', 'navbar_order', 'show_in_footer', 'footer_group', 'footer_order']);
 
@@ -42,6 +43,7 @@ class PageController extends Controller
             'title' => $page->title,
             'slug' => $page->slug,
             'type' => $page->type,
+            'footer_group' => $page->footer_group,
             'subtitle' => $page->subtitle,
             'hero_image_url' => $page->hero_image_url,
             'content' => $page->isLanding() ? null : $page->content,
