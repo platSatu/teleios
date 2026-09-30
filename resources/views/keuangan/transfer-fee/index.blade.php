@@ -62,13 +62,16 @@
                         </div>
 
                         @if($preview['total'] > 0)
-                            <form method="POST" action="{{ route('keuangan.transfer-fee.execute') }}"
+                            <form method="POST" action="{{ route('keuangan.transfer-fee.execute') }}" class="d-flex flex-wrap align-items-start gap-2"
                                   onsubmit="return confirm('Transfer fee Rp {{ number_format($preview['total'], 0, ',', '.') }} ke {{ $preview['pengajar_count'] }} pengajar untuk periode {{ \Illuminate\Support\Carbon::createFromDate($year, $month, 1)->translatedFormat('F Y') }}? Tindakan ini tidak bisa dibatalkan.');">
                                 @csrf
                                 <input type="hidden" name="branch_office_id" value="{{ $branch->id }}">
                                 <input type="hidden" name="year" value="{{ $year }}">
                                 <input type="hidden" name="month" value="{{ $month }}">
-                                <button type="submit" class="btn btn-primary">
+                                <div style="max-width: 220px;">
+                                    <x-transaction-pin-input />
+                                </div>
+                                <button type="submit" class="btn btn-primary" style="margin-top: 1.9rem;">
                                     <i class="ri-send-plane-line"></i> Transfer Fee Sekarang
                                 </button>
                             </form>

@@ -68,6 +68,9 @@
                             <label class="form-label">Catatan (opsional)</label>
                             <input type="text" name="purpose" class="form-control" value="{{ old('purpose') }}">
                         </div>
+                        <div class="col-md-6">
+                            <x-transaction-pin-input />
+                        </div>
                         <div class="col-12">
                             <button type="submit" class="btn btn-primary">
                                 <i class="ri-send-plane-line"></i> Ajukan Tarik Saldo

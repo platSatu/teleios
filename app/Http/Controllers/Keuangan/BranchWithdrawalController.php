@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Keuangan;
 
 use App\Http\Controllers\Concerns\ResolvesCompanyContext;
+use App\Http\Controllers\Concerns\VerifiesTransactionPin;
 use App\Http\Controllers\Controller;
 use App\Models\BranchOffice;
 use App\Models\WalletWithdrawal;
@@ -27,6 +28,7 @@ use Throwable;
 class BranchWithdrawalController extends Controller
 {
     use ResolvesCompanyContext;
+    use VerifiesTransactionPin;
 
     public function __construct(protected WalletWithdrawalService $service)
     {
@@ -73,6 +75,10 @@ class BranchWithdrawalController extends Controller
             'account_name' => ['required', 'string', 'max:255'],
             'purpose' => ['nullable', 'string', 'max:255'],
         ]);
+
+        if ($failed = $this->failedTransactionPin($request)) {
+            return $failed;
+        }
 
         $context = $this->companyContext($request);
         $company = $context->company;

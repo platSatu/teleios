@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Keuangan;
 
 use App\Http\Controllers\Concerns\ResolvesCompanyContext;
+use App\Http\Controllers\Concerns\VerifiesTransactionPin;
 use App\Http\Controllers\Controller;
 use App\Models\BranchOffice;
 use App\Models\PengajarFeeTransfer;
@@ -27,6 +28,7 @@ use RuntimeException;
 class PengajarFeeTransferController extends Controller
 {
     use ResolvesCompanyContext;
+    use VerifiesTransactionPin;
 
     public function __construct(protected PengajarFeeTransferService $transferService)
     {
@@ -80,6 +82,10 @@ class PengajarFeeTransferController extends Controller
             'year' => ['required', 'integer', 'min:2020', 'max:2100'],
             'month' => ['required', 'integer', 'min:1', 'max:12'],
         ]);
+
+        if ($failed = $this->failedTransactionPin($request)) {
+            return $failed;
+        }
 
         $context = $this->companyContext($request);
         $company = $context->company;

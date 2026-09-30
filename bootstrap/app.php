@@ -212,6 +212,10 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // PIN transaksi tidak boleh ikut tersimpan di session (old input)
+        // saat validasi gagal, sama seperti password.
+        $exceptions->dontFlash(['pin', 'current_pin', 'pin_confirmation']);
+
         // Confirmed via curl against production (2026-08-05): the
         // redirect-to-/login response a logged-out session gets bounced
         // to was going out with the WRONG cache header —

@@ -6,10 +6,13 @@
             <div class="card border-0 shadow-sm">
                 <div class="card-body p-4">
                     <h4 class="mb-1">{{ $hasPin ? 'Ubah PIN Transaksi' : 'Buat PIN Transaksi' }}</h4>
-                    <p class="text-muted mb-4">PIN 6 digit ini dipakai untuk konfirmasi setiap transfer saldo ke user lain.</p>
+                    <p class="text-muted mb-4">PIN 6 digit ini dipakai untuk konfirmasi setiap transaksi keuangan: transfer saldo, tarik saldo, dan transfer fee pengajar. Jangan berikan PIN ke siapa pun, termasuk tim kami.</p>
 
                     @if (session('success'))
                         <div class="alert alert-success">{{ session('success') }}</div>
+                    @endif
+                    @if (session('error'))
+                        <div class="alert alert-danger">{{ session('error') }}</div>
                     @endif
                     @if ($errors->any())
                         <div class="alert alert-danger">

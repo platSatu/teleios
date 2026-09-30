@@ -3,13 +3,12 @@
 namespace App\Http\Controllers\Keuangan;
 
 use App\Http\Controllers\Concerns\ResolvesCompanyContext;
+use App\Http\Controllers\Concerns\VerifiesTransactionPin;
 use App\Http\Controllers\Controller;
 use App\Models\WalletWithdrawal;
 use App\Services\Wallet\WalletWithdrawalService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\View\View;
 use RuntimeException;
 
@@ -22,8 +21,7 @@ use RuntimeException;
  * Controllers\Keuangan\BranchWithdrawalController) -- satu antrean,
  * bukan dua halaman terpisah.
  *
- * approve() WAJIB PIN transaksi (users.pin, sama persis pola & rate
- * limit dengan Dashboard\WalletTransferController) -- dari sini
+ * approve() WAJIB PIN transaksi (Concerns\VerifiesTransactionPin) -- dari sini
  * langsung memicu panggilan Duitku Disbursement yang beneran mengirim
  * uang keluar, jadi diberi pengaman yang sama dengan Transfer Saldo
  * antar-user yang sudah ada, bukan cuma klik tombol biasa.
@@ -31,10 +29,7 @@ use RuntimeException;
 class WithdrawalApprovalController extends Controller
 {
     use ResolvesCompanyContext;
-
-    private const MAX_PIN_ATTEMPTS = 5;
-
-    private const PIN_LOCKOUT_SECONDS = 900;
+    use VerifiesTransactionPin;
 
     public function __construct(protected WalletWithdrawalService $service)
     {
@@ -79,36 +74,15 @@ class WithdrawalApprovalController extends Controller
     public function approve(Request $request, string $id): RedirectResponse
     {
         $user = $request->user();
-
-        if (is_null($user->pin)) {
-            return redirect()
-                ->route('user-settings.pin.edit')
-                ->with('error', 'Buat PIN transaksi terlebih dahulu sebelum menyetujui tarik saldo.');
-        }
-
-        $validated = $request->validate(['pin' => ['required', 'digits:6']]);
-
         $withdrawal = WalletWithdrawal::findOrFail($id);
 
         if (! $this->authorize($request, $withdrawal)) {
             abort(403);
         }
 
-        $rateLimitKey = 'withdrawal-approve-pin:'.$user->id;
-
-        if (RateLimiter::tooManyAttempts($rateLimitKey, self::MAX_PIN_ATTEMPTS)) {
-            $seconds = RateLimiter::availableIn($rateLimitKey);
-
-            return back()->with('error', "Terlalu banyak percobaan PIN salah. Coba lagi dalam {$seconds} detik.");
+        if ($failed = $this->failedTransactionPin($request)) {
+            return $failed;
         }
-
-        if (! Hash::check($validated['pin'], $user->pin)) {
-            RateLimiter::hit($rateLimitKey, self::PIN_LOCKOUT_SECONDS);
-
-            return back()->with('error', 'PIN salah.');
-        }
-
-        RateLimiter::clear($rateLimitKey);
 
         try {
             $result = $this->service->approveAndProcess($withdrawal, $user);

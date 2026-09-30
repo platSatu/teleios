@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Wallet;
 
+use App\Http\Controllers\Concerns\VerifiesTransactionPin;
 use App\Http\Controllers\Controller;
 use App\Models\WalletWithdrawal;
 use App\Services\Payment\DuitkuDisbursementService;
@@ -25,6 +26,8 @@ use Throwable;
  */
 class WalletWithdrawalController extends Controller
 {
+    use VerifiesTransactionPin;
+
     public function __construct(protected WalletWithdrawalService $service)
     {
     }
@@ -62,6 +65,10 @@ class WalletWithdrawalController extends Controller
             'account_name' => ['required', 'string', 'max:255'],
             'purpose' => ['nullable', 'string', 'max:255'],
         ]);
+
+        if ($failed = $this->failedTransactionPin($request)) {
+            return $failed;
+        }
 
         $user = $request->user();
         $wallet = $user->wallet;

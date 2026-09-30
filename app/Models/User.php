@@ -150,6 +150,12 @@ class User extends Authenticatable
         );
     }
 
+    /** PIN transaksi sudah dibuat (lihat Concerns\VerifiesTransactionPin). */
+    public function hasTransactionPin(): bool
+    {
+        return ! is_null($this->pin);
+    }
+
     public function wallet()
     {
         return $this->hasOne(

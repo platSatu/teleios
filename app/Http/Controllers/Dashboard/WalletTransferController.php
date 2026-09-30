@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Dashboard;
 
+use App\Http\Controllers\Concerns\VerifiesTransactionPin;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\User;
@@ -14,8 +15,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\View\View;
 use RuntimeException;
 
@@ -31,9 +30,8 @@ use RuntimeException;
  * Security notes:
  *   - Requires a PIN (users.pin, hashed) to be set first — see
  *     User\Settings\PinController. No PIN, no transfer.
- *   - PIN attempts are rate-limited (5 per 15 minutes per user) via
- *     Laravel's RateLimiter, so a stolen session can't be used to brute
- *     force the PIN.
+ *   - PIN check & rate limit (shared across every money action) live
+ *     in Concerns\VerifiesTransactionPin.
  *   - Both wallets are locked in a consistent order (sorted by id)
  *     before any balance change, so two transfers between the same pair
  *     of users running concurrently in opposite directions can't
@@ -44,15 +42,15 @@ use RuntimeException;
  */
 class WalletTransferController extends Controller
 {
+    use VerifiesTransactionPin;
+
     private const MIN_AMOUNT = 1000;
-    private const MAX_PIN_ATTEMPTS = 5;
-    private const PIN_LOCKOUT_SECONDS = 900; // 15 minutes
 
     public function index(): View
     {
         $user = Auth::user();
         $wallet = $user->wallet;
-        $hasPin = ! is_null($user->pin);
+        $hasPin = $user->hasTransactionPin();
 
         return view('dashboard.wallet-transfer.index', [
             'wallet' => $wallet,
@@ -116,38 +114,19 @@ class WalletTransferController extends Controller
     {
         $sender = Auth::user();
 
-        if (is_null($sender->pin)) {
-            return redirect()
-                ->route('user-settings.pin.edit')
-                ->with('error', 'Buat PIN transaksi terlebih dahulu sebelum transfer saldo.');
-        }
-
         $validated = $request->validate([
             'receiver_id' => ['required', 'uuid', 'exists:users,id'],
             'amount' => ['required', 'numeric', 'min:' . self::MIN_AMOUNT],
             'note' => ['nullable', 'string', 'max:255'],
-            'pin' => ['required', 'digits:6'],
         ]);
 
         if ($validated['receiver_id'] === $sender->id) {
             return back()->withInput()->with('error', 'Tidak bisa transfer ke akun sendiri.');
         }
 
-        $rateLimitKey = 'wallet-transfer-pin:' . $sender->id;
-
-        if (RateLimiter::tooManyAttempts($rateLimitKey, self::MAX_PIN_ATTEMPTS)) {
-            $seconds = RateLimiter::availableIn($rateLimitKey);
-
-            return back()->with('error', "Terlalu banyak percobaan PIN salah. Coba lagi dalam {$seconds} detik.");
+        if ($failed = $this->failedTransactionPin($request)) {
+            return $failed;
         }
-
-        if (! Hash::check($validated['pin'], $sender->pin)) {
-            RateLimiter::hit($rateLimitKey, self::PIN_LOCKOUT_SECONDS);
-
-            return back()->with('error', 'PIN salah.');
-        }
-
-        RateLimiter::clear($rateLimitKey);
 
         $receiver = User::findOrFail($validated['receiver_id']);
 
