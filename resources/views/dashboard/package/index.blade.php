@@ -99,43 +99,46 @@
             @foreach ($branchStatuses as $status)
                 @php
                     $statusBranch = $status['branch'];
-                    $statusVoucher = $status['voucher'];
+                    $statusVouchers = $status['vouchers'];
                 @endphp
                 <div class="col-12 col-sm-6 col-xl-4">
                     <div class="card border-0 shadow-sm h-100 mb-0 {{ $selectedBranchId === $statusBranch->id ? 'border border-primary' : '' }}">
                         <div class="card-body d-flex flex-column">
                             <div class="d-flex align-items-center justify-content-between mb-2">
                                 <span class="fw-semibold text-truncate"><i class="ri-store-2-line me-1"></i>{{ $statusBranch->name }}</span>
-                                @if ($statusVoucher)
-                                    <span class="badge bg-success-subtle text-success">{{ $statusVoucher->package?->is_trial ? 'Trial' : 'Aktif' }}</span>
+                                @if ($statusVouchers->isNotEmpty())
+                                    <span class="badge bg-success-subtle text-success">{{ $statusVouchers->count() }} paket aktif</span>
                                 @else
                                     <span class="badge bg-secondary-subtle text-secondary">Belum berlangganan</span>
                                 @endif
                             </div>
-                            <p class="text-muted fs-13 mb-3">
-                                @if ($statusVoucher)
-                                    {{ $statusVoucher->package?->name }} &middot; s/d {{ $statusVoucher->valid_until->format('d M Y') }}
-                                @else
-                                    Pilih paket untuk membuka layanan di branch ini.
-                                @endif
-                            </p>
+
+                            {{-- Satu branch bisa punya beberapa paket aktif (satu per layanan). --}}
+                            @forelse ($statusVouchers as $statusVoucher)
+                                <div class="d-flex align-items-start justify-content-between gap-2 fs-13 {{ $loop->last ? 'mb-3' : 'mb-2' }}">
+                                    <div class="text-muted">
+                                        <span class="fw-semibold text-body">{{ $statusVoucher->package->name }}</span>
+                                        @if ($statusVoucher->package->is_trial)
+                                            <span class="badge bg-info-subtle text-info">Trial</span>
+                                        @endif
+                                        <div>{{ $statusVoucher->package->categoryNames() }} &middot; s/d {{ $statusVoucher->valid_until->format('d M Y') }}</div>
+                                    </div>
+                                    @unless ($statusVoucher->package->is_trial)
+                                        <a href="{{ route('dashboard.package.checkout', ['package' => $statusVoucher->package_id, 'branch_office_id' => $statusBranch->id]) }}"
+                                            class="btn btn-sm btn-outline-primary flex-shrink-0">
+                                            <i class="ri-refresh-line"></i> Perpanjang
+                                        </a>
+                                    @endunless
+                                </div>
+                            @empty
+                                <p class="text-muted fs-13 mb-3">Pilih paket untuk membuka layanan di branch ini.</p>
+                            @endforelse
+
                             <div class="mt-auto">
-                                @if ($statusVoucher?->package?->is_trial)
-                                    <a href="{{ route('dashboard.package.index', ['branch_office_id' => $statusBranch->id]) }}#paket"
-                                        class="btn btn-sm btn-primary w-100">
-                                        <i class="ri-vip-crown-line"></i> Pilih Paket Berbayar
-                                    </a>
-                                @elseif ($statusVoucher)
-                                    <a href="{{ route('dashboard.package.checkout', ['package' => $statusVoucher->package_id, 'branch_office_id' => $statusBranch->id]) }}"
-                                        class="btn btn-sm btn-outline-primary w-100">
-                                        <i class="ri-refresh-line"></i> Perpanjang
-                                    </a>
-                                @else
-                                    <a href="{{ route('dashboard.package.index', ['branch_office_id' => $statusBranch->id]) }}#paket"
-                                        class="btn btn-sm btn-primary w-100">
-                                        <i class="ri-shopping-cart-2-line"></i> Pilih Paket
-                                    </a>
-                                @endif
+                                <a href="{{ route('dashboard.package.index', ['branch_office_id' => $statusBranch->id]) }}#paket"
+                                    class="btn btn-sm btn-primary w-100">
+                                    <i class="ri-shopping-cart-2-line"></i> {{ $statusVouchers->isNotEmpty() ? 'Tambah Layanan' : 'Pilih Paket' }}
+                                </a>
                             </div>
                         </div>
                     </div>

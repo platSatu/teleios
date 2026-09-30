@@ -4,6 +4,7 @@ namespace App\Services\Chat;
 
 use App\Models\BranchOffice;
 use App\Models\Company;
+use App\Models\JadwalReminderSetting;
 use App\Models\WaApiKey;
 use App\Models\WaApiRequestLog;
 use App\Services\PackageLimitService;
@@ -98,7 +99,9 @@ class WaApiUsageService
         // device, device terikat ke satu branch.
         $company = $apiKey->company;
         $branch = $this->packageLimits->branchForDevice($apiKey->device_id);
-        $voucher = $company && $branch ? $this->packageLimits->resolveActiveVoucher($company, $branch) : null;
+        // Branch bisa punya beberapa paket aktif (satu per layanan) -- yang
+        // relevan untuk WA API adalah paket Chat-nya.
+        $voucher = $company && $branch ? $this->packageLimits->activeVoucherCovering($company, JadwalReminderSetting::CHAT_CATEGORY_NAMES, $branch) : null;
         $periodStart = $voucher?->valid_from;
 
         return [
@@ -125,7 +128,7 @@ class WaApiUsageService
         // Paket berlaku per branch: tampilkan paket aktif terbaru company
         // ini beserta kuota branch pemiliknya. Rincian per device ada di
         // tabel API key halaman yang sama.
-        $voucher = $this->packageLimits->resolveActiveVoucher($company);
+        $voucher = $this->packageLimits->activeVoucherCovering($company, JadwalReminderSetting::CHAT_CATEGORY_NAMES);
 
         return [
             'package' => $this->packageInfo($company, $voucher),

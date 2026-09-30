@@ -6,15 +6,15 @@
             <h4 class="mb-1">Sisa Kuota Paket Saya</h4>
             <p class="text-muted mb-0">
                 Branch <strong>{{ $branch?->name ?? '-' }}</strong> &middot;
-                @if ($activePackage)
-                    Paket aktif: <strong>{{ $activePackage->name }}</strong>
+                @if ($activeVouchers->isNotEmpty())
+                    Paket aktif: <strong>{{ $activeVouchers->map(fn ($voucher) => $voucher->package->name)->implode(', ') }}</strong>
                 @else
                     Belum ada paket aktif.
                 @endif
             </p>
         </div>
         <a href="{{ route('dashboard.package.index') }}" class="btn btn-outline-primary btn-sm">
-            <i class="ri-shopping-cart-2-line"></i> Lihat/Upgrade Paket
+            <i class="ri-shopping-cart-2-line"></i> Lihat/Tambah Paket
         </a>
     </div>
 

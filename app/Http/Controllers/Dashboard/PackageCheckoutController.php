@@ -74,9 +74,12 @@ class PackageCheckoutController extends Controller
 
         // Paket dibeli PER BRANCH -- company harus sudah punya minimal satu
         // branch (alur Company -> Branch -> Paket).
-        $branchOptions = $branchSubscriptions->branchesWithActiveVoucher(
+        // Tiap opsi membawa 'conflict': voucher aktif yang layanannya bentrok
+        // dengan paket ini (null = boleh dipilih) -- aturan yang sama dengan
+        // assertCanActivate() di store().
+        $branchOptions = $branchSubscriptions->branchesWithActiveVouchers(
             Company::where('user_id', Auth::id())->first()
-        );
+        )->map(fn (array $option) => $option + ['conflict' => $branchSubscriptions->conflictFor($option['vouchers'], $package)]);
 
         if ($branchOptions->isEmpty()) {
             return redirect()
@@ -167,9 +170,10 @@ class PackageCheckoutController extends Controller
             'kode_referral' => ['nullable', 'string', 'max:32'],
         ]);
 
-        // Branch tujuan wajib milik company owner ini, dan tidak sedang
-        // aktif dengan paket lain (tidak ada upgrade/downgrade). Dicek
-        // lagi saat redeem -- lihat BranchSubscriptionService.
+        // Branch tujuan wajib milik company owner ini, dan layanan paket
+        // ini tidak sedang aktif dengan paket lain (tidak ada upgrade/
+        // downgrade per layanan). Dicek lagi saat redeem -- lihat
+        // BranchSubscriptionService.
         try {
             $branch = $branchSubscriptions->branchOfCompanyOrFail($company, $request->input('branch_office_id'));
             $branchSubscriptions->assertCanActivate($company, $branch, $package);

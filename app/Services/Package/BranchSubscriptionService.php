@@ -9,6 +9,7 @@ use App\Models\PackageTrialClaim;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Models\Voucher;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use RuntimeException;
@@ -20,41 +21,57 @@ use RuntimeException;
  * satu sumber:
  *
  *   - Paket selalu untuk satu branch milik company owner.
- *   - Tidak ada upgrade/downgrade: selama branch masih aktif dengan
- *     paket X, branch itu hanya boleh memperpanjang paket X yang sama.
- *     Ganti ke paket lain baru bisa setelah masa aktifnya habis. Ini juga
- *     yang menjamin satu branch tidak pernah punya dua paket berbeda yang
- *     aktif bersamaan.
+ *   - Satu branch boleh berlangganan beberapa layanan (Chat, Form,
+ *     Jadwal, Tagihan) lewat paket terpisah -- aturannya 1 paket aktif
+ *     PER LAYANAN. Paket bentrok kalau layanannya beririsan
+ *     (Package::categoryIds()).
+ *   - Tidak ada upgrade/downgrade per layanan: selama layanan X aktif
+ *     dengan paket P, layanan itu hanya boleh diperpanjang dengan paket P
+ *     yang sama. Ganti ke paket lain baru bisa setelah masa aktifnya habis.
  *   - Pengecualian: paket TRIAL (packages.is_trial) boleh langsung
- *     diganti paket lain; trial-nya diakhiri saat paket baru di-redeem
- *     (endActiveTrials).
+ *     diganti paket lain; trial yang layanannya beririsan diakhiri saat
+ *     paket baru di-redeem (endActiveTrials).
  *   - Trial hanya sekali per nomor HP owner (claimTrial).
  */
 class BranchSubscriptionService
 {
     /**
-     * Branch milik company beserta voucher yang sedang aktif (atau null).
+     * Branch milik company beserta SEMUA voucher yang sedang aktif di
+     * branch itu (satu per paket, bisa kosong).
      *
-     * @return Collection<int, array{branch: BranchOffice, voucher: ?Voucher}>
+     * @return Collection<int, array{branch: BranchOffice, vouchers: Collection<int, Voucher>}>
      */
-    public function branchesWithActiveVoucher(Company $company): Collection
+    public function branchesWithActiveVouchers(Company $company): Collection
     {
         $branches = $company->branchOffices()->orderBy('created_at')->orderBy('id')->get();
 
-        $vouchers = Voucher::query()
-            ->currentlyActive()
-            ->where('company_id', $company->id)
+        $vouchers = $this->activeVouchersQuery($company)
             ->whereIn('branch_office_id', $branches->pluck('id'))
-            ->with('package:id,name,is_trial')
-            ->orderByDesc('valid_from')
             ->get()
-            ->unique('branch_office_id')
-            ->keyBy('branch_office_id');
+            ->filter(fn (Voucher $voucher) => $voucher->package)
+            ->groupBy('branch_office_id');
 
         return $branches->map(fn (BranchOffice $branch) => [
             'branch' => $branch,
-            'voucher' => $vouchers->get($branch->id),
+            'vouchers' => $vouchers->get($branch->id, collect())->unique('package_id')->values(),
         ]);
+    }
+
+    /**
+     * Voucher aktif (dari $activeVouchers) yang menghalangi $package:
+     * paket LAIN, bukan trial, dan layanannya beririsan. Null = boleh.
+     * Satu sumber untuk dropdown checkout dan pengecekan server.
+     *
+     * @param  Collection<int, Voucher>  $activeVouchers
+     */
+    public function conflictFor(Collection $activeVouchers, Package $package): ?Voucher
+    {
+        $wanted = $package->categoryIds();
+
+        return $activeVouchers->first(fn (Voucher $voucher) => $voucher->package
+            && ! $voucher->package->is_trial
+            && $voucher->package_id !== $package->id
+            && array_intersect($voucher->package->categoryIds(), $wanted) !== []);
     }
 
     /**
@@ -74,48 +91,62 @@ class BranchSubscriptionService
     }
 
     /**
-     * RuntimeException kalau branch masih aktif dengan paket LAIN
-     * (paket trial yang masih aktif tidak menghalangi).
-     * $ignoreVoucherId dipakai saat redeem (voucher yang sedang di-redeem
-     * sendiri tidak dihitung).
+     * RuntimeException kalau layanan paket ini masih aktif dengan paket
+     * LAIN di branch ini (lihat conflictFor). $ignoreVoucherId dipakai saat
+     * redeem (voucher yang sedang di-redeem sendiri tidak dihitung).
      */
     public function assertCanActivate(Company $company, BranchOffice $branch, Package $package, ?string $ignoreVoucherId = null): void
     {
-        $active = Voucher::query()
-            ->currentlyActive()
-            ->where('company_id', $company->id)
+        $active = $this->activeVouchersQuery($company)
             ->where('branch_office_id', $branch->id)
-            ->where('package_id', '!=', $package->id)
-            ->whereHas('package', fn ($q) => $q->where('is_trial', false))
             ->when($ignoreVoucherId, fn ($q) => $q->whereKeyNot($ignoreVoucherId))
-            ->with('package:id,name')
-            ->orderByDesc('valid_until')
-            ->first();
+            ->get();
 
-        if ($active) {
+        if ($conflict = $this->conflictFor($active, $package)) {
             throw new RuntimeException(sprintf(
-                'Branch %s masih aktif dengan paket %s sampai %s. Selama masih aktif, branch ini hanya bisa memperpanjang paket yang sama.',
+                'Layanan %s di branch %s masih aktif dengan paket %s sampai %s. Selama masih aktif, layanan itu hanya bisa diperpanjang dengan paket yang sama. Layanan lain tetap bisa Anda tambahkan.',
+                $conflict->package->categoryNames(),
                 $branch->name,
-                $active->package?->name ?? '-',
-                $active->valid_until->format('d M Y H:i')
+                $conflict->package->name,
+                $conflict->valid_until->format('d M Y H:i')
             ));
         }
     }
 
     /**
      * Akhiri trial yang masih aktif di branch ini begitu paket lain
-     * diaktifkan, supaya branch tidak punya dua paket aktif sekaligus.
+     * dengan layanan yang BERIRISAN diaktifkan, supaya satu layanan tidak
+     * punya dua paket aktif sekaligus. Trial layanan lain tetap jalan.
      * Dipanggil di dalam transaksi redeem (baris branch sudah dikunci).
      */
     public function endActiveTrials(BranchOffice $branch, Voucher $activated): void
     {
-        Voucher::query()
+        $activatedCategories = $activated->package->categoryIds();
+
+        $trialIds = Voucher::query()
             ->currentlyActive()
             ->where('branch_office_id', $branch->id)
             ->where('package_id', '!=', $activated->package_id)
             ->whereKeyNot($activated->id)
             ->whereHas('package', fn ($q) => $q->where('is_trial', true))
-            ->update(['status' => 'inactive', 'valid_until' => now()]);
+            ->with(['package.categoryApplications'])
+            ->get()
+            ->filter(fn (Voucher $trial) => array_intersect($trial->package->categoryIds(), $activatedCategories) !== [])
+            ->modelKeys();
+
+        if ($trialIds !== []) {
+            Voucher::whereKey($trialIds)->update(['status' => 'inactive', 'valid_until' => now()]);
+        }
+    }
+
+    /** Voucher aktif company beserta paket & layanannya, masa aktif terpanjang dulu. */
+    private function activeVouchersQuery(Company $company): Builder
+    {
+        return Voucher::query()
+            ->currentlyActive()
+            ->where('company_id', $company->id)
+            ->with(['package.categoryApplications', 'package.categoryApplication'])
+            ->orderByDesc('valid_until');
     }
 
     /**

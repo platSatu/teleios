@@ -129,7 +129,8 @@ class VoucherRedeemController extends Controller
                 // Kunci baris branch supaya dua redeem bersamaan untuk
                 // branch yang sama diproses berurutan -- tanpa ini, dua
                 // voucher paket BERBEDA bisa sama-sama lolos
-                // assertCanActivate() dan aktif bersamaan di satu branch.
+                // assertCanActivate() dan aktif bersamaan untuk layanan yang
+                // sama di satu branch.
                 BranchOffice::whereKey($branch->id)->lockForUpdate()->first();
 
                 $branchSubscriptions->assertCanActivate($company, $branch, $voucher->package, $voucher->id);
@@ -166,8 +167,8 @@ class VoucherRedeemController extends Controller
                     'redeemed_at' => now(),
                 ]);
 
-                // Paket trial yang masih aktif di branch ini diganti paket
-                // baru (boleh langsung, tanpa menunggu trial habis).
+                // Paket trial untuk layanan yang sama di branch ini diganti
+                // paket baru (boleh langsung, tanpa menunggu trial habis).
                 $branchSubscriptions->endActiveTrials($branch, $voucher);
 
                 AuditLog::create([

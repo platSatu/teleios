@@ -66,7 +66,7 @@ class PackageController extends Controller
         // Status paket tiap branch -- hanya untuk owner (satu-satunya yang
         // boleh membeli paket, lihat PackageCheckoutController).
         $ownedCompany = Company::where('user_id', $request->user()->id)->first();
-        $branchStatuses = $ownedCompany ? $branchSubscriptions->branchesWithActiveVoucher($ownedCompany) : collect();
+        $branchStatuses = $ownedCompany ? $branchSubscriptions->branchesWithActiveVouchers($ownedCompany) : collect();
 
         return view('dashboard.package.index', [
             'packageGroups' => $this->groupPackages($packages),
@@ -123,7 +123,7 @@ class PackageController extends Controller
 
     /**
      * "Sudah dibeli berapa, sudah terpakai berapa, sisa berapa" report for
-     * whichever package the acting company currently has active — see
+     * every package the active branch currently has (one per service) — see
      * App\Services\PackageLimitService::usageReport(). Live counts for
      * 'stock' metrics ('contact_count'/'device_count') are supplied here
      * rather than inside the service itself, since only the controller
@@ -158,11 +158,11 @@ class PackageController extends Controller
         }
 
         $rows = $branch ? $packageLimits->usageReport($company, $branch, $liveCountResolvers) : [];
-        $activePackage = $branch ? $packageLimits->activePackage($company, $branch) : null;
+        $activeVouchers = $branch ? $packageLimits->activeVouchersWithPackage($company, $branch)->unique('package_id') : collect();
 
         return view('dashboard.package.usage', [
             'rows' => $rows,
-            'activePackage' => $activePackage,
+            'activeVouchers' => $activeVouchers,
             'branch' => $branch,
         ]);
     }

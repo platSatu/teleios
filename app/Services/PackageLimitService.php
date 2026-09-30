@@ -17,6 +17,7 @@ use App\Services\Chat\DeviceDirectory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -62,9 +63,41 @@ class PackageLimitService
             ->first();
     }
 
+    /**
+     * Salah satu paket aktif (yang terbaru) -- cukup untuk pertanyaan "masih
+     * berlangganan atau tidak". Untuk limit JANGAN pakai ini: satu branch
+     * bisa punya beberapa paket aktif (satu per layanan), lihat
+     * limitAndVoucher().
+     */
     public function activePackage(Company $company, ?BranchOffice $branch = null): ?Package
     {
         return $this->resolveActiveVoucher($company, $branch)?->package;
+    }
+
+    /**
+     * Semua voucher aktif beserta paketnya, terbaru dulu.
+     *
+     * @return Collection<int, Voucher>
+     */
+    public function activeVouchersWithPackage(Company $company, ?BranchOffice $branch = null): Collection
+    {
+        return $this->activeVouchers($company, $branch)
+            ->with('package')
+            ->latest('valid_from')
+            ->get()
+            ->filter(fn (Voucher $voucher) => $voucher->package)
+            ->values();
+    }
+
+    /**
+     * Voucher aktif terbaru yang paketnya mencakup salah satu layanan
+     * bernama $categoryNames (mis. paket Chat untuk info kuota WA API).
+     *
+     * @param  array<int, string>  $categoryNames
+     */
+    public function activeVoucherCovering(Company $company, array $categoryNames, ?BranchOffice $branch = null): ?Voucher
+    {
+        return $this->coveringVouchers($company, $categoryNames, $branch)->latest('valid_from')->first();
     }
 
     public function activeSubscription(Company $company, ?BranchOffice $branch = null): ?Subscription
@@ -83,9 +116,16 @@ class PackageLimitService
      */
     public function hasActiveCategoryPackage(Company $company, array $categoryNames, ?BranchOffice $branch = null): bool
     {
+        return $this->coveringVouchers($company, $categoryNames, $branch)->exists();
+    }
+
+    /**
+     * @param  array<int, string>  $categoryNames
+     */
+    protected function coveringVouchers(Company $company, array $categoryNames, ?BranchOffice $branch): Builder
+    {
         return $this->activeVouchers($company, $branch)
-            ->whereHas('package', fn (Builder $q) => $q->coveringCategoryNames($categoryNames))
-            ->exists();
+            ->whereHas('package', fn (Builder $q) => $q->coveringCategoryNames($categoryNames));
     }
 
     /**
@@ -195,9 +235,7 @@ class PackageLimitService
      */
     public function limitFor(Company $company, string $metricKey, ?BranchOffice $branch = null): ?PackageLimit
     {
-        $package = $this->activePackage($company, $branch);
-
-        return $package ? $this->packageLimitFor($package, $metricKey) : null;
+        return $this->limitAndVoucher($company, $metricKey, $branch)[0];
     }
 
     /**
@@ -359,15 +397,19 @@ class PackageLimitService
      */
     public function usageReport(Company $company, ?BranchOffice $branch = null, array $liveCountResolvers = []): array
     {
-        $voucher = $this->resolveActiveVoucher($company, $branch);
+        $vouchers = $this->activeVouchersWithPackage($company, $branch);
+        $limits = $this->limitsQuery($vouchers)->get();
 
-        if (! $voucher?->package) {
-            return [];
-        }
+        // Satu baris per metric, dari voucher terbaru yang memasangnya --
+        // aturan yang sama dengan limitAndVoucher().
+        $pairs = $vouchers
+            ->flatMap(fn (Voucher $voucher) => $limits->where('package_id', $voucher->package_id)
+                ->map(fn (PackageLimit $packageLimit) => [$packageLimit, $voucher]))
+            ->unique(fn (array $pair) => $pair[0]->limit_metric_id)
+            ->values();
 
-        $limits = PackageLimit::with('limitMetric')->where('package_id', $voucher->package_id)->get();
-
-        return $limits->map(function (PackageLimit $packageLimit) use ($company, $branch, $voucher, $liveCountResolvers) {
+        return $pairs->map(function (array $pair) use ($company, $branch, $liveCountResolvers) {
+            [$packageLimit, $voucher] = $pair;
             $metric = $packageLimit->limitMetric;
 
             if ($metric->isStock()) {
@@ -411,31 +453,44 @@ class PackageLimitService
     }
 
     /**
-     * PackageLimit paket ini untuk metric ber-key $metricKey. Dicari lewat
-     * limit yang benar-benar dipasang di paket (bukan lewat category
-     * utama), jadi paket multi-layanan dan metric dari category mana pun
-     * tetap terbaca selama superadmin memasangnya di paket itu.
+     * PackageLimit (metric aktif) yang dipasang di paket-paket voucher ini.
+     * Dicari lewat limit yang benar-benar dipasang di paket (bukan lewat
+     * category utama), jadi paket multi-layanan tetap terbaca.
+     *
+     * @param  Collection<int, Voucher>  $vouchers
      */
-    protected function packageLimitFor(Package $package, string $metricKey): ?PackageLimit
+    protected function limitsQuery(Collection $vouchers): Builder
     {
         return PackageLimit::with('limitMetric')
-            ->where('package_id', $package->id)
-            ->whereHas('limitMetric', fn (Builder $q) => $q->where('key', $metricKey)->where('status', 'active'))
-            ->first();
+            ->whereIn('package_id', $vouchers->pluck('package_id')->unique())
+            ->whereHas('limitMetric', fn (Builder $q) => $q->where('status', 'active'));
     }
 
     /**
+     * Limit $metricKey beserta voucher pemiliknya. Satu branch bisa punya
+     * beberapa paket aktif (satu per layanan), jadi limit diambil dari
+     * paket aktif yang MEMANG memasang metric ini -- bukan dari paket
+     * terbaru. Tanpa ini, membeli paket Form (tanpa limit) setelah paket
+     * Chat membuat kuota Chat terbaca "tanpa batas".
+     *
      * @return array{0: ?PackageLimit, 1: ?Voucher}
      */
     protected function limitAndVoucher(Company $company, string $metricKey, ?BranchOffice $branch): array
     {
-        $voucher = $this->resolveActiveVoucher($company, $branch);
+        $vouchers = $this->activeVouchersWithPackage($company, $branch);
 
-        if (! $voucher?->package) {
+        if ($vouchers->isEmpty()) {
             return [null, null];
         }
 
-        return [$this->packageLimitFor($voucher->package, $metricKey), $voucher];
+        $limits = $this->limitsQuery($vouchers)
+            ->whereHas('limitMetric', fn (Builder $q) => $q->where('key', $metricKey))
+            ->get()
+            ->keyBy('package_id');
+
+        $voucher = $vouchers->first(fn (Voucher $voucher) => $limits->has($voucher->package_id));
+
+        return $voucher ? [$limits->get($voucher->package_id), $voucher] : [null, null];
     }
 
     /**
