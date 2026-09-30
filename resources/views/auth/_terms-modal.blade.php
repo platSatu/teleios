@@ -22,7 +22,13 @@
                 </div>
                 <div class="modal-body">
                     @if ($currentTerms)
-                        <div style="white-space: pre-line;">{{ $currentTerms->descriptions }}</div>
+                        {{-- Markdown -> HTML aman, lihat WebTermCondition::descriptionsHtml(). --}}
+                        <style>
+                            .terms-body h2 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 .5rem; }
+                            .terms-body h3 { font-size: .9375rem; font-weight: 600; margin: 1rem 0 .5rem; }
+                            .terms-body ol, .terms-body ul { padding-left: 1.25rem; }
+                        </style>
+                        <div class="terms-body">{!! $currentTerms->descriptionsHtml() !!}</div>
                     @else
                         <p class="text-muted mb-0">Syarat dan Ketentuan belum tersedia.</p>
                     @endif

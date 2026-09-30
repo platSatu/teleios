@@ -26,7 +26,7 @@ class TermConditionController extends Controller
         $termCondition = WebTermCondition::current();
 
         return response()->json([
-            'data' => $termCondition?->only(['id', 'name', 'descriptions']),
+            'data' => $termCondition?->only(['id', 'name', 'descriptions', 'updated_at']),
         ]);
     }
 }

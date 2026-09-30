@@ -55,4 +55,18 @@ class WebTermCondition extends Model
     {
         return static::where('status', 'active')->latest('updated_at')->first();
     }
+
+    /**
+     * Isi (Markdown) sebagai HTML aman untuk popup register/login -- HTML
+     * mentah di isian dibuang dan link berbahaya (javascript:, data:)
+     * tidak dijadikan link. Sama dengan renderer dokumen di fe-konexa
+     * (App\Support\MarkdownDocument).
+     */
+    public function descriptionsHtml(): string
+    {
+        return (string) Str::markdown((string) $this->descriptions, [
+            'html_input' => 'strip',
+            'allow_unsafe_links' => false,
+        ]);
+    }
 }
