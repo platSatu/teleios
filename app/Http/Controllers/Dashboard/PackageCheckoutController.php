@@ -112,9 +112,9 @@ class PackageCheckoutController extends Controller
     public function applyPromo(Request $request, Package $package): JsonResponse
     {
         $code = $request->string('code')->trim()->value();
-        $result = $this->validatePromo($code, Auth::id());
 
-        return response()->json($result);
+        // Model voucher (kuota, batas pakai, dll.) tidak dikirim ke browser.
+        return response()->json(collect($this->validatePromo($code, Auth::id()))->only(['valid', 'message', 'discount_percent']));
     }
 
     /**

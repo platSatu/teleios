@@ -10,6 +10,7 @@ use App\Models\WebTermCondition;
 use App\Rules\Turnstile;
 use App\Services\Chat\SystemJwtService;
 use App\Services\GolangAuthService;
+use App\Services\Referral\ReferralService;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\RedirectResponse;
@@ -377,12 +378,17 @@ class AuthController extends Controller
     // REGISTER
     // =========================================================
 
-    public function showRegister(Request $request): View
+    public function showRegister(Request $request, ReferralService $referrals): View
     {
-        $this->rememberReferralCodeFromLink($request);
+        $referral = $this->rememberReferralCodeFromLink($request);
 
         return view('auth.register', [
             'currentTerms' => WebTermCondition::current(),
+            // Banner "diundang oleh ..." -- hanya nama depan pemilik kode, tanpa data lain.
+            'referralInvite' => $referral ? [
+                'name' => strtok((string) $referral->user?->name, ' ') ?: $referral->code,
+                'discount' => $referrals->buyerDiscount($referral),
+            ] : null,
         ]);
     }
 
@@ -635,37 +641,41 @@ class AuthController extends Controller
      * mengisikannya otomatis ke form checkout kapan pun user itu akhirnya
      * beli package (bisa berhari-hari kemudian, setelah verifikasi email
      * & login pertama kali). TIDAK mengunci apa pun ke database di sini
-     * — itu tetap baru terjadi lewat validateReferral()/store() yang
-     * sudah ada di PackageCheckoutController, sama sekali tidak diubah
-     * oleh method ini.
+     * — itu tetap baru terjadi saat checkout (App\Services\Referral\
+     * ReferralService).
      *
      * Kode divalidasi ada & berstatus aktif dulu sebelum disimpan (bukan
      * disalin mentah dari query string) supaya form checkout nanti tidak
      * pernah ke-prefill kode basi/typo yang ujungnya cuma bikin bingung
      * user — dan supaya cookie ini tidak bisa dipakai menaruh sembarang
      * string tanpa lolos cek apa pun.
+     *
+     * Mengembalikan kode aktif dari link (atau cookie yang sudah ada)
+     * untuk banner "diundang oleh ..." di halaman daftar.
      */
-    private function rememberReferralCodeFromLink(Request $request): void
+    private function rememberReferralCodeFromLink(Request $request): ?ReferralCode
     {
-        $code = $request->string('ref')->trim()->value();
+        $fromLink = $request->string('ref')->trim()->value();
+        $code = $fromLink !== '' ? $fromLink : (string) $request->cookie(self::REFERRAL_COOKIE_NAME);
 
         if ($code === '') {
-            return;
+            return null;
         }
 
-        $isValidActiveCode = ReferralCode::where('code', $code)
+        $referralCode = ReferralCode::with('user:id,name')
+            ->where('code', $code)
             ->where('status', 'active')
-            ->exists();
+            ->first();
 
-        if (! $isValidActiveCode) {
-            return;
+        if ($referralCode && $fromLink !== '') {
+            Cookie::queue(
+                self::REFERRAL_COOKIE_NAME,
+                $referralCode->code,
+                self::REFERRAL_COOKIE_DAYS * 24 * 60
+            );
         }
 
-        Cookie::queue(
-            self::REFERRAL_COOKIE_NAME,
-            $code,
-            self::REFERRAL_COOKIE_DAYS * 24 * 60
-        );
+        return $referralCode;
     }
 
     /**

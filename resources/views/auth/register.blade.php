@@ -64,6 +64,19 @@
                         Getting started is quick and easy. Create your account to securely access your dashboard, organize your data, and take advantage of features built to simplify your workflow.
                     </p>
                 </div> --}}
+                @if ($referralInvite)
+                    <div class="alert alert-success d-flex align-items-start gap-2 mb-4" role="alert">
+                        <i class="ri-gift-line fs-4 lh-1"></i>
+                        <div class="fs-13">
+                            Anda diundang oleh <strong>{{ $referralInvite['name'] }}</strong>.
+                            @if ($referralInvite['discount'] > 0)
+                                Dapatkan <strong>diskon tambahan Rp {{ number_format($referralInvite['discount'], 0, ',', '.') }}</strong>
+                                untuk langganan pertama Anda, otomatis terpakai saat checkout.
+                            @endif
+                        </div>
+                    </div>
+                @endif
+
                 <form method="POST" action="{{ route('register') }}">
                     @csrf
 
