@@ -969,6 +969,11 @@
                                     Pengaturan Duitku
                                 </a>
                             </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('duitku-disbursement-setting.edit') }}" class="pe-nav-link">
+                                    Pengaturan Duitku Disbursement
+                                </a>
+                            </li>
                         </ul>
                     </li>
 

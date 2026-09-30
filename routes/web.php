@@ -37,6 +37,7 @@ use App\Http\Controllers\Superadmin\AuditLogController;
 use App\Http\Controllers\Superadmin\QueueMonitorController;
 use App\Http\Controllers\Superadmin\PaymentWebhookController;
 use App\Http\Controllers\Superadmin\WaApiUsageController as SuperadminWaApiUsageController;
+use App\Http\Controllers\Superadmin\DuitkuDisbursementSettingController;
 use App\Http\Controllers\Superadmin\DuitkuSettingController;
 
 use App\Http\Controllers\Superadmin\RoleController;
@@ -1644,6 +1645,16 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
             ->group(function () {
                 Route::get('/', 'edit')->name('duitku-setting.edit');
                 Route::put('/', 'update')->name('duitku-setting.update');
+            });
+
+        // Kredensial Duitku Disbursement (Tarik Saldo), terpisah dari
+        // pembayaran di atas -- lihat DuitkuDisbursementSettingController.
+        Route::prefix('duitku-disbursement-setting')
+            ->controller(DuitkuDisbursementSettingController::class)
+            ->group(function () {
+                Route::get('/', 'edit')->name('duitku-disbursement-setting.edit');
+                Route::put('/', 'update')->name('duitku-disbursement-setting.update');
+                Route::post('/test', 'test')->name('duitku-disbursement-setting.test');
             });
 
         Route::prefix('roles')
