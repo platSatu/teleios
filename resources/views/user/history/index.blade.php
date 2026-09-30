@@ -13,7 +13,7 @@
                  horizontal scroller on narrow screens instead of letting
                  Bootstrap's default nav-tabs wrapping stack 6 tabs into a
                  tall, uneven pile. text-nowrap on each button stops an
-                 individual label (e.g. "Kode Referral Saya") from
+                 individual label (e.g. "Pembelian Package") from
                  wrapping mid-word once it's inside a flex item. --}}
             <div class="mb-3" style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
                 <ul class="nav nav-tabs flex-nowrap mb-0" id="myHistoryTabs" role="tablist" style="width: max-content;">
@@ -36,10 +36,10 @@
                             </button>
                         </li>
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#tab-referral" type="button">
-                                <i class="ri-share-forward-line"></i> Kode Referral Saya
-                                <span class="badge bg-secondary-subtle text-secondary">{{ $referralUsages?->total() ?? 0 }}</span>
-                            </button>
+                            {{-- Referral punya halaman sendiri (Referral Saya) -- bukan tab di sini. --}}
+                            <a class="nav-link text-nowrap" href="{{ route('referral.mine') }}">
+                                <i class="ri-share-forward-line"></i> Referral Saya <i class="ri-arrow-right-up-line"></i>
+                            </a>
                         </li>
                         <li class="nav-item" role="presentation">
                             <button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#tab-transfer" type="button">
@@ -182,63 +182,6 @@
                             <div class="mt-3">
                                 {{ $subscriptions->links('pagination::bootstrap-5') }}
                             </div>
-                        </div>
-
-                        {{-- Kode Referral Saya --}}
-                        <div class="tab-pane fade" id="tab-referral">
-                            @if ($referralCode)
-                                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3 p-3 border rounded-3 bg-light-subtle">
-                                    <div>
-                                        <p class="text-muted mb-1 fs-13">Kode Referral Anda</p>
-                                        <h4 class="mb-0"><code>{{ $referralCode->code }}</code></h4>
-                                        <p class="text-muted fs-13 mb-0">
-                                            Bagikan kode ini — setiap orang yang memakainya saat checkout membuat Anda mendapat komisi
-                                            {{ rtrim(rtrim(number_format($referralCode->percentage, 2, '.', ''), '0'), '.') }}%
-                                            dari setiap pembelian package mereka, selama kode ini aktif.
-                                        </p>
-                                    </div>
-                                    <div class="text-md-end">
-                                        <span class="badge {{ $referralCode->status === 'active' ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger' }} mb-2 d-inline-block">
-                                            {{ $referralCode->status === 'active' ? 'Aktif' : 'Diblokir' }}
-                                        </span>
-                                        <p class="text-muted mb-1 fs-13">Total Komisi Diterima</p>
-                                        <h5 class="mb-0 text-success">Rp {{ number_format($referralTotalCommission, 0, ',', '.') }}</h5>
-                                    </div>
-                                </div>
-
-                                <h6 class="mb-2 fs-14">Siapa Saja yang Memakai Kode Anda</h6>
-                                <div class="table-responsive">
-                                    <table class="table table-sm table-hover align-middle mb-0" style="min-width: 700px;">
-                                        <thead class="table-light">
-                                            <tr>
-                                                <th style="min-width: 160px;">Digunakan Oleh</th>
-                                                <th style="min-width: 170px;">Package Dibeli</th>
-                                                <th style="min-width: 170px;">Komisi Diterima</th>
-                                                <th style="min-width: 150px;">Waktu</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @forelse ($referralUsages as $item)
-                                                <tr>
-                                                    <td class="fw-semibold">{{ $item->usedBy->name ?? '-' }}</td>
-                                                    <td>{{ $item->subscription?->package?->name ?? '-' }}</td>
-                                                    <td class="text-success fw-semibold">Rp {{ number_format($item->commission_amount, 0, ',', '.') }}</td>
-                                                    <td class="text-muted small">{{ $item->created_at->format('d M Y H:i') }}</td>
-                                                </tr>
-                                            @empty
-                                                <tr>
-                                                    <td colspan="4" class="text-center text-muted py-4">Belum ada yang memakai kode referral Anda.</td>
-                                                </tr>
-                                            @endforelse
-                                        </tbody>
-                                    </table>
-                                </div>
-                                <div class="mt-3">
-                                    {{ $referralUsages->links('pagination::bootstrap-5') }}
-                                </div>
-                            @else
-                                <p class="text-muted mb-0">Kode referral Anda belum tersedia.</p>
-                            @endif
                         </div>
 
                         {{-- Transfer Saldo --}}
