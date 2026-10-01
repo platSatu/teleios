@@ -141,6 +141,8 @@ use App\Http\Controllers\Tagihan\TagihanPelangganController;
 use App\Http\Controllers\Tagihan\TagihanController;
 use App\Http\Controllers\Tagihan\TagihanPenerimaController;
 use App\Http\Controllers\Tagihan\Public\TagihanPublicController;
+use App\Http\Controllers\Marketplace\Lazada\LazadaOrderController;
+use App\Http\Controllers\Marketplace\Lazada\LazadaShopController;
 use App\Http\Controllers\Keuangan\PengajarFeeTransferController;
 use App\Http\Controllers\Keuangan\BranchWithdrawalController;
 use App\Http\Controllers\Keuangan\WithdrawalApprovalController;
@@ -637,6 +639,25 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 // ter-share ke orang yang salah.
                 Route::post('/{id}/regenerate-token', 'regenerateToken')->name('tagihan.laporan.regenerate-token');
             });
+    });
+
+    // Layanan "Marketplace" (1 Oktober 2026) -- toko marketplace pelanggan
+    // per branch, dimulai dari Lazada (folder App\Http\Controllers\
+    // Marketplace\Lazada & App\Services\Marketplace\Lazada). Di-gate
+    // 'active.package:Marketplace' (App\Support\MenuGateCategories::
+    // MARKETPLACE_CATEGORY_NAMES). Callback OAuth Lazada ada di luar grup
+    // ini (URL tetap /api/marketplace/lazada/callback), lihat di bawah.
+    Route::prefix('marketplace/lazada')->middleware(['active.package:Marketplace', 'menu.access'])->group(function () {
+        Route::prefix('toko')
+            ->controller(LazadaShopController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('marketplace.lazada.shops.index');
+                Route::post('/hubungkan', 'connect')->name('marketplace.lazada.shops.connect')->middleware('throttle:10,1');
+                Route::post('/{id}/sinkron', 'sync')->name('marketplace.lazada.shops.sync');
+                Route::delete('/{id}', 'disconnect')->name('marketplace.lazada.shops.disconnect');
+            });
+
+        Route::get('/pesanan', [LazadaOrderController::class, 'index'])->name('marketplace.lazada.orders.index');
     });
 
     // Fitur "Keuangan" -- Saldo Branch/Company/Reseller & Tarik Saldo
@@ -2160,6 +2181,17 @@ require __DIR__ . '/auth.php';
 // berkali-kali kalau pelanggan refresh/cek status), 6/menit khusus
 // /checkout (ditumpuk di atas throttle grup, bukan menggantikannya)
 // karena itu yang benar-benar memicu pembuatan invoice baru ke Duitku.
+// Kembali dari halaman izin Lazada (OAuth). Path-nya SENGAJA /api/...
+// karena itu Callback URL yang terdaftar di aplikasi Lazada, tapi
+// didaftarkan di file web ini (bukan routes/api.php) supaya punya session
+// login: LazadaShopConnector::connect() memastikan user yang login sama
+// dengan yang menekan "Hubungkan Toko" (selain state terenkripsi + nonce
+// sekali pakai). Tidak di-gate paket karena gate sudah dilewati saat
+// "Hubungkan Toko" ditekan, dan state hanya berlaku 10 menit.
+Route::get('/api/marketplace/lazada/callback', [LazadaShopController::class, 'callback'])
+    ->middleware(['auth', 'verified', 'throttle:20,1'])
+    ->name('marketplace.lazada.callback');
+
 Route::prefix('tagihan/{branchSlug}/{token}')
     ->controller(TagihanPublicController::class)
     ->middleware('throttle:30,1')

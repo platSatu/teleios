@@ -178,6 +178,13 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('platform:health-alert')
             ->everyMinute()
             ->withoutOverlapping();
+
+        // Sinkron pesanan toko marketplace (Lazada) -- command ini hanya
+        // mengantrekan 1 job per toko, lihat App\Console\Commands\
+        // SyncMarketplaceOrders & App\Jobs\SyncMarketplaceShopOrders.
+        $schedule->command('marketplace:sync-orders')
+            ->everyFifteenMinutes()
+            ->withoutOverlapping();
     })
      ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([

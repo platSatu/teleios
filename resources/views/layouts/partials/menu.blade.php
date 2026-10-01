@@ -300,6 +300,49 @@
                 </li>
                 @endif
 
+                {{-- Menu "Marketplace" -- toko marketplace per branch, tepat di
+                         bawah Tagihan (Pembayaran). Tiap marketplace punya sub-grup
+                         sendiri (pola nested sama dengan "Jadwal > Keuangan"),
+                         dimulai dari Lazada; Shopee/TikTok nanti jadi sub-grup
+                         berikutnya. Route-nya dikunci 'active.package:Marketplace'. --}}
+                @if ($hasActiveMarketplacePackage && $canSeeAny(['marketplace.lazada.shops.index', 'marketplace.lazada.orders.index']))
+                <li class="pe-slide pe-has-sub">
+                    <a href="#collapseMarketplace" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
+                        aria-controls="collapseMarketplace">
+                        <i class="uil uil-store pe-nav-icon"></i>
+                        <span class="pe-nav-content">Marketplace</span>
+                        <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
+                        <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
+                    </a>
+                    <ul class="pe-slide-menu collapse" id="collapseMarketplace">
+                        <li class="pe-slide-item pe-has-sub">
+                            <a href="#collapseMarketplaceLazada" class="pe-nav-link" data-bs-toggle="collapse"
+                                aria-expanded="false" aria-controls="collapseMarketplaceLazada">
+                                <span class="pe-nav-sub-content">Lazada</span>
+                                <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
+                                <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
+                            </a>
+                            <ul class="pe-slide-menu collapse" id="collapseMarketplaceLazada">
+                                @if ($canSeeMenu('marketplace.lazada.shops.index'))
+                                    <li class="pe-slide-item">
+                                        <a href="{{ route('marketplace.lazada.shops.index') }}" class="pe-nav-link">
+                                            Toko
+                                        </a>
+                                    </li>
+                                @endif
+                                @if ($canSeeMenu('marketplace.lazada.orders.index'))
+                                    <li class="pe-slide-item">
+                                        <a href="{{ route('marketplace.lazada.orders.index') }}" class="pe-nav-link">
+                                            Pesanan
+                                        </a>
+                                    </li>
+                                @endif
+                            </ul>
+                        </li>
+                    </ul>
+                </li>
+                @endif
+
                 {{-- Chat menu (and its whole "Pengaturan" sub-tree) only
                          shown while the user has at least one active,
                          not-yet-expired package — same rule as the routes

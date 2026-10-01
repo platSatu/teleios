@@ -50,4 +50,11 @@ class MenuGateCategories
      * dibahas pertama kali (lihat routes/web.php grup 'tagihan').
      */
     public const TAGIHAN_CATEGORY_NAMES = ['Tagihan', 'Pembayaran'];
+
+    /**
+     * Layanan Marketplace (toko Lazada, nanti Shopee/TikTok) -- lihat
+     * routes/web.php grup 'marketplace' & migration
+     * seed_marketplace_application_catalog.
+     */
+    public const MARKETPLACE_CATEGORY_NAMES = ['Marketplace'];
 }

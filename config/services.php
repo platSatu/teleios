@@ -139,4 +139,31 @@ return [
         'checkout_timeout_minutes' => env('DUITKU_CHECKOUT_TIMEOUT_MINUTES', 10),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Lazada Open Platform (layanan Marketplace)
+    |--------------------------------------------------------------------------
+    |
+    | Lihat App\Services\Marketplace\Lazada\LazadaClient. App Key/Secret dari
+    | aplikasi di open.lazada.com -- tiap deployment (konexa, bizbos) memakai
+    | aplikasinya sendiri karena Callback URL yang terdaftar di Lazada harus
+    | sama persis dengan route('marketplace.lazada.callback'), yaitu
+    | APP_URL + /api/marketplace/lazada/callback.
+    |
+    */
+
+    'lazada' => [
+        'app_key' => env('LAZADA_APP_KEY'),
+        'app_secret' => env('LAZADA_APP_SECRET'),
+        // Gateway API toko per negara (Indonesia default).
+        'api_url' => env('LAZADA_API_URL', 'https://api.lazada.co.id/rest'),
+        // Halaman izin (OAuth) & API token -- sama untuk semua negara.
+        'auth_url' => env('LAZADA_AUTH_URL', 'https://auth.lazada.com'),
+        'auth_api_url' => env('LAZADA_AUTH_API_URL', 'https://auth.lazada.com/rest'),
+        // Kosong = route('marketplace.lazada.callback'). Isi hanya kalau URL
+        // yang terbentuk otomatis berbeda dari Callback URL di Lazada
+        // (mis. http vs https di belakang proxy).
+        'redirect_uri' => env('LAZADA_REDIRECT_URI'),
+    ],
+
 ];
