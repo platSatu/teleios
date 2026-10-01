@@ -5,10 +5,8 @@ namespace App\Services\Marketplace\Lazada;
 use App\Models\BranchOffice;
 use App\Models\MarketplaceShop;
 use App\Models\User;
-use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -18,9 +16,9 @@ use Illuminate\Support\Str;
  *
  * Alur:
  *  1. authorizeUrl() -- pelanggan diarahkan ke halaman izin Lazada. `state`
- *     berisi company/branch/user terenkripsi + nonce sekali pakai (berlaku
- *     10 menit, disimpan di cache) -- callback tidak butuh session login dan
- *     tidak bisa dipalsukan/diputar ulang.
+ *     = token acak sekali pakai (berlaku 10 menit); company/branch/user-nya
+ *     disimpan di cache dengan kunci token itu -- tidak bisa ditebak/dipakai
+ *     ulang.
  *  2. Lazada kembali ke callback (marketplace.lazada.callback, URL
  *     /api/marketplace/lazada/callback) membawa `code` -> connect() memastikan
  *     user yang login = user yang memulai, menukar code jadi token, lalu
@@ -42,24 +40,30 @@ class LazadaShopConnector
 
     public function authorizeUrl(BranchOffice $branch, User $user): string
     {
-        $nonce = Str::random(32);
-        Cache::put($this->nonceKey($nonce), true, now()->addMinutes(self::STATE_TTL_MINUTES));
+        // State = token acak pendek; isinya (company/branch/user) disimpan di
+        // cache, bukan ditaruh di URL -- URL tetap pendek & tanpa karakter
+        // khusus (Lazada sempat menolak dengan "Missing parameter").
+        $state = Str::random(40);
 
-        $state = Crypt::encryptString(json_encode([
+        Cache::put($this->stateKey($state), [
             'company_id' => $branch->company_id,
             'branch_office_id' => $branch->id,
             'user_id' => $user->id,
-            'nonce' => $nonce,
-            'expires_at' => now()->addMinutes(self::STATE_TTL_MINUTES)->timestamp,
-        ]));
+        ], now()->addMinutes(self::STATE_TTL_MINUTES));
 
+        // Separator '&' ditulis eksplisit supaya tidak bergantung pada
+        // setting arg_separator.output di php.ini server.
         return rtrim(config('services.lazada.auth_url'), '/').'/oauth/authorize?'.http_build_query([
             'response_type' => 'code',
-            'force_auth' => 'true',
+            // false: kalau seller sudah login Lazada di browser, langsung ke
+            // halaman izin. Dengan 'true' Lazada memaksa login ulang, dan
+            // setelah login itu Lazada sempat kehilangan parameter
+            // ("Missing parameter" di api.lazada.co.id/oauth/authorize).
+            'force_auth' => 'false',
             'redirect_uri' => config('services.lazada.redirect_uri') ?: route('marketplace.lazada.callback'),
             'client_id' => $this->client->appKey(),
             'state' => $state,
-        ]);
+        ], '', '&', PHP_QUERY_RFC3986);
     }
 
     /**
@@ -215,8 +219,10 @@ class LazadaShopConnector
     private function sellerIdFrom(array $token): string
     {
         $info = collect($token['country_user_info'] ?? []);
-        $country = $token['country'] ?? null;
-        $entry = $info->firstWhere('country', $country) ?? $info->first();
+        // "country" di root huruf kecil ("id"), di country_user_info huruf
+        // besar ("ID") -- dibandingkan tanpa peduli besar-kecil huruf.
+        $country = strtolower((string) ($token['country'] ?? ''));
+        $entry = $info->first(fn ($row) => strtolower((string) ($row['country'] ?? '')) === $country) ?? $info->first();
         $sellerId = (string) ($entry['seller_id'] ?? '');
 
         if ($sellerId === '') {
@@ -244,24 +250,19 @@ class LazadaShopConnector
      */
     private function consumeState(string $state): array
     {
-        try {
-            $data = json_decode(Crypt::decryptString($state), true, flags: JSON_THROW_ON_ERROR);
-        } catch (DecryptException|\JsonException) {
-            throw new LazadaConnectException('Tautan tidak valid. Silakan ulangi dari menu Lazada.');
-        }
+        // Cache::pull = ambil sekaligus hapus: state yang sama tidak bisa
+        // dipakai 2x, dan otomatis hangus setelah STATE_TTL_MINUTES.
+        $data = preg_match('/^[A-Za-z0-9]{40}$/', $state) ? Cache::pull($this->stateKey($state)) : null;
 
-        $expired = (int) ($data['expires_at'] ?? 0) < now()->timestamp;
-
-        // Cache::pull = ambil sekaligus hapus: state yang sama tidak bisa dipakai 2x.
-        if ($expired || ! Cache::pull($this->nonceKey((string) ($data['nonce'] ?? '')))) {
+        if (! is_array($data)) {
             throw new LazadaConnectException('Waktu menghubungkan sudah habis. Silakan klik "Hubungkan Toko" lagi.');
         }
 
         return $data;
     }
 
-    private function nonceKey(string $nonce): string
+    private function stateKey(string $state): string
     {
-        return 'lazada-oauth-state:'.$nonce;
+        return 'lazada-oauth-state:'.$state;
     }
 }
