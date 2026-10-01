@@ -305,6 +305,10 @@
                          sendiri (pola nested sama dengan "Jadwal > Keuangan"),
                          dimulai dari Lazada; Shopee/TikTok nanti jadi sub-grup
                          berikutnya. Route-nya dikunci 'active.package:Marketplace'. --}}
+                {{-- DINONAKTIFKAN SEMENTARA (1 Oktober 2026) -- menu Marketplace >
+                     Lazada disembunyikan dulu sampai tes koneksi Lazada selesai.
+                     Untuk mengaktifkan lagi: hapus baris pembuka komentar ini dan
+                     baris penutup "AKHIR MARKETPLACE" di bawah.
                 @if ($hasActiveMarketplacePackage && $canSeeAny(['marketplace.lazada.shops.index', 'marketplace.lazada.orders.index']))
                 <li class="pe-slide pe-has-sub">
                     <a href="#collapseMarketplace" class="pe-nav-link" data-bs-toggle="collapse" aria-expanded="false"
@@ -330,6 +334,7 @@
                                         </a>
                                     </li>
                                 @endif
+                AKHIR MARKETPLACE --}}
                                 @if ($canSeeMenu('marketplace.lazada.orders.index'))
                                     <li class="pe-slide-item">
                                         <a href="{{ route('marketplace.lazada.orders.index') }}" class="pe-nav-link">
