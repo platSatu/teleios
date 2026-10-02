@@ -5,10 +5,15 @@ namespace App\Http\Controllers\Superadmin;
 use App\Http\Controllers\Controller;
 use App\Models\Deposit;
 use App\Models\PaymentTransaction;
+use App\Models\Subscription;
 use App\Models\TransactionStatusHistory;
 use App\Models\User;
+use App\Models\WalletWithdrawal;
+use App\Services\Finance\FinanceSummaryService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 /**
@@ -30,79 +35,83 @@ use Illuminate\View\View;
  */
 class DepositController extends Controller
 {
+    private const TABS = ['deposit', 'disbursement', 'penjualan'];
+
+    /**
+     * Data Deposit superadmin (2 Oktober 2026): 3 tab (Deposit, Disbursement,
+     * Penjualan Paket) + kartu ringkasan. Filter tanggal & user berlaku untuk
+     * SEMUA kartu dan tabel; pencarian & status hanya untuk tabel di tab aktif.
+     * Hanya tabel tab yang sedang dibuka yang di-query.
+     */
     public function index(Request $request): View
     {
         $validated = $request->validate([
+            'tab' => ['nullable', Rule::in(self::TABS)],
             'date_from' => ['nullable', 'date_format:Y-m-d'],
             'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
+            'user_id' => ['nullable', 'uuid'],
+            'status' => ['nullable', 'string', 'max:30'],
+            'search' => ['nullable', 'string', 'max:100'],
         ], [], ['date_from' => 'Dari tanggal', 'date_to' => 'Sampai tanggal']);
 
+        $tab = $validated['tab'] ?? 'deposit';
         $dateFrom = isset($validated['date_from']) ? Carbon::createFromFormat('Y-m-d', $validated['date_from'])->startOfDay() : null;
         $dateTo = isset($validated['date_to']) ? Carbon::createFromFormat('Y-m-d', $validated['date_to'])->endOfDay() : null;
+        $userId = $validated['user_id'] ?? null;
 
-        // Filter bersama tabel & kartu ringkasan: tanggal dibuat, user, pencarian.
-        // Rentang pakai >= / <= pada created_at (bukan whereDate) supaya index kolom tetap terpakai.
-        $filtered = fn () => Deposit::query()
-            ->when($dateFrom, fn ($q) => $q->where('created_at', '>=', $dateFrom))
-            ->when($dateTo, fn ($q) => $q->where('created_at', '<=', $dateTo))
-            ->when($request->filled('user_id'), function ($q) use ($request) {
-                $q->where('user_id', $request->string('user_id')->value());
-            })
-            ->when($request->filled('search'), function ($q) use ($request) {
-                $search = $request->string('search')->value();
-                $q->where(function ($q) use ($search) {
-                    $q->where('reference_number', 'like', "%{$search}%")
-                        ->orWhereHas('user', function ($q) use ($search) {
-                            $q->where('name', 'like', "%{$search}%")
-                                ->orWhere('email', 'like', "%{$search}%");
-                        });
-                });
-            });
+        $summary = new FinanceSummaryService($dateFrom, $dateTo, $userId);
+        $stats = [
+            'deposit' => $summary->deposits(),
+            'disbursement' => $summary->disbursements(),
+            'sales' => $summary->packageSales(),
+            'user_balance' => $summary->userBalance(),
+        ];
 
-        $deposits = $filtered()
-            ->with('user')
-            ->when($request->filled('status'), function ($q) use ($request) {
-                $q->where('status', $request->string('status')->value());
-            })
+        $statuses = match ($tab) {
+            'deposit' => collect(['PENDING', 'SUCCESS', 'FAILED', 'EXPIRED'])->merge($stats['deposit']['statuses'])->unique()->values()->all(),
+            'disbursement' => array_keys(WalletWithdrawal::STATUS_LABELS),
+            'penjualan' => ['ACTIVE', 'EXPIRED', 'CANCELLED'],
+        };
+
+        $status = in_array($validated['status'] ?? null, $statuses, true) ? $validated['status'] : null;
+        $like = isset($validated['search']) && $validated['search'] !== ''
+            ? '%'.addcslashes($validated['search'], '%_\\').'%'
+            : null;
+
+        $rows = $this->tabQuery($tab, $summary, $userId, $like)
+            ->when($status, fn ($q) => $q->where('status', $status))
             ->latest()
             ->paginate(20)
             ->withQueryString();
 
         $users = User::orderBy('name')->get(['id', 'name', 'email']);
 
-        // Kartu ringkasan (2 Oktober 2026): mengikuti filter tanggal, user, dan
-        // pencarian -- supaya total per periode kelihatan -- tapi TIDAK filter
-        // status, karena kartu justru memecah per status.
-        //
-        // FIX (2 Oktober 2026): dulu cuma menghitung FAILED, jadi deposit
-        // EXPIRED tidak masuk kartu mana pun dan angkanya tidak cocok dengan
-        // tabel. Sekarang 1 query GROUP BY status (bukan 4 query terpisah),
-        // semua status ikut terhitung, dan Total = jumlah semua status.
-        $byStatus = $filtered()
-            ->selectRaw('status, COUNT(*) AS total_count, COALESCE(SUM(amount), 0) AS total_amount')
-            ->groupBy('status')
-            ->get()
-            ->keyBy('status');
+        return view('superadmin.deposit.index', compact('tab', 'rows', 'users', 'stats', 'statuses', 'dateFrom', 'dateTo'));
+    }
 
-        $count = fn (string $status) => (int) ($byStatus[$status]->total_count ?? 0);
+    /** Query tabel untuk tab aktif, sudah dibatasi tanggal, user, dan pencarian. */
+    private function tabQuery(string $tab, FinanceSummaryService $summary, ?string $userId, ?string $like): Builder
+    {
+        $userMatches = fn (Builder $q) => $q->where('name', 'like', $like)->orWhere('email', 'like', $like);
 
-        $stats = [
-            'total' => (int) $byStatus->sum('total_count'),
-            'success' => $count('SUCCESS'),
-            'success_amount' => (float) ($byStatus['SUCCESS']->total_amount ?? 0),
-            'pending' => $count('PENDING'),
-            'failed' => $count('FAILED'),
-            'expired' => $count('EXPIRED'),
-        ];
-
-        // Pilihan filter status: status baku + status lain yang benar-benar ada di data.
-        $statuses = collect(['PENDING', 'SUCCESS', 'FAILED', 'EXPIRED'])
-            ->merge($byStatus->keys())
-            ->filter()
-            ->unique()
-            ->values();
-
-        return view('superadmin.deposit.index', compact('deposits', 'users', 'stats', 'statuses', 'dateFrom', 'dateTo'));
+        return match ($tab) {
+            'deposit' => $summary->inRange(Deposit::query()->with('user'))
+                ->when($userId, fn ($q) => $q->where('user_id', $userId))
+                ->when($like, fn ($q) => $q->where(fn ($q) => $q
+                    ->where('reference_number', 'like', $like)
+                    ->orWhereHas('user', $userMatches))),
+            'disbursement' => $summary->inRange(WalletWithdrawal::query()->with(['requestedBy', 'wallet.user', 'branchOffice']))
+                ->when($userId, fn ($q) => $q->whereIn('wallet_id', $summary->userWalletIds()))
+                ->when($like, fn ($q) => $q->where(fn ($q) => $q
+                    ->where('account_name', 'like', $like)
+                    ->orWhere('duitku_disburse_id', 'like', $like)
+                    ->orWhereHas('requestedBy', $userMatches))),
+            'penjualan' => $summary->inRange(Subscription::query()->with(['user', 'package']))
+                ->when($userId, fn ($q) => $q->where('user_id', $userId))
+                ->when($like, fn ($q) => $q->where(fn ($q) => $q
+                    ->whereHas('user', $userMatches)
+                    ->orWhereHas('package', fn ($q) => $q->where('name', 'like', $like)))),
+        };
     }
 
     public function show(string $id): View
