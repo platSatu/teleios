@@ -1,9 +1,11 @@
 @extends('layouts.dashboard')
 
 @section('content')
+    @include('user.history._tabs', ['active' => 'kuota'])
+
     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
         <div>
-            <h4 class="mb-1">Sisa Kuota Paket Saya</h4>
+            <h5 class="mb-1">Sisa Kuota Paket Saya</h5>
             <p class="text-muted mb-0">
                 Branch <strong>{{ $branch?->name ?? '-' }}</strong> &middot;
                 @if ($activeVouchers->isNotEmpty())

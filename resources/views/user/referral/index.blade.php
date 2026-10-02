@@ -6,12 +6,13 @@
         $shareText = 'Pakai '.config('app.name').' lewat link saya'.($buyerDiscount > 0 ? ' dan dapat diskon '.$rupiah($buyerDiscount) : '').': '.$link;
     @endphp
 
+    @include('user.history._tabs', ['active' => 'referral'])
+
     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
         <div>
-            <h4 class="mb-1">Referral Saya</h4>
+            <h5 class="mb-1">Referral Saya</h5>
             <p class="text-muted mb-0">Bagikan link Anda. Setiap customer yang berlangganan lewat link ini memberi Anda komisi {{ rtrim(rtrim(number_format($commissionPercent, 2, '.', ''), '0'), '.') }}% setiap kali mereka membayar atau perpanjang.</p>
         </div>
-        <a href="{{ route('wallet.dashboard.index') }}" class="btn btn-sm btn-outline-secondary"><i class="ri-wallet-3-line"></i> Riwayat Saldo</a>
     </div>
 
     @if (session('success'))

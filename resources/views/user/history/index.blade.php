@@ -1,60 +1,19 @@
 @extends('layouts.dashboard')
 @section('content')
-
-    <div class="mb-3">
-        <h5 class="mb-1">Riwayat Saya</h5>
-        <p class="text-muted small mb-0">Riwayat top up, voucher, dan login akun Anda.</p>
-    </div>
+    @include('user.history._tabs', [
+        'active' => 'topup',
+        'counts' => [
+            'topup' => $deposits->total(),
+            'voucher' => $vouchers->total(),
+            'subscription' => $subscriptions->total(),
+            'transfer' => $transfers->total(),
+            'login' => $loginHistories->total(),
+        ],
+    ])
 
     <div class="card border-0 shadow-sm">
         <div class="card-body">
 
-            {{-- flex-nowrap + overflow-x-auto turns the tab bar into a
-                 horizontal scroller on narrow screens instead of letting
-                 Bootstrap's default nav-tabs wrapping stack 6 tabs into a
-                 tall, uneven pile. text-nowrap on each button stops an
-                 individual label (e.g. "Pembelian Package") from
-                 wrapping mid-word once it's inside a flex item. --}}
-            <div class="mb-3" style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
-                <ul class="nav nav-tabs flex-nowrap mb-0" id="myHistoryTabs" role="tablist" style="width: max-content;">
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link active text-nowrap" data-bs-toggle="tab" data-bs-target="#tab-topup" type="button">
-                                <i class="ri-wallet-3-line"></i> Top Up
-                                <span class="badge bg-secondary-subtle text-secondary">{{ $deposits->total() }}</span>
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#tab-voucher" type="button">
-                                <i class="ri-coupon-3-line"></i> Voucher
-                                <span class="badge bg-secondary-subtle text-secondary">{{ $vouchers->total() }}</span>
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#tab-subscription" type="button">
-                                <i class="ri-shopping-bag-3-line"></i> Pembelian Package
-                                <span class="badge bg-secondary-subtle text-secondary">{{ $subscriptions->total() }}</span>
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            {{-- Referral punya halaman sendiri (Referral Saya) -- bukan tab di sini. --}}
-                            <a class="nav-link text-nowrap" href="{{ route('referral.mine') }}">
-                                <i class="ri-share-forward-line"></i> Referral Saya <i class="ri-arrow-right-up-line"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#tab-transfer" type="button">
-                                <i class="ri-exchange-line"></i> Transfer Saldo
-                                <span class="badge bg-secondary-subtle text-secondary">{{ $transfers->total() }}</span>
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#tab-login" type="button">
-                                <i class="ri-login-circle-line"></i> Login
-                                <span class="badge bg-secondary-subtle text-secondary">{{ $loginHistories->total() }}</span>
-                            </button>
-                        </li>
-                </ul>
-            </div>
 
                     <div class="tab-content">
 
@@ -275,4 +234,13 @@
 
         </div>
     </div>
+
+    <script>
+        // Buka tab dari link ?tab=... (mis. dari halaman Riwayat Saldo / Sisa Kuota).
+        document.addEventListener('DOMContentLoaded', function () {
+            var key = new URLSearchParams(window.location.search).get('tab');
+            var button = key && document.querySelector('#myHistoryTabs [data-tab-key="' + CSS.escape(key) + '"]');
+            if (button) button.click();
+        });
+    </script>
 @endsection

@@ -296,19 +296,6 @@
                                     </a>
                                 </li>
                                 <li class="profile-item">
-                                    <a href="{{ route('referral.mine') }}" class="text-body">
-                                        <i class="ri-gift-line me-3"></i>Referral Saya
-                                    </a>
-                                </li>
-                                <li class="profile-item">
-                                    <a href="{{ route('dashboard.package.usage') }}"
-                                        class="text-body d-flex align-items-center justify-content-between">
-                                        <span>
-                                            <i class="ri-pie-chart-2-line me-3"></i>Sisa Kuota Saya
-                                        </span>
-                                    </a>
-                                </li>
-                                <li class="profile-item">
                                     <a href="{{ route('dashboard.voucher-redeem.index') }}"
                                         class="text-body d-flex align-items-center justify-content-between">
                                         <span>
@@ -341,14 +328,6 @@
                                     </a>
                                 </li>
                                 <li class="profile-item">
-                                    <a href="{{ route('wallet.dashboard.index') }}"
-                                        class="text-body d-flex align-items-center justify-content-between">
-                                        <span>
-                                            <i class="ri-history-line me-3"></i>Riwayat Saldo
-                                        </span>
-                                    </a>
-                                </li>
-                                <li class="profile-item">
                                     <a href="{{ route('user-settings.pin.edit') }}"
                                         class="text-body d-flex align-items-center justify-content-between">
                                         <span>
@@ -357,7 +336,7 @@
                                     </a>
                                 </li>
                                 <li class="profile-item">
-                                    {{-- Was a dead "Subscription" link (href="#!") --}}
+                                    {{-- Riwayat Saya: tab Top Up, Voucher, Package, Transfer, Riwayat Saldo, Sisa Kuota, Referral, Login (lihat user/history/_tabs). --}}
                                     <a href="{{ route('user-history.index') }}"
                                         class="text-body d-flex align-items-center justify-content-between ">
                                         <span>

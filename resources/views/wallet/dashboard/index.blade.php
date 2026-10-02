@@ -3,12 +3,13 @@
 @section('content')
 <div class="row">
     <div class="col-12">
+        @include('user.history._tabs', ['active' => 'saldo'])
 
         <div class="card mb-3">
             <div class="card-body">
                 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
                     <div>
-                        <h4 class="mb-1">Riwayat Saldo</h4>
+                        <h5 class="mb-1">Saldo Saya</h5>
                         <p class="text-muted mb-0">Saldo saat ini: <span class="fw-semibold fs-16">Rp {{ number_format((float) ($wallet->balance ?? 0), 0, ',', '.') }}</span></p>
                     </div>
                     <div class="d-flex gap-2">
