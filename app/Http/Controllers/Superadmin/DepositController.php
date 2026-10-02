@@ -58,14 +58,36 @@ class DepositController extends Controller
         // (not $request's search/status/user filters), same "at a
         // glance dashboard, not numbers that shift mid-search" rule as
         // Chat\MessageScheduleController::index()'s $stats.
+        //
+        // FIX (2 Oktober 2026): dulu cuma menghitung FAILED, jadi deposit
+        // EXPIRED tidak masuk kartu mana pun dan angkanya tidak cocok dengan
+        // tabel. Sekarang 1 query GROUP BY status (bukan 4 query terpisah),
+        // semua status ikut terhitung, dan Total = jumlah semua status.
+        $byStatus = Deposit::query()
+            ->selectRaw('status, COUNT(*) AS total_count, COALESCE(SUM(amount), 0) AS total_amount')
+            ->groupBy('status')
+            ->get()
+            ->keyBy('status');
+
+        $count = fn (string $status) => (int) ($byStatus[$status]->total_count ?? 0);
+
         $stats = [
-            'total' => Deposit::count(),
-            'success_amount' => Deposit::where('status', 'SUCCESS')->sum('amount'),
-            'pending' => Deposit::where('status', 'PENDING')->count(),
-            'failed' => Deposit::where('status', 'FAILED')->count(),
+            'total' => (int) $byStatus->sum('total_count'),
+            'success' => $count('SUCCESS'),
+            'success_amount' => (float) ($byStatus['SUCCESS']->total_amount ?? 0),
+            'pending' => $count('PENDING'),
+            'failed' => $count('FAILED'),
+            'expired' => $count('EXPIRED'),
         ];
 
-        return view('superadmin.deposit.index', compact('deposits', 'users', 'stats'));
+        // Pilihan filter status: status baku + status lain yang benar-benar ada di data.
+        $statuses = collect(['PENDING', 'SUCCESS', 'FAILED', 'EXPIRED'])
+            ->merge($byStatus->keys())
+            ->filter()
+            ->unique()
+            ->values();
+
+        return view('superadmin.deposit.index', compact('deposits', 'users', 'stats', 'statuses'));
     }
 
     public function show(string $id): View

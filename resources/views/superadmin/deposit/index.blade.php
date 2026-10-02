@@ -27,6 +27,7 @@
                     <div>
                         <div class="text-muted small">Total Nominal Sukses</div>
                         <h4 class="mb-0">Rp {{ number_format($stats['success_amount'], 0, ',', '.') }}</h4>
+                        <div class="text-muted small">{{ number_format($stats['success'], 0, ',', '.') }} transaksi sukses</div>
                     </div>
                 </div>
             </div>
@@ -51,8 +52,9 @@
                         <i class="ri-error-warning-line fs-4"></i>
                     </div>
                     <div>
-                        <div class="text-muted small">Failed</div>
-                        <h4 class="mb-0">{{ number_format($stats['failed'], 0, ',', '.') }}</h4>
+                        <div class="text-muted small">Gagal / Kedaluwarsa</div>
+                        <h4 class="mb-0">{{ number_format($stats['failed'] + $stats['expired'], 0, ',', '.') }}</h4>
+                        <div class="text-muted small">Failed {{ number_format($stats['failed'], 0, ',', '.') }} · Expired {{ number_format($stats['expired'], 0, ',', '.') }}</div>
                     </div>
                 </div>
             </div>
@@ -79,7 +81,7 @@
                 <div class="col-auto">
                     <select name="status" class="form-select">
                         <option value="">Semua status</option>
-                        @foreach (['PENDING', 'SUCCESS', 'FAILED'] as $status)
+                        @foreach ($statuses as $status)
                             <option value="{{ $status }}" @selected(request('status') === $status)>{{ $status }}</option>
                         @endforeach
                     </select>
