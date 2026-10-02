@@ -45,7 +45,12 @@
                                         @endif
                                     </td>
                                     <td>{{ $row->requestedBy->name ?? '-' }}</td>
-                                    <td class="text-end">Rp {{ number_format((float) $row->amount, 0, ',', '.') }}</td>
+                                    <td class="text-end">
+                                        Rp {{ number_format((float) $row->amount, 0, ',', '.') }}
+                                        @if ((float) $row->fee_amount > 0)
+                                            <div class="text-muted small">Biaya Rp {{ number_format((float) $row->fee_amount, 0, ',', '.') }} · dikirim Rp {{ number_format($row->transferAmount(), 0, ',', '.') }}</div>
+                                        @endif
+                                    </td>
                                     <td>{{ $row->bank_code }} — {{ $row->bank_account }}<div class="text-muted small">{{ $row->account_name }}</div></td>
                                     <td class="text-end">
                                         <div class="d-flex gap-1 justify-content-end">
@@ -68,7 +73,9 @@
                                                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                                         </div>
                                                         <div class="modal-body">
-                                                            <p class="mb-2">Jumlah: <strong>Rp {{ number_format((float) $row->amount, 0, ',', '.') }}</strong></p>
+                                                            <p class="mb-1">Saldo dipotong: <strong>Rp {{ number_format((float) $row->amount, 0, ',', '.') }}</strong></p>
+                                                            <p class="mb-1">Biaya penarikan: <strong>Rp {{ number_format((float) $row->fee_amount, 0, ',', '.') }}</strong></p>
+                                                            <p class="mb-2">Dikirim ke rekening: <strong>Rp {{ number_format($row->transferAmount(), 0, ',', '.') }}</strong></p>
                                                             <p class="mb-3">Ke: <strong>{{ $row->bank_code }} — {{ $row->bank_account }} a.n {{ $row->account_name }}</strong></p>
                                                             <label class="form-label">Masukkan PIN Transaksi (6 digit)</label>
                                                             <input type="password" name="pin" class="form-control" inputmode="numeric" pattern="\d{6}" maxlength="6" minlength="6" required autocomplete="off">
@@ -140,7 +147,12 @@
                                     <tr>
                                         <td>{{ $row->created_at->translatedFormat('d M Y H:i') }}</td>
                                         <td>{{ $row->sourceLabel() }}</td>
-                                        <td class="text-end">Rp {{ number_format((float) $row->amount, 0, ',', '.') }}</td>
+                                        <td class="text-end">
+                                        Rp {{ number_format((float) $row->amount, 0, ',', '.') }}
+                                        @if ((float) $row->fee_amount > 0)
+                                            <div class="text-muted small">Biaya Rp {{ number_format((float) $row->fee_amount, 0, ',', '.') }} · dikirim Rp {{ number_format($row->transferAmount(), 0, ',', '.') }}</div>
+                                        @endif
+                                    </td>
                                         <td>{{ $row->bank_code }} — {{ $row->bank_account }}<div class="text-muted small">{{ $row->account_name }}</div></td>
                                         <td class="text-muted small">
                                             {{ $row->failure_reason ?? 'Proses berhenti di tengah jalan.' }}
@@ -166,7 +178,7 @@
                                                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                                         </div>
                                                         <div class="modal-body">
-                                                            <p class="mb-3">Rp {{ number_format((float) $row->amount, 0, ',', '.') }} ke {{ $row->bank_code }} — {{ $row->bank_account }}</p>
+                                                            <p class="mb-3">Rp {{ number_format($row->transferAmount(), 0, ',', '.') }} (saldo dipotong Rp {{ number_format((float) $row->amount, 0, ',', '.') }}) ke {{ $row->bank_code }} — {{ $row->bank_account }}</p>
                                                             <div class="form-check mb-2">
                                                                 <input class="form-check-input" type="radio" name="sent" value="1" id="sent1-{{ $row->id }}" required>
                                                                 <label class="form-check-label" for="sent1-{{ $row->id }}"><strong>Dana SUDAH terkirim</strong> (tercatat sukses di Duitku) — saldo user tetap terpotong.</label>
@@ -223,7 +235,12 @@
                                         @endif
                                     </td>
                                     <td>{{ $row->requestedBy->name ?? '-' }}</td>
-                                    <td class="text-end">Rp {{ number_format((float) $row->amount, 0, ',', '.') }}</td>
+                                    <td class="text-end">
+                                        Rp {{ number_format((float) $row->amount, 0, ',', '.') }}
+                                        @if ((float) $row->fee_amount > 0)
+                                            <div class="text-muted small">Biaya Rp {{ number_format((float) $row->fee_amount, 0, ',', '.') }} · dikirim Rp {{ number_format($row->transferAmount(), 0, ',', '.') }}</div>
+                                        @endif
+                                    </td>
                                     <td>
                                         @php
                                             $badgeClass = match($row->status) {

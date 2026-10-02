@@ -48,8 +48,8 @@
                         <div class="col-md-4">
                             <label class="form-label">Jumlah Penarikan (Rp)</label>
                             <input type="number" name="amount" class="form-control @error('amount') is-invalid @enderror" min="10000" step="1" value="{{ old('amount') }}" required>
-                            <div class="form-text">Minimal Rp 10.000</div>
                             @error('amount')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            @include('wallet.withdrawal._fee-preview')
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Catatan (opsional)</label>
@@ -86,7 +86,12 @@
                             @forelse($riwayat as $row)
                                 <tr>
                                     <td>{{ $row->created_at->translatedFormat('d M Y H:i') }}</td>
-                                    <td class="text-end">Rp {{ number_format((float) $row->amount, 0, ',', '.') }}</td>
+                                    <td class="text-end">
+                                        Rp {{ number_format((float) $row->amount, 0, ',', '.') }}
+                                        @if ((float) $row->fee_amount > 0)
+                                            <div class="text-muted small">Biaya Rp {{ number_format((float) $row->fee_amount, 0, ',', '.') }} · diterima Rp {{ number_format($row->transferAmount(), 0, ',', '.') }}</div>
+                                        @endif
+                                    </td>
                                     <td>{{ $row->bankAccount?->masked() ?? $row->bank_code.' ****'.substr($row->bank_account, -4) }}</td>
                                     <td>
                                         @php

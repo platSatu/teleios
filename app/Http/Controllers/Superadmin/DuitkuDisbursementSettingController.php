@@ -27,7 +27,7 @@ class DuitkuDisbursementSettingController extends Controller
 {
     use VerifiesTransactionPin;
 
-    private const FIELDS = ['sandbox_user_id', 'sandbox_email', 'production_user_id', 'production_email'];
+    private const FIELDS = ['withdrawal_fee', 'sandbox_user_id', 'sandbox_email', 'production_user_id', 'production_email'];
 
     public function edit(): View
     {
@@ -38,6 +38,8 @@ class DuitkuDisbursementSettingController extends Controller
     {
         $validated = $request->validate([
             'mode' => ['required', Rule::in(DuitkuDisbursementSetting::MODES)],
+            // Biaya per tarik saldo, Rupiah bulat (dipotong dari jumlah yang ditarik user).
+            'withdrawal_fee' => ['required', 'integer', 'min:0', 'max:1000000'],
             'sandbox_user_id' => ['nullable', 'digits_between:1,20'],
             'sandbox_email' => ['nullable', 'email', 'max:255'],
             'sandbox_secret_key' => ['nullable', 'string', 'max:500'],

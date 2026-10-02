@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Wallet;
 
 use App\Http\Controllers\Concerns\VerifiesTransactionPin;
 use App\Http\Controllers\Controller;
+use App\Models\DuitkuDisbursementSetting;
 use App\Models\WalletWithdrawal;
 use App\Services\Wallet\BankAccountService;
 use App\Services\Wallet\WalletWithdrawalService;
@@ -49,13 +50,14 @@ class WalletWithdrawalController extends Controller
             'riwayat' => $riwayat,
             'bankAccount' => $this->bankAccounts->current($user),
             'nextBankAccount' => $this->bankAccounts->latestSubmission($user),
+            'withdrawalFee' => DuitkuDisbursementSetting::current()->withdrawalFee(),
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'amount' => ['required', 'numeric', 'min:10000'],
+            'amount' => ['required', 'integer', 'min:'.WalletWithdrawalService::MIN_TRANSFER],
             'purpose' => ['nullable', 'string', 'max:255'],
         ]);
 

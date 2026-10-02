@@ -61,6 +61,8 @@ class WalletWithdrawal extends Model
         'branch_office_id',
         'bank_account_id',
         'amount',
+        'fee_amount',
+        'net_amount',
         'bank_code',
         'bank_account',
         'account_name',
@@ -80,6 +82,8 @@ class WalletWithdrawal extends Model
 
     protected $casts = [
         'amount' => 'decimal:2',
+        'fee_amount' => 'decimal:2',
+        'net_amount' => 'decimal:2',
         'approved_at' => 'datetime',
         'duitku_response' => 'array',
         'processed_at' => 'datetime',
@@ -116,6 +120,15 @@ class WalletWithdrawal extends Model
     public function approvedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    /**
+     * Jumlah yang dikirim ke rekening: amount (saldo yang dipotong) dikurangi
+     * biaya. Baris lama tanpa net_amount = amount utuh.
+     */
+    public function transferAmount(): float
+    {
+        return (float) ($this->net_amount ?? $this->amount);
     }
 
     public function statusLabel(): string

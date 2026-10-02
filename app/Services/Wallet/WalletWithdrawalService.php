@@ -3,6 +3,7 @@
 namespace App\Services\Wallet;
 
 use App\Models\AuditLog;
+use App\Models\DuitkuDisbursementSetting;
 use App\Models\User;
 use App\Models\Wallet;
 use App\Models\WalletWithdrawal;
@@ -29,6 +30,14 @@ use Throwable;
  * (resolveReview()). Uang tidak pernah bisa keluar tanpa saldo terpotong.
  *
  * Permintaan lama (sebelum fitur ini, held_at null) ditahan saat disetujui.
+ *
+ * BIAYA PENARIKAN (2 Oktober 2026): biaya per penarikan diisi superadmin
+ * (DuitkuDisbursementSetting::withdrawal_fee) dan di-snapshot ke
+ * permintaan saat diajukan. Saldo dipotong sebesar amount, yang dikirim ke
+ * rekening = amount - fee (net_amount). Di Ledger tercatat 2 baris:
+ * WITHDRAWAL (net) dan WITHDRAWAL_FEE (biaya), dikembalikan berpasangan.
+ * Semua angka dihitung dalam Rupiah utuh (integer) supaya tidak ada selisih
+ * pembulatan.
  */
 class WalletWithdrawalService
 {
@@ -44,12 +53,23 @@ class WalletWithdrawalService
         ?string $branchOfficeId,
         ?string $bankAccountId = null,
     ): WalletWithdrawal {
-        if ($amount <= 0) {
-            throw new RuntimeException('Jumlah tarik saldo harus lebih besar dari 0.');
+        // Rupiah utuh saja: Duitku mentransfer dalam integer, jadi pecahan
+        // ditolak di depan daripada dibulatkan diam-diam.
+        if ($amount <= 0 || floor($amount) !== $amount) {
+            throw new RuntimeException('Jumlah tarik saldo harus berupa angka Rupiah bulat lebih dari 0.');
         }
+
+        $amount = (int) $amount;
 
         return DB::transaction(function () use ($wallet, $requestedBy, $amount, $bankCode, $bankAccount, $accountName, $purpose, $companyId, $branchOfficeId, $bankAccountId) {
             $lockedWallet = Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
+
+            $fee = DuitkuDisbursementSetting::current()->withdrawalFee();
+            $net = $amount - $fee;
+
+            if ($net < self::MIN_TRANSFER) {
+                throw new RuntimeException('Jumlah yang diterima setelah biaya penarikan (Rp '.number_format($fee, 0, ',', '.').') minimal Rp '.number_format(self::MIN_TRANSFER, 0, ',', '.').'. Silakan tarik minimal Rp '.number_format($fee + self::MIN_TRANSFER, 0, ',', '.').'.');
+            }
 
             // Permintaan lama yang belum ditahan tetap mengurangi saldo tersedia.
             $legacyInFlight = (float) WalletWithdrawal::where('wallet_id', $wallet->id)
@@ -69,6 +89,8 @@ class WalletWithdrawalService
                 'branch_office_id' => $branchOfficeId,
                 'bank_account_id' => $bankAccountId,
                 'amount' => $amount,
+                'fee_amount' => $fee,
+                'net_amount' => $net,
                 'bank_code' => $bankCode,
                 'bank_account' => $bankAccount,
                 'account_name' => $accountName,
@@ -84,6 +106,9 @@ class WalletWithdrawalService
 
     /** Kode respons transfer Duitku yang pasti sukses. Selain ini hasilnya dianggap belum pasti. */
     private const DUITKU_SUCCESS = '00';
+
+    /** Jumlah minimal yang dikirim ke rekening (setelah biaya). */
+    public const MIN_TRANSFER = 10000;
 
     public function approveAndProcess(WalletWithdrawal $withdrawal, User $approver): WalletWithdrawal
     {
@@ -257,7 +282,8 @@ class WalletWithdrawalService
 
         try {
             $duitku = DuitkuDisbursementService::make();
-            $amount = (int) round((float) $withdrawal->amount);
+            // Yang dikirim = saldo dipotong - biaya (lihat docblock class).
+            $amount = (int) round($withdrawal->transferAmount());
             $purpose = $withdrawal->purpose ?: 'Tarik Saldo '.config('app.name');
 
             // Rekening terdaftar: nomor lengkap diambil dari bank_accounts (terenkripsi),
@@ -345,18 +371,36 @@ class WalletWithdrawalService
         return $withdrawal->fresh();
     }
 
-    /** Tahan (potong) saldo untuk permintaan ini. Melempar RuntimeException kalau saldo kurang. */
+    /**
+     * Tahan (potong) saldo untuk permintaan ini: jumlah yang dikirim + biaya,
+     * 2 baris Ledger dalam transaksi pemanggil. Melempar RuntimeException kalau
+     * saldo kurang (seluruh transaksi batal, tidak ada potongan setengah).
+     */
     private function hold(WalletWithdrawal $withdrawal, Wallet $wallet, ?string $actorId): void
     {
+        $target = $withdrawal->bank_code.' '.$withdrawal->bank_account;
+
         WalletLedgerService::debit(
             $wallet,
-            (float) $withdrawal->amount,
+            $withdrawal->transferAmount(),
             WalletWithdrawal::class,
             $withdrawal->id,
-            'Ditahan untuk tarik saldo ke '.$withdrawal->bank_code.' '.$withdrawal->bank_account,
+            'Ditahan untuk tarik saldo ke '.$target,
             $actorId,
             'WITHDRAWAL',
         );
+
+        if ((float) $withdrawal->fee_amount > 0) {
+            WalletLedgerService::debit(
+                $wallet,
+                (float) $withdrawal->fee_amount,
+                WalletWithdrawal::class,
+                $withdrawal->id,
+                'Biaya tarik saldo ke '.$target,
+                $actorId,
+                'WITHDRAWAL_FEE',
+            );
+        }
 
         $withdrawal->update(['held_at' => now()]);
     }
@@ -370,15 +414,29 @@ class WalletWithdrawalService
             return;
         }
 
+        $wallet = Wallet::whereKey($locked->wallet_id)->firstOrFail();
+
         WalletLedgerService::credit(
-            Wallet::whereKey($locked->wallet_id)->firstOrFail(),
-            (float) $locked->amount,
+            $wallet,
+            $locked->transferAmount(),
             WalletWithdrawal::class,
             $locked->id,
             "Pengembalian tarik saldo ({$reason})",
             $actorId,
             'WITHDRAWAL_REFUND',
         );
+
+        if ((float) $locked->fee_amount > 0) {
+            WalletLedgerService::credit(
+                $wallet,
+                (float) $locked->fee_amount,
+                WalletWithdrawal::class,
+                $locked->id,
+                "Pengembalian biaya tarik saldo ({$reason})",
+                $actorId,
+                'WITHDRAWAL_FEE_REFUND',
+            );
+        }
 
         $locked->update(['refunded_at' => now()]);
     }

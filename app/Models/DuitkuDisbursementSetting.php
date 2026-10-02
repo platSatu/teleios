@@ -30,6 +30,7 @@ class DuitkuDisbursementSetting extends Model
 
     protected $fillable = [
         'mode',
+        'withdrawal_fee',
         'sandbox_user_id',
         'sandbox_email',
         'sandbox_secret_key',
@@ -42,6 +43,7 @@ class DuitkuDisbursementSetting extends Model
     protected $casts = [
         'sandbox_secret_key' => 'encrypted',
         'production_secret_key' => 'encrypted',
+        'withdrawal_fee' => 'decimal:2',
     ];
 
     public function updatedBy(): BelongsTo
@@ -52,6 +54,12 @@ class DuitkuDisbursementSetting extends Model
     public static function current(): self
     {
         return static::query()->first() ?? static::create(['mode' => self::MODE_SANDBOX]);
+    }
+
+    /** Biaya per tarik saldo (Rupiah utuh), dipotong dari jumlah yang ditarik. */
+    public function withdrawalFee(): int
+    {
+        return max(0, (int) round((float) $this->withdrawal_fee));
     }
 
     public function isSandbox(): bool

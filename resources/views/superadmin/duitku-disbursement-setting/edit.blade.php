@@ -40,6 +40,14 @@
                             </select>
                         </div>
 
+                        <div class="mb-4">
+                            <label class="form-label" for="withdrawal_fee">Biaya Tarik Saldo per Transaksi (Rp)</label>
+                            <input type="number" name="withdrawal_fee" id="withdrawal_fee" class="form-control @error('withdrawal_fee') is-invalid @enderror"
+                                min="0" max="1000000" step="1" required value="{{ old('withdrawal_fee', $setting->withdrawalFee()) }}">
+                            <div class="form-text">Dipotong dari jumlah yang ditarik user. Contoh: biaya Rp 2.500, user tarik Rp 50.000 → saldo terpotong Rp 50.000, diterima di rekening Rp 47.500. Berlaku untuk pengajuan baru; pengajuan yang sudah ada memakai biaya saat diajukan.</div>
+                            @error('withdrawal_fee')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+
                         <div class="row">
                             @foreach (['sandbox' => 'Sandbox', 'production' => 'Production'] as $mode => $label)
                                 <div class="col-md-6 mb-3">

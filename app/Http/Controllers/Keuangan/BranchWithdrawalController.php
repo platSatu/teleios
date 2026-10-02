@@ -6,6 +6,7 @@ use App\Http\Controllers\Concerns\ResolvesCompanyContext;
 use App\Http\Controllers\Concerns\VerifiesTransactionPin;
 use App\Http\Controllers\Controller;
 use App\Models\BranchOffice;
+use App\Models\DuitkuDisbursementSetting;
 use App\Models\WalletWithdrawal;
 use App\Services\Payment\DuitkuDisbursementService;
 use App\Services\Wallet\WalletProvisioningService;
@@ -62,14 +63,16 @@ class BranchWithdrawalController extends Controller
             // Lihat komentar sama di WalletWithdrawalController::index().
         }
 
-        return view('keuangan.withdrawal.index', compact('branches', 'branch', 'wallet', 'riwayat', 'banks'));
+        $withdrawalFee = DuitkuDisbursementSetting::current()->withdrawalFee();
+
+        return view('keuangan.withdrawal.index', compact('branches', 'branch', 'wallet', 'riwayat', 'banks', 'withdrawalFee'));
     }
 
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
             'branch_office_id' => ['required', 'uuid'],
-            'amount' => ['required', 'numeric', 'min:10000'],
+            'amount' => ['required', 'integer', 'min:'.WalletWithdrawalService::MIN_TRANSFER],
             'bank_code' => ['required', 'string', 'max:10'],
             'bank_account' => ['required', 'string', 'max:50'],
             'account_name' => ['required', 'string', 'max:255'],
