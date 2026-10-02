@@ -66,16 +66,19 @@ class FinanceSummaryService
             ->get()
             ->keyBy('status');
 
-        $count = fn (string $status) => (int) ($rows[$status]->total_count ?? 0);
+        // Jumlah & nominal per status -- untuk dicocokkan dengan laporan Duitku.
+        $of = fn (string $status) => [
+            'count' => (int) ($rows[$status]->total_count ?? 0),
+            'amount' => (float) ($rows[$status]->total_amount ?? 0),
+        ];
 
         return [
             'statuses' => $rows->keys()->all(),
-            'total' => (int) $rows->sum('total_count'),
-            'success' => $count('SUCCESS'),
-            'success_amount' => (float) ($rows['SUCCESS']->total_amount ?? 0),
-            'pending' => $count('PENDING'),
-            'failed' => $count('FAILED'),
-            'expired' => $count('EXPIRED'),
+            'total' => ['count' => (int) $rows->sum('total_count'), 'amount' => (float) $rows->sum('total_amount')],
+            'success' => $of('SUCCESS'),
+            'pending' => $of('PENDING'),
+            'failed' => $of('FAILED'),
+            'expired' => $of('EXPIRED'),
         ];
     }
 
@@ -90,17 +93,23 @@ class FinanceSummaryService
             ->keyBy('status');
 
         $success = $rows[WalletWithdrawal::STATUS_SUCCESS] ?? null;
-        $countOf = fn (array $statuses) => (int) $rows->only($statuses)->sum('total_count');
+        $group = fn (array $statuses) => [
+            'count' => (int) $rows->only($statuses)->sum('total_count'),
+            'amount' => (float) $rows->only($statuses)->sum('total_amount'),
+        ];
 
         return [
-            'total' => (int) $rows->sum('total_count'),
-            'total_amount' => (float) $rows->sum('total_amount'),
-            'success' => (int) ($success->total_count ?? 0),
-            'success_net' => (float) ($success->total_net ?? 0),
+            'total' => ['count' => (int) $rows->sum('total_count'), 'amount' => (float) $rows->sum('total_amount')],
+            // Sukses: nominal yang dikirim ke rekening (sama dengan laporan Duitku) + saldo yang dipotong.
+            'success' => [
+                'count' => (int) ($success->total_count ?? 0),
+                'amount' => (float) ($success->total_amount ?? 0),
+                'net' => (float) ($success->total_net ?? 0),
+            ],
             // Biaya hanya dihitung dari penarikan sukses; yang gagal/ditolak dikembalikan ke user.
             'fee' => (float) ($success->total_fee ?? 0),
-            'pending' => $countOf(self::WITHDRAWAL_PENDING),
-            'failed' => $countOf(self::WITHDRAWAL_FAILED),
+            'pending' => $group(self::WITHDRAWAL_PENDING),
+            'failed' => $group(self::WITHDRAWAL_FAILED),
         ];
     }
 
