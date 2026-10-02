@@ -8,6 +8,7 @@ use App\Models\PaymentTransaction;
 use App\Models\TransactionStatusHistory;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\View\View;
 
 /**
@@ -31,10 +32,19 @@ class DepositController extends Controller
 {
     public function index(Request $request): View
     {
-        $deposits = Deposit::with('user')
-            ->when($request->filled('status'), function ($q) use ($request) {
-                $q->where('status', $request->string('status')->value());
-            })
+        $validated = $request->validate([
+            'date_from' => ['nullable', 'date_format:Y-m-d'],
+            'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
+        ], [], ['date_from' => 'Dari tanggal', 'date_to' => 'Sampai tanggal']);
+
+        $dateFrom = isset($validated['date_from']) ? Carbon::createFromFormat('Y-m-d', $validated['date_from'])->startOfDay() : null;
+        $dateTo = isset($validated['date_to']) ? Carbon::createFromFormat('Y-m-d', $validated['date_to'])->endOfDay() : null;
+
+        // Filter bersama tabel & kartu ringkasan: tanggal dibuat, user, pencarian.
+        // Rentang pakai >= / <= pada created_at (bukan whereDate) supaya index kolom tetap terpakai.
+        $filtered = fn () => Deposit::query()
+            ->when($dateFrom, fn ($q) => $q->where('created_at', '>=', $dateFrom))
+            ->when($dateTo, fn ($q) => $q->where('created_at', '<=', $dateTo))
             ->when($request->filled('user_id'), function ($q) use ($request) {
                 $q->where('user_id', $request->string('user_id')->value());
             })
@@ -47,6 +57,12 @@ class DepositController extends Controller
                                 ->orWhere('email', 'like', "%{$search}%");
                         });
                 });
+            });
+
+        $deposits = $filtered()
+            ->with('user')
+            ->when($request->filled('status'), function ($q) use ($request) {
+                $q->where('status', $request->string('status')->value());
             })
             ->latest()
             ->paginate(20)
@@ -54,16 +70,15 @@ class DepositController extends Controller
 
         $users = User::orderBy('name')->get(['id', 'name', 'email']);
 
-        // Summary cards above the table — fixed to the WHOLE dataset
-        // (not $request's search/status/user filters), same "at a
-        // glance dashboard, not numbers that shift mid-search" rule as
-        // Chat\MessageScheduleController::index()'s $stats.
+        // Kartu ringkasan (2 Oktober 2026): mengikuti filter tanggal, user, dan
+        // pencarian -- supaya total per periode kelihatan -- tapi TIDAK filter
+        // status, karena kartu justru memecah per status.
         //
         // FIX (2 Oktober 2026): dulu cuma menghitung FAILED, jadi deposit
         // EXPIRED tidak masuk kartu mana pun dan angkanya tidak cocok dengan
         // tabel. Sekarang 1 query GROUP BY status (bukan 4 query terpisah),
         // semua status ikut terhitung, dan Total = jumlah semua status.
-        $byStatus = Deposit::query()
+        $byStatus = $filtered()
             ->selectRaw('status, COUNT(*) AS total_count, COALESCE(SUM(amount), 0) AS total_amount')
             ->groupBy('status')
             ->get()
@@ -87,7 +102,7 @@ class DepositController extends Controller
             ->unique()
             ->values();
 
-        return view('superadmin.deposit.index', compact('deposits', 'users', 'stats', 'statuses'));
+        return view('superadmin.deposit.index', compact('deposits', 'users', 'stats', 'statuses', 'dateFrom', 'dateTo'));
     }
 
     public function show(string $id): View

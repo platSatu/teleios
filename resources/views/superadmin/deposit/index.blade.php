@@ -1,9 +1,15 @@
 @extends('layouts.dashboard')
 
 @section('content')
-    {{-- Summary cards — fixed to the whole dataset (see
-         Superadmin\DepositController::index()'s $stats), not affected by
-         the search/status/user filter below. --}}
+    {{-- Kartu ringkasan: mengikuti filter tanggal, user, dan pencarian di
+         bawah (bukan filter status), lihat Superadmin\DepositController::index(). --}}
+    @if ($dateFrom || $dateTo)
+        <p class="text-muted small mb-2">
+            Ringkasan periode
+            <strong>{{ $dateFrom?->translatedFormat('d M Y') ?? 'awal' }}</strong> s/d
+            <strong>{{ $dateTo?->translatedFormat('d M Y') ?? 'sekarang' }}</strong>
+        </p>
+    @endif
     <div class="row g-3 mb-3">
         <div class="col-6 col-xl-3">
             <div class="card border-0 shadow-sm mb-0 h-100">
@@ -95,8 +101,22 @@
                     </select>
                 </div>
                 <div class="col-auto">
-                    <button type="submit" class="btn btn-outline-secondary"><i class="ri-search-line"></i> Filter</button>
+                    <div class="input-group">
+                        <span class="input-group-text">Dari</span>
+                        <input type="date" name="date_from" class="form-control @error('date_from') is-invalid @enderror" value="{{ request('date_from') }}">
+                        <span class="input-group-text">s/d</span>
+                        <input type="date" name="date_to" class="form-control @error('date_to') is-invalid @enderror" value="{{ request('date_to') }}">
+                    </div>
                 </div>
+                <div class="col-auto d-flex gap-2">
+                    <button type="submit" class="btn btn-outline-secondary"><i class="ri-search-line"></i> Filter</button>
+                    @if (request()->hasAny(['search', 'status', 'user_id', 'date_from', 'date_to']))
+                        <a href="{{ route('deposits.index') }}" class="btn btn-light" title="Reset filter">Reset</a>
+                    @endif
+                </div>
+                @if ($errors->has('date_from') || $errors->has('date_to'))
+                    <div class="col-12 text-danger small">{{ $errors->first('date_to') ?: $errors->first('date_from') }}</div>
+                @endif
             </form>
 
             <div class="table-responsive">
