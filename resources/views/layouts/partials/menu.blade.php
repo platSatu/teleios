@@ -988,11 +988,6 @@
                                 </a>
                             </li>
                             <li class="pe-slide-item">
-                                <a href="{{ route('database-backup.index') }}" class="pe-nav-link">
-                                    Backup Database
-                                </a>
-                            </li>
-                            <li class="pe-slide-item">
                                 <a href="{{ route('ledger-entry.index') }}" class="pe-nav-link">
                                     Ledger Entries
                                 </a>
@@ -1104,6 +1099,24 @@
                             <li class="pe-slide-item">
                                 <a href="{{ route('category-help-center.index') }}" class="pe-nav-link">
                                     Kategori Help Center
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+
+                    {{-- Sistem & Pengaturan (3 Oktober 2026): alat pemeliharaan sistem superadmin. --}}
+                    <li class="pe-slide pe-has-sub">
+                        <a href="#collapseSystemSettings" class="pe-nav-link" data-bs-toggle="collapse"
+                            aria-expanded="false" aria-controls="collapseSystemSettings">
+                            <i class="uil uil-setting pe-nav-icon"></i>
+                            <span class="pe-nav-content">Sistem &amp; Pengaturan</span>
+                            <i class="ri-arrow-right-s-line pe-nav-arrow arrow-right"></i>
+                            <i class="ri-arrow-left-s-line pe-nav-arrow arrow-left"></i>
+                        </a>
+                        <ul class="pe-slide-menu collapse" id="collapseSystemSettings">
+                            <li class="pe-slide-item">
+                                <a href="{{ route('database-backup.index') }}" class="pe-nav-link">
+                                    Backup Database
                                 </a>
                             </li>
                         </ul>
