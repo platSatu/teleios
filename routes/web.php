@@ -33,6 +33,7 @@ use App\Http\Controllers\Superadmin\LedgerTransactionController;
 use App\Http\Controllers\Superadmin\PaymentTransactionController;
 
 use App\Http\Controllers\Superadmin\AuditLogController;
+use App\Http\Controllers\Superadmin\DatabaseBackupController;
 
 use App\Http\Controllers\Superadmin\QueueMonitorController;
 use App\Http\Controllers\Superadmin\PaymentWebhookController;
@@ -1617,6 +1618,15 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
 
         Route::get('/audit-log', [AuditLogController::class, 'index'])
             ->name('audit-log.index');
+
+        // Backup Database (3 Oktober 2026) -- buat/download/hapus wajib PIN,
+        // lihat Superadmin\DatabaseBackupController.
+        Route::prefix('database-backup')->controller(DatabaseBackupController::class)->group(function () {
+            Route::get('/', 'index')->name('database-backup.index');
+            Route::post('/', 'store')->middleware('throttle:3,10')->name('database-backup.store');
+            Route::post('/{id}/download', 'download')->middleware('throttle:10,1')->name('database-backup.download');
+            Route::delete('/{id}', 'destroy')->middleware('throttle:10,1')->name('database-backup.destroy');
+        });
 
         // Read-only view over the `jobs` (pending) / `failed_jobs`
         // (gave up after exhausting retries) tables that the `database`

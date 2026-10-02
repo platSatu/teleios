@@ -185,6 +185,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('marketplace:sync-orders')
             ->everyFifteenMinutes()
             ->withoutOverlapping();
+
+        // Backup database otomatis tiap malam (zona waktu app: Asia/Jakarta)
+        // + hapus backup lama, lihat App\Console\Commands\BackupDatabase.
+        $schedule->command('backup:database')
+            ->dailyAt('01:00')
+            ->withoutOverlapping(120);
     })
      ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([

@@ -988,6 +988,11 @@
                                 </a>
                             </li>
                             <li class="pe-slide-item">
+                                <a href="{{ route('database-backup.index') }}" class="pe-nav-link">
+                                    Backup Database
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
                                 <a href="{{ route('ledger-entry.index') }}" class="pe-nav-link">
                                     Ledger Entries
                                 </a>
