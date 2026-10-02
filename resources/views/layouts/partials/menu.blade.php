@@ -334,7 +334,6 @@
                                         </a>
                                     </li>
                                 @endif
-                AKHIR MARKETPLACE --}}
                                 @if ($canSeeMenu('marketplace.lazada.orders.index'))
                                     <li class="pe-slide-item">
                                         <a href="{{ route('marketplace.lazada.orders.index') }}" class="pe-nav-link">
@@ -347,6 +346,7 @@
                     </ul>
                 </li>
                 @endif
+                AKHIR MARKETPLACE --}}
 
                 {{-- Chat menu (and its whole "Pengaturan" sub-tree) only
                          shown while the user has at least one active,
