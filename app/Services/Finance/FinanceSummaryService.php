@@ -4,6 +4,8 @@ namespace App\Services\Finance;
 
 use App\Models\Deposit;
 use App\Models\LedgerEntry;
+use App\Models\ReferralCode;
+use App\Models\ReferralCodeUsage;
 use App\Models\Subscription;
 use App\Models\Wallet;
 use App\Models\WalletWithdrawal;
@@ -121,6 +123,35 @@ class FinanceSummaryService
             ->first();
 
         return ['count' => (int) $row->total_count, 'amount' => (float) $row->total_amount];
+    }
+
+    /** Pemakaian referral di periode ini (difilter per pemilik kode / referrer). */
+    public function referralUsages(): Builder
+    {
+        return $this->inRange(ReferralCodeUsage::query())
+            ->when($this->userId, fn ($q) => $q->whereIn('referral_code_id', ReferralCode::query()->select('id')->where('user_id', $this->userId)));
+    }
+
+    /** Komisi cair (available) vs tertahan (pending), jumlah referrer, jumlah pemakaian. */
+    public function referrals(): array
+    {
+        $row = $this->referralUsages()
+            ->selectRaw("COUNT(*) AS total_count,
+                COALESCE(SUM(CASE WHEN status = 'available' THEN commission_amount ELSE 0 END), 0) AS paid,
+                COALESCE(SUM(CASE WHEN status = 'pending' THEN commission_amount ELSE 0 END), 0) AS held")
+            ->first();
+
+        $referrers = ReferralCode::query()
+            ->whereIn('id', $this->referralUsages()->select('referral_code_id'))
+            ->distinct()
+            ->count('user_id');
+
+        return [
+            'paid' => (float) $row->paid,
+            'held' => (float) $row->held,
+            'referrers' => (int) $referrers,
+            'usages' => (int) $row->total_count,
+        ];
     }
 
     /**

@@ -1,33 +1,47 @@
-{{-- Kartu ringkasan Data Deposit -- semua mengikuti filter tanggal & user (FinanceSummaryService). --}}
+{{--
+    Kartu ringkasan Data Deposit -- semua mengikuti filter tanggal & user
+    (App\Services\Finance\FinanceSummaryService). Satu baris per bagian,
+    label dibuat singkat supaya cepat dibaca & dicocokkan dengan Duitku.
+--}}
 @php
     $rp = fn ($value) => 'Rp '.number_format((float) $value, 0, ',', '.');
     $n = fn ($value) => number_format((int) $value, 0, ',', '.');
-    [$dep, $dis, $sales] = [$stats['deposit'], $stats['disbursement'], $stats['sales']];
+    $trx = fn ($value) => $n($value).' trx';
+    [$dep, $dis, $sales, $ref] = [$stats['deposit'], $stats['disbursement'], $stats['sales'], $stats['referral']];
+    $sections = [
+        'Deposit' => [
+            ['Total', $rp($dep['total']['amount']), 'ri-file-list-3-line', 'primary', $trx($dep['total']['count'])],
+            ['Sukses', $rp($dep['success']['amount']), 'ri-wallet-3-line', 'success', $trx($dep['success']['count'])],
+            ['Pending', $rp($dep['pending']['amount']), 'ri-time-line', 'warning', $trx($dep['pending']['count'])],
+            ['Failed', $rp($dep['failed']['amount']), 'ri-error-warning-line', 'danger', $trx($dep['failed']['count'])],
+            ['Expired', $rp($dep['expired']['amount']), 'ri-timer-flash-line', 'secondary', $trx($dep['expired']['count'])],
+        ],
+        'Disbursement' => [
+            ['Total', $rp($dis['total']['amount']), 'ri-bank-line', 'primary', $trx($dis['total']['count'])],
+            ['Terkirim', $rp($dis['success']['net']), 'ri-checkbox-circle-line', 'success', $trx($dis['success']['count'])],
+            ['Fee', $rp($dis['fee']), 'ri-percent-line', 'info', 'dari yang terkirim'],
+            ['Pending', $rp($dis['pending']['amount']), 'ri-time-line', 'warning', $trx($dis['pending']['count'])],
+            ['Gagal', $rp($dis['failed']['amount']), 'ri-close-circle-line', 'danger', $trx($dis['failed']['count'])],
+        ],
+        'Penjualan & Saldo' => [
+            ['Penjualan Paket', $rp($sales['amount']), 'ri-shopping-bag-3-line', 'primary', $n($sales['count']).' paket'],
+            ['Deposit User', $rp($dep['success']['amount']), 'ri-download-2-line', 'success', 'deposit sukses'],
+            ['Sisa Saldo User', $rp($stats['user_balance']), 'ri-safe-2-line', 'secondary', $dateTo && ! $dateTo->isFuture() ? 'per '.$dateTo->translatedFormat('d M Y') : 'per hari ini'],
+        ],
+        'Referral' => [
+            ['Komisi Cair', $rp($ref['paid']), 'ri-hand-coin-line', 'success', null],
+            ['Komisi Tertahan', $rp($ref['held']), 'ri-time-line', 'warning', null],
+            ['Pembagi Referral', $n($ref['referrers']), 'ri-share-forward-line', 'info', 'user'],
+            ['Pemakaian Referral', $n($ref['usages']), 'ri-user-add-line', 'primary', 'kali'],
+        ],
+    ];
 @endphp
 
-{{-- 5 kartu sejajar di layar lebar (col-xl), jumlah transaksi + nominal per status untuk dicocokkan dengan dashboard Duitku. --}}
-@php $five = 'col-12 col-sm-6 col-xl'; @endphp
-<h6 class="text-muted text-uppercase small mb-2">Deposit</h6>
-<div class="row g-3 mb-4">
-    @include('superadmin.deposit._stat-card', ['col' => $five, 'label' => 'Total Deposit', 'value' => $rp($dep['total']['amount']), 'icon' => 'ri-file-list-3-line', 'tone' => 'primary', 'sub' => $n($dep['total']['count']).' transaksi, semua status'])
-    @include('superadmin.deposit._stat-card', ['col' => $five, 'label' => 'Sukses', 'value' => $rp($dep['success']['amount']), 'icon' => 'ri-wallet-3-line', 'tone' => 'success', 'sub' => $n($dep['success']['count']).' transaksi'])
-    @include('superadmin.deposit._stat-card', ['col' => $five, 'label' => 'Pending', 'value' => $rp($dep['pending']['amount']), 'icon' => 'ri-time-line', 'tone' => 'warning', 'sub' => $n($dep['pending']['count']).' transaksi'])
-    @include('superadmin.deposit._stat-card', ['col' => $five, 'label' => 'Failed', 'value' => $rp($dep['failed']['amount']), 'icon' => 'ri-error-warning-line', 'tone' => 'danger', 'sub' => $n($dep['failed']['count']).' transaksi'])
-    @include('superadmin.deposit._stat-card', ['col' => $five, 'label' => 'Expired', 'value' => $rp($dep['expired']['amount']), 'icon' => 'ri-timer-flash-line', 'tone' => 'secondary', 'sub' => $n($dep['expired']['count']).' transaksi'])
-</div>
-
-<h6 class="text-muted text-uppercase small mb-2">Disbursement (Tarik Saldo)</h6>
-<div class="row g-3 mb-4">
-    @include('superadmin.deposit._stat-card', ['col' => $five, 'label' => 'Total Disbursement', 'value' => $rp($dis['total']['amount']), 'icon' => 'ri-bank-line', 'tone' => 'primary', 'sub' => $n($dis['total']['count']).' pengajuan, semua status'])
-    @include('superadmin.deposit._stat-card', ['col' => $five, 'label' => 'Sukses (dikirim ke rekening)', 'value' => $rp($dis['success']['net']), 'icon' => 'ri-checkbox-circle-line', 'tone' => 'success', 'sub' => $n($dis['success']['count']).' transaksi · saldo dipotong '.$rp($dis['success']['amount'])])
-    @include('superadmin.deposit._stat-card', ['col' => $five, 'label' => 'Jumlah Fee', 'value' => $rp($dis['fee']), 'icon' => 'ri-percent-line', 'tone' => 'info', 'sub' => 'dari penarikan sukses'])
-    @include('superadmin.deposit._stat-card', ['col' => $five, 'label' => 'Pending', 'value' => $rp($dis['pending']['amount']), 'icon' => 'ri-time-line', 'tone' => 'warning', 'sub' => $n($dis['pending']['count']).' pengajuan (menunggu / diproses / dicek)'])
-    @include('superadmin.deposit._stat-card', ['col' => $five, 'label' => 'Gagal', 'value' => $rp($dis['failed']['amount']), 'icon' => 'ri-close-circle-line', 'tone' => 'danger', 'sub' => $n($dis['failed']['count']).' pengajuan (gagal / ditolak / dibatalkan)'])
-</div>
-
-<h6 class="text-muted text-uppercase small mb-2">Penjualan & Saldo User</h6>
-<div class="row g-3 mb-4">
-    @include('superadmin.deposit._stat-card', ['label' => 'Total Penjualan Paket', 'value' => $rp($sales['amount']), 'icon' => 'ri-shopping-bag-3-line', 'tone' => 'primary', 'sub' => $n($sales['count']).' paket terjual'])
-    @include('superadmin.deposit._stat-card', ['label' => 'Total Deposit User', 'value' => $rp($dep['success']['amount']), 'icon' => 'ri-download-2-line', 'tone' => 'success', 'sub' => 'deposit sukses di periode ini'])
-    @include('superadmin.deposit._stat-card', ['label' => 'Total Sisa Saldo User', 'value' => $rp($stats['user_balance']), 'icon' => 'ri-safe-2-line', 'tone' => 'secondary', 'sub' => $dateTo && ! $dateTo->isFuture() ? 'per '.$dateTo->translatedFormat('d M Y') : 'per hari ini'])
-</div>
+@foreach ($sections as $title => $cards)
+    <h6 class="text-muted text-uppercase small mb-2">{{ $title }}</h6>
+    <div class="row g-2 mb-3">
+        @foreach ($cards as [$label, $value, $icon, $tone, $sub])
+            @include('superadmin.deposit._stat-card', compact('label', 'value', 'icon', 'tone', 'sub'))
+        @endforeach
+    </div>
+@endforeach

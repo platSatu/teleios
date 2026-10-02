@@ -9,7 +9,7 @@
         App\Services\Finance\FinanceSummaryService.
     --}}
     @php
-        $tabs = ['deposit' => ['Data Deposit', 'ri-wallet-3-line'], 'disbursement' => ['Data Disbursement', 'ri-bank-line'], 'penjualan' => ['Penjualan Paket', 'ri-shopping-bag-3-line']];
+        $tabs = ['deposit' => ['Data Deposit', 'ri-wallet-3-line'], 'disbursement' => ['Data Disbursement', 'ri-bank-line'], 'penjualan' => ['Penjualan Paket', 'ri-shopping-bag-3-line'], 'referral' => ['Referral', 'ri-share-forward-line']];
         $keep = request()->only(['date_from', 'date_to', 'user_id']);
     @endphp
 
@@ -29,16 +29,16 @@
         <div class="card-body">
             <form method="GET" class="row g-2 align-items-end">
                 <input type="hidden" name="tab" value="{{ $tab }}">
-                <div class="col-12 col-md-6 col-xl-3">
+                <div class="col-12 col-md-6 col-xl-2">
                     <label class="form-label small text-muted mb-1">Cari</label>
-                    <input type="text" name="search" class="form-control" maxlength="100" placeholder="Referensi / nama / email..." value="{{ request('search') }}">
+                    <input type="text" name="search" class="form-control" maxlength="100" placeholder="Nama / email / kode..." value="{{ request('search') }}">
                 </div>
                 <div class="col-6 col-md-3 col-xl-2">
                     <label class="form-label small text-muted mb-1">Status</label>
                     <select name="status" class="form-select">
                         <option value="">Semua status</option>
-                        @foreach ($statuses as $status)
-                            <option value="{{ $status }}" @selected(request('status') === $status)>{{ $tab === 'disbursement' ? \App\Models\WalletWithdrawal::STATUS_LABELS[$status] : $status }}</option>
+                        @foreach ($statuses as $value => $label)
+                            <option value="{{ $value }}" @selected(request('status') === (string) $value)>{{ $label }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -59,10 +59,11 @@
                     <label class="form-label small text-muted mb-1">Sampai tanggal</label>
                     <input type="date" name="date_to" class="form-control @error('date_to') is-invalid @enderror" value="{{ request('date_to') }}">
                 </div>
-                <div class="col-12 col-md-4 col-xl-1 d-flex gap-2">
-                    <button type="submit" class="btn btn-outline-primary w-100 text-nowrap"><i class="ri-search-line"></i> Filter</button>
+                {{-- Tombol punya kolom sendiri (tidak terdorong ke pojok): Filter + Reset berdampingan. --}}
+                <div class="col-12 col-md-4 col-xl-2 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary flex-grow-1 text-nowrap"><i class="ri-search-line"></i> Filter</button>
                     @if (request()->hasAny(['search', 'status', 'user_id', 'date_from', 'date_to']))
-                        <a href="{{ route('deposits.index', ['tab' => $tab]) }}" class="btn btn-light" title="Reset filter">&times;</a>
+                        <a href="{{ route('deposits.index', ['tab' => $tab]) }}" class="btn btn-outline-danger text-nowrap" title="Hapus semua filter"><i class="ri-close-line"></i> Reset</a>
                     @endif
                 </div>
                 @if ($errors->any())

@@ -35,7 +35,10 @@ use Illuminate\View\View;
  */
 class DepositController extends Controller
 {
-    private const TABS = ['deposit', 'disbursement', 'penjualan'];
+    private const TABS = ['deposit', 'disbursement', 'penjualan', 'referral'];
+
+    /** Status komisi referral (lihat superadmin/referral-code/_status). */
+    private const REFERRAL_STATUSES = ['pending' => 'Tertahan', 'available' => 'Cair', 'cancelled' => 'Dibatalkan'];
 
     /**
      * Data Deposit superadmin (2 Oktober 2026): 3 tab (Deposit, Disbursement,
@@ -65,15 +68,18 @@ class DepositController extends Controller
             'disbursement' => $summary->disbursements(),
             'sales' => $summary->packageSales(),
             'user_balance' => $summary->userBalance(),
+            'referral' => $summary->referrals(),
         ];
 
+        // Pilihan filter status per tab: [nilai => label].
         $statuses = match ($tab) {
-            'deposit' => collect(['PENDING', 'SUCCESS', 'FAILED', 'EXPIRED'])->merge($stats['deposit']['statuses'])->unique()->values()->all(),
-            'disbursement' => array_keys(WalletWithdrawal::STATUS_LABELS),
-            'penjualan' => ['ACTIVE', 'EXPIRED', 'CANCELLED'],
+            'deposit' => collect(['PENDING', 'SUCCESS', 'FAILED', 'EXPIRED'])->merge($stats['deposit']['statuses'])->unique()->mapWithKeys(fn ($s) => [$s => $s])->all(),
+            'disbursement' => WalletWithdrawal::STATUS_LABELS,
+            'penjualan' => ['ACTIVE' => 'ACTIVE', 'EXPIRED' => 'EXPIRED', 'CANCELLED' => 'CANCELLED'],
+            'referral' => self::REFERRAL_STATUSES,
         };
 
-        $status = in_array($validated['status'] ?? null, $statuses, true) ? $validated['status'] : null;
+        $status = array_key_exists((string) ($validated['status'] ?? ''), $statuses) ? $validated['status'] : null;
         $like = isset($validated['search']) && $validated['search'] !== ''
             ? '%'.addcslashes($validated['search'], '%_\\').'%'
             : null;
@@ -106,6 +112,10 @@ class DepositController extends Controller
                     ->where('account_name', 'like', $like)
                     ->orWhere('duitku_disburse_id', 'like', $like)
                     ->orWhereHas('requestedBy', $userMatches))),
+            'referral' => $summary->referralUsages()->with(['referralCode.user', 'usedBy', 'subscription.package'])
+                ->when($like, fn ($q) => $q->where(fn ($q) => $q
+                    ->whereHas('referralCode', fn ($q) => $q->where('code', 'like', $like)->orWhereHas('user', $userMatches))
+                    ->orWhereHas('usedBy', $userMatches))),
             'penjualan' => $summary->inRange(Subscription::query()->with(['user', 'package']))
                 ->when($userId, fn ($q) => $q->where('user_id', $userId))
                 ->when($like, fn ($q) => $q->where(fn ($q) => $q
