@@ -5,6 +5,8 @@
     punya input name="amount". Variabel: $withdrawalFee (int Rupiah).
 --}}
 @php $minAmount = $withdrawalFee + \App\Services\Wallet\WalletWithdrawalService::MIN_TRANSFER; @endphp
+{{-- Pembanding saja: server menolak kalau biaya sudah berubah sejak halaman dibuka. --}}
+<input type="hidden" name="expected_fee" value="{{ $withdrawalFee }}">
 <div class="small mt-1 js-fee-preview" data-fee="{{ $withdrawalFee }}" data-min-net="{{ \App\Services\Wallet\WalletWithdrawalService::MIN_TRANSFER }}">
     <div>Biaya penarikan: <strong>Rp {{ number_format($withdrawalFee, 0, ',', '.') }}</strong></div>
     <div>Diterima di rekening: <strong class="js-fee-net">-</strong></div>

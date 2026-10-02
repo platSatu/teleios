@@ -52,6 +52,7 @@ class WalletWithdrawalService
         ?string $companyId,
         ?string $branchOfficeId,
         ?string $bankAccountId = null,
+        ?int $expectedFee = null,
     ): WalletWithdrawal {
         // Rupiah utuh saja: Duitku mentransfer dalam integer, jadi pecahan
         // ditolak di depan daripada dibulatkan diam-diam.
@@ -61,10 +62,18 @@ class WalletWithdrawalService
 
         $amount = (int) $amount;
 
-        return DB::transaction(function () use ($wallet, $requestedBy, $amount, $bankCode, $bankAccount, $accountName, $purpose, $companyId, $branchOfficeId, $bankAccountId) {
+        return DB::transaction(function () use ($wallet, $requestedBy, $amount, $bankCode, $bankAccount, $accountName, $purpose, $companyId, $branchOfficeId, $bankAccountId, $expectedFee) {
             $lockedWallet = Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
 
+            // Biaya selalu dari database, bukan dari form. $expectedFee hanya
+            // dipakai untuk memastikan biaya yang dilihat user di form masih
+            // sama (mis. superadmin baru saja mengubahnya) -- kalau beda, batal.
             $fee = DuitkuDisbursementSetting::current()->withdrawalFee();
+
+            if ($expectedFee !== null && $expectedFee !== $fee) {
+                throw new RuntimeException('Biaya penarikan baru saja berubah menjadi Rp '.number_format($fee, 0, ',', '.').'. Silakan cek kembali jumlah yang akan diterima, lalu ajukan ulang.');
+            }
+
             $net = $amount - $fee;
 
             if ($net < self::MIN_TRANSFER) {

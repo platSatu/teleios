@@ -77,6 +77,8 @@ class BranchWithdrawalController extends Controller
             'bank_account' => ['required', 'string', 'max:50'],
             'account_name' => ['required', 'string', 'max:255'],
             'purpose' => ['nullable', 'string', 'max:255'],
+            // Biaya yang ditampilkan di form saat diajukan (lihat _fee-preview); hanya pembanding.
+            'expected_fee' => ['required', 'integer', 'min:0'],
         ]);
 
         if ($failed = $this->failedTransactionPin($request)) {
@@ -107,6 +109,7 @@ class BranchWithdrawalController extends Controller
                 $validated['purpose'] ?? null,
                 $company->id,
                 $branch->id,
+                expectedFee: (int) $validated['expected_fee'],
             );
         } catch (RuntimeException $e) {
             return back()->withInput()->with('error', $e->getMessage());

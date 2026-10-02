@@ -59,6 +59,8 @@ class WalletWithdrawalController extends Controller
         $validated = $request->validate([
             'amount' => ['required', 'integer', 'min:'.WalletWithdrawalService::MIN_TRANSFER],
             'purpose' => ['nullable', 'string', 'max:255'],
+            // Biaya yang ditampilkan di form saat diajukan (lihat _fee-preview); hanya pembanding.
+            'expected_fee' => ['required', 'integer', 'min:0'],
         ]);
 
         if ($failed = $this->failedTransactionPin($request)) {
@@ -99,6 +101,7 @@ class WalletWithdrawalController extends Controller
                 $membership?->company_id,
                 $membership?->branch_office_id,
                 $account->id,
+                expectedFee: (int) $validated['expected_fee'],
             );
         } catch (RuntimeException $e) {
             return back()->withInput($request->except('pin'))->with('error', $e->getMessage());
