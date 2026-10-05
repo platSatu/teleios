@@ -36,6 +36,7 @@ use App\Http\Controllers\Tagihan\TagihanDuitkuCallbackController;
 // DuitkuCallbackController and App\Services\Payment\DuitkuService
 // (builds the callbackUrl sent to Duitku via route('deposit.duitku.callback')).
 Route::post('/duitku/callback', [DuitkuCallbackController::class, 'handle'])
+    ->middleware('throttle:120,1')
     ->name('deposit.duitku.callback');
 
 // Webhook Duitku terpisah khusus fitur Tagihan (bukan dipakai bareng
@@ -46,6 +47,7 @@ Route::post('/duitku/callback', [DuitkuCallbackController::class, 'handle'])
 // sendiri, bukan numpang lookup Deposit. Sama pola stateless/no-CSRF
 // dan sama-sama trust dari signature check di dalam controller.
 Route::post('/tagihan/duitku/callback', [TagihanDuitkuCallbackController::class, 'handle'])
+    ->middleware('throttle:120,1')
     ->name('tagihan.duitku.callback');
 
 // Server-to-server webhook the Go backend posts to every time a WhatsApp
@@ -207,3 +209,16 @@ Route::middleware('auth:sanctum')->group(function () {
     ]);
 
 });
+
+// Live Chat Widget (6 Oktober 2026) -- API publik untuk iframe chat
+// (pengunjung website, tanpa login). Pengunjung dikenali dari header
+// X-Visitor-Token. Limit per IP dibuat longgar untuk polling (beberapa
+// pengunjung bisa berbagi 1 IP kantor). Lihat docs/live-chat-widget.md.
+Route::prefix('chat-widget/{key}')
+    ->controller(\App\Http\Controllers\Chat\Widget\ChatWidgetPublicController::class)
+    ->group(function () {
+        Route::post('/session', 'session')->middleware('throttle:30,1,chat-widget-session');
+        Route::get('/messages', 'messages')->middleware('throttle:240,1,chat-widget-poll');
+        Route::post('/messages', 'send')->middleware('throttle:30,1,chat-widget-send');
+        Route::post('/handover', 'handover')->middleware('throttle:10,1,chat-widget-handover');
+    });

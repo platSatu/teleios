@@ -28,8 +28,9 @@ class SecurityHeaders
             'Permissions-Policy' => 'camera=(), microphone=(), geolocation=()',
         ];
 
-        // Form publik boleh di-embed pelanggan di website mereka (iframe).
-        if (! $request->routeIs('form.public.*')) {
+        // Form publik & Live Chat Widget boleh di-embed pelanggan di website
+        // mereka (iframe). Widget dibatasi lagi oleh CSP frame-ancestors.
+        if (! $request->routeIs('form.public.*', 'chat-widget.frame')) {
             $headers['X-Frame-Options'] = 'SAMEORIGIN';
         }
 

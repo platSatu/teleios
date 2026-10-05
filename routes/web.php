@@ -211,6 +211,12 @@ Route::get('/', function () {
 Route::get('/dokumentasi', [PublicDocumentationController::class, 'index'])
     ->name('dokumentasi.index');
 
+// Live Chat Widget (6 Oktober 2026) -- jendela chat publik yang dibuka
+// public/widget.js di dalam iframe. Lihat docs/live-chat-widget.md.
+Route::get('/chat-widget/{key}', [\App\Http\Controllers\Chat\Widget\ChatWidgetPublicController::class, 'frame'])
+    ->middleware('throttle:60,1,chat-widget-frame')
+    ->name('chat-widget.frame');
+
 // Duitku's server-to-server webhook now lives in routes/api.php as
 // POST /api/duitku/callback (moved there — the "api" route group is
 // stateless by default, no CSRF middleware to exempt, and it matches
@@ -1125,6 +1131,28 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::post('/', 'store')->name('chat.ai-bots.store');
                 Route::put('/{id}', 'update')->name('chat.ai-bots.update');
                 Route::delete('/{id}', 'destroy')->name('chat.ai-bots.destroy');
+            });
+
+        // Live Chat Widget (6 Oktober 2026) -- lihat docs/live-chat-widget.md.
+        Route::prefix('widgets')
+            ->controller(\App\Http\Controllers\Chat\Widget\ChatWidgetController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('chat.widgets.index');
+                Route::post('/', 'store')->name('chat.widgets.store');
+                Route::put('/{id}', 'update')->name('chat.widgets.update');
+                Route::delete('/{id}', 'destroy')->name('chat.widgets.destroy');
+                Route::post('/{id}/regenerate-key', 'regenerateKey')->name('chat.widgets.regenerate-key');
+            });
+
+        Route::prefix('widget-inbox')
+            ->controller(\App\Http\Controllers\Chat\Widget\ChatWidgetInboxController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('chat.widget-inbox.index');
+                Route::get('/conversations', 'conversations')->name('chat.widget-inbox.conversations');
+                Route::get('/{id}/messages', 'messages')->name('chat.widget-inbox.messages');
+                Route::post('/{id}/reply', 'reply')->name('chat.widget-inbox.reply');
+                Route::post('/{id}/take-over', 'takeOver')->name('chat.widget-inbox.take-over');
+                Route::post('/{id}/close', 'close')->name('chat.widget-inbox.close');
             });
     });
 

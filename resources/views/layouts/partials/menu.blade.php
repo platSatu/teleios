@@ -530,6 +530,21 @@
                                             </a>
                                         </li>
                                     @endif
+                                    {{-- Live Chat Widget (6 Oktober 2026), lihat docs/live-chat-widget.md --}}
+                                    @if ($canSeeMenu('chat.widgets.index'))
+                                        <li class="pe-slide-item">
+                                            <a href="{{ route('chat.widgets.index') }}" class="pe-nav-link">
+                                                Live Chat Widget
+                                            </a>
+                                        </li>
+                                    @endif
+                                    @if ($canSeeMenu('chat.widget-inbox.index'))
+                                        <li class="pe-slide-item">
+                                            <a href="{{ route('chat.widget-inbox.index') }}" class="pe-nav-link">
+                                                Live Chat Inbox
+                                            </a>
+                                        </li>
+                                    @endif
                                     {{-- Fitur #2 — daftar nomor yang
                                              berhenti berlangganan broadcast.
                                              See App\Http\Controllers\Chat\
