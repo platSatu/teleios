@@ -145,12 +145,11 @@ class DepositController extends Controller
 
         $checkoutTimeoutMinutes = (int) config('services.duitku.checkout_timeout_minutes', 10);
 
-        // Biaya QRIS hanya ditampilkan kalau superadmin mengaktifkan
-        // "dibebankan ke customer" (Pengaturan Duitku). Angka final tetap
-        // dihitung ulang di server saat lanjut ke Duitku.
-        $duitkuSetting = DuitkuSetting::current();
-        $qrisFee = $duitkuSetting->qrisFeeFor((int) round((float) $deposit->amount));
-        $qrisFeePercent = (float) $duitkuSetting->qris_fee_percent;
+        // Keterangan biaya QRIS hanya tampil kalau superadmin mengaktifkan
+        // "dibebankan ke customer" (Pengaturan Duitku). Biaya dipotong dari
+        // saldo SETELAH pembayaran QRIS berhasil (DuitkuCallbackController).
+        $qrisFeePercent = DuitkuSetting::current()->activeQrisFeePercent();
+        $qrisFee = DuitkuSetting::qrisFeeFor((int) round((float) $deposit->amount), $qrisFeePercent);
 
         return view('user.deposit.checkout', compact('deposit', 'checkoutTimeoutMinutes', 'qrisFee', 'qrisFeePercent'));
     }
@@ -239,20 +238,22 @@ class DepositController extends Controller
 
         $duitku = DuitkuService::make();
 
-        // Biaya QRIS dihitung di server dari pengaturan superadmin (bukan dari
-        // form), disimpan di deposit dalam transaksi + lock supaya klik ganda
-        // tidak menulis angka berbeda. Pilih "metode lain" = tanpa biaya.
+        // Simpan tarif QRIS yang BERLAKU saat customer melihat keterangannya,
+        // supaya perubahan setting setelah ini tidak mengubah potongan untuk
+        // deposit ini. Biaya baru dipotong di callback kalau ternyata QRIS.
         $duitkuSetting = DuitkuSetting::current();
-        $payWithQris = $duitkuSetting->qris_fee_to_customer && $request->input('method') === 'qris';
 
-        $deposit = DB::transaction(function () use ($deposit, $duitkuSetting, $payWithQris) {
+        $deposit = DB::transaction(function () use ($deposit, $duitkuSetting) {
             $locked = Deposit::whereKey($deposit->id)->lockForUpdate()->firstOrFail();
-            $fee = $payWithQris ? $duitkuSetting->qrisFeeFor((int) round((float) $locked->amount)) : 0;
 
             $locked->update([
-                'fee_amount' => $fee,
-                'payment_amount' => (int) round((float) $locked->amount) + $fee,
-                'payment_method' => $payWithQris ? $duitkuSetting->qris_payment_code : null,
+                'fee_amount' => 0,
+                'payment_amount' => (int) round((float) $locked->amount),
+                'payment_method' => null,
+                'metadata' => array_merge((array) $locked->metadata, [
+                    'qris_fee_percent' => $duitkuSetting->activeQrisFeePercent(),
+                    'qris_payment_code' => $duitkuSetting->qris_payment_code,
+                ]),
             ]);
 
             return $locked->fresh();

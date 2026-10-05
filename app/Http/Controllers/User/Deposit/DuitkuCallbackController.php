@@ -5,6 +5,7 @@ namespace App\Http\Controllers\User\Deposit;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Deposit;
+use App\Models\DuitkuSetting;
 use App\Models\PaymentTransaction;
 use App\Models\PaymentWebhook;
 use App\Models\TransactionStatusHistory;
@@ -242,6 +243,25 @@ class DuitkuCallbackController extends Controller
                             null,
                             'DEPOSIT'
                         );
+
+                        // Biaya QRIS dibebankan ke customer (5 Oktober 2026): tarif
+                        // disimpan saat checkout (metadata), dipotong hanya kalau
+                        // pembayarannya memang QRIS (paymentCode dari Duitku).
+                        $qrisFee = $this->qrisFeeFor($deposit, $notification['paymentCode'] ?? null);
+
+                        if ($qrisFee > 0) {
+                            WalletLedgerService::debit(
+                                $wallet,
+                                (float) $qrisFee,
+                                Deposit::class,
+                                $deposit->id,
+                                'Biaya QRIS top-up: ' . $deposit->reference_number,
+                                null,
+                                'DEPOSIT_QRIS_FEE'
+                            );
+
+                            $deposit->update(['fee_amount' => $qrisFee]);
+                        }
                     }
 
                     AuditLog::create([
@@ -416,5 +436,19 @@ class DuitkuCallbackController extends Controller
         // acknowledge the callback — anything else, it treats as a
         // failure and retries.
         return response('OK', 200);
+    }
+
+    /** Biaya QRIS untuk deposit ini (0 kalau bukan QRIS / saklar mati saat checkout). */
+    private function qrisFeeFor(Deposit $deposit, ?string $paymentCode): int
+    {
+        $meta = (array) $deposit->metadata;
+        $percent = (float) ($meta['qris_fee_percent'] ?? 0);
+        $qrisCode = (string) ($meta['qris_payment_code'] ?? '');
+
+        if ($percent <= 0 || $qrisCode === '' || $paymentCode === null || strcasecmp($paymentCode, $qrisCode) !== 0) {
+            return 0;
+        }
+
+        return DuitkuSetting::qrisFeeFor((int) round((float) $deposit->amount), $percent);
     }
 }

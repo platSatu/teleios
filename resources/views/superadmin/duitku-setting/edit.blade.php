@@ -43,11 +43,11 @@
                         </div>
 
                         {{-- Biaya QRIS (5 Oktober 2026): Duitku tidak mengizinkan biaya QRIS dibebankan ke customer
-                             dari dashboard-nya, jadi kalau saklar ini aktif, biaya ditambahkan oleh sistem saat top up. --}}
+                             dari dashboard-nya, jadi kalau saklar ini aktif, biaya dipotong dari saldo setelah pembayaran QRIS berhasil. --}}
                         <div class="card border mb-4">
                             <div class="card-body">
                                 <h6 class="mb-1">Biaya QRIS</h6>
-                                <p class="text-muted small mb-3">Kalau aktif, customer yang top up lewat QRIS membayar nominal + biaya QRIS. Saldo yang masuk tetap sesuai nominal top up.</p>
+                                <p class="text-muted small mb-3">Kalau aktif, top up yang dibayar lewat QRIS dipotong biaya QRIS dari saldonya (contoh 0,7%: bayar Rp 50.000, saldo masuk Rp 49.650). Customer diberi tahu di halaman checkout.</p>
                                 <div class="form-check form-switch mb-3">
                                     <input class="form-check-input" type="checkbox" role="switch" id="qris_fee_to_customer" name="qris_fee_to_customer" value="1"
                                         @checked(old('qris_fee_to_customer', $setting->qris_fee_to_customer))>
