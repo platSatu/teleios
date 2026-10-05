@@ -131,13 +131,14 @@ class DuitkuCallbackController extends Controller
         ]);
 
         // Nominal di callback (ikut ditandatangani Duitku) wajib sama dengan
-        // nominal deposit -- kalau beda, saldo TIDAK ditambahkan.
-        if ((int) round((float) ($notification['amount'] ?? 0)) !== (int) round((float) $deposit->amount)) {
+        // total yang ditagihkan (top up + biaya QRIS kalau ada) -- kalau beda,
+        // saldo TIDAK ditambahkan. Saldo yang masuk tetap $deposit->amount.
+        if ((int) round((float) ($notification['amount'] ?? 0)) !== $deposit->chargedAmount()) {
             Log::warning('duitku-callback: amount mismatch, not crediting', [
                 'webhook_id' => $webhook->id,
                 'deposit_id' => $deposit->id,
                 'callback_amount' => $notification['amount'] ?? null,
-                'deposit_amount' => $deposit->amount,
+                'deposit_amount' => $deposit->chargedAmount(),
             ]);
 
             $webhook->update(['event_type' => 'PAYMENT_ERROR', 'processing_error' => 'Amount mismatch']);
@@ -153,7 +154,7 @@ class DuitkuCallbackController extends Controller
         // jaringan tidak boleh menahan lock baris deposit. Kalau belum
         // terkonfirmasi, balas non-OK supaya Duitku mengirim ulang nanti.
         if ($resultCode === '00' && $deposit->status !== 'SUCCESS'
-            && ($reason = $duitku->unconfirmedPaymentReason($deposit->reference_number, (int) round((float) $deposit->amount)))) {
+            && ($reason = $duitku->unconfirmedPaymentReason($deposit->reference_number, $deposit->chargedAmount()))) {
             Log::warning('duitku-callback: payment not confirmed by Duitku, not crediting', [
                 'webhook_id' => $webhook->id,
                 'deposit_id' => $deposit->id,

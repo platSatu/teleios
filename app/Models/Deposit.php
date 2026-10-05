@@ -21,6 +21,8 @@ class Deposit extends Model
         'reference_number',
         'idempotency_key',
         'amount',
+        'fee_amount',
+        'payment_amount',
         'currency',
         'payment_method',
         'payment_provider',
@@ -37,6 +39,8 @@ class Deposit extends Model
 
     protected $casts = [
         'amount' => 'decimal:2',
+        'fee_amount' => 'decimal:2',
+        'payment_amount' => 'decimal:2',
         'paid_at' => 'datetime',
         'expires_at' => 'datetime',
         'reminder_sent_at' => 'datetime',
@@ -115,5 +119,14 @@ class Deposit extends Model
             LedgerTransaction::class,
             'reference'
         );
+    }
+
+    /**
+     * Total yang ditagihkan ke Duitku: nominal top up + biaya QRIS (kalau
+     * dibebankan ke customer). Saldo yang masuk tetap $this->amount.
+     */
+    public function chargedAmount(): int
+    {
+        return (int) round((float) ($this->payment_amount ?? $this->amount));
     }
 }

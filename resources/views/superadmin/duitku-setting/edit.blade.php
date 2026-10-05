@@ -42,6 +42,36 @@
                             </div>
                         </div>
 
+                        {{-- Biaya QRIS (5 Oktober 2026): Duitku tidak mengizinkan biaya QRIS dibebankan ke customer
+                             dari dashboard-nya, jadi kalau saklar ini aktif, biaya ditambahkan oleh sistem saat top up. --}}
+                        <div class="card border mb-4">
+                            <div class="card-body">
+                                <h6 class="mb-1">Biaya QRIS</h6>
+                                <p class="text-muted small mb-3">Kalau aktif, customer yang top up lewat QRIS membayar nominal + biaya QRIS. Saldo yang masuk tetap sesuai nominal top up.</p>
+                                <div class="form-check form-switch mb-3">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="qris_fee_to_customer" name="qris_fee_to_customer" value="1"
+                                        @checked(old('qris_fee_to_customer', $setting->qris_fee_to_customer))>
+                                    <label class="form-check-label" for="qris_fee_to_customer">Biaya QRIS dibebankan ke customer</label>
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-sm-6">
+                                        <label class="form-label">Tarif QRIS (%)</label>
+                                        <input type="number" name="qris_fee_percent" class="form-control @error('qris_fee_percent') is-invalid @enderror"
+                                            min="0" max="10" step="0.01" required value="{{ old('qris_fee_percent', $setting->qris_fee_percent ?? 0.7) }}">
+                                        @error('qris_fee_percent')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <label class="form-label">Kode metode QRIS di Duitku</label>
+                                        <input type="text" name="qris_payment_code" class="form-control text-uppercase @error('qris_payment_code') is-invalid @enderror"
+                                            maxlength="10" required value="{{ old('qris_payment_code', $setting->qris_payment_code ?? 'SQ') }}">
+                                        <div class="form-text">Lihat kolom Metode di Data Deposit untuk pembayaran QRIS sebelumnya (mis. SQ).</div>
+                                        @error('qris_payment_code')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                    </div>
+                                </div>
+                                <div class="form-text text-warning mt-2">Catatan: Bank Indonesia mengimbau biaya QRIS tidak dibebankan ke pembeli. Aktifkan sesuai kebijakan bisnis Anda.</div>
+                            </div>
+                        </div>
+
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <div class="card border">

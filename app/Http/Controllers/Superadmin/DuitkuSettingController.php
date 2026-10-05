@@ -42,12 +42,18 @@ class DuitkuSettingController extends Controller
             'sandbox_api_key' => ['nullable', 'string', 'max:500'],
             'production_merchant_code' => ['nullable', 'string', 'max:100'],
             'production_api_key' => ['nullable', 'string', 'max:500'],
+            'qris_fee_to_customer' => ['nullable', 'boolean'],
+            'qris_fee_percent' => ['required', 'numeric', 'min:0', 'max:10'],
+            'qris_payment_code' => ['required', 'string', 'max:10', 'regex:/^[A-Z0-9]+$/'],
         ]);
 
         $data = [
             'mode' => $validated['mode'],
             'sandbox_merchant_code' => $validated['sandbox_merchant_code'] ?? null,
             'production_merchant_code' => $validated['production_merchant_code'] ?? null,
+            'qris_fee_to_customer' => $request->boolean('qris_fee_to_customer'),
+            'qris_fee_percent' => $validated['qris_fee_percent'],
+            'qris_payment_code' => $validated['qris_payment_code'],
             'updated_by' => $request->user()->id,
         ];
 

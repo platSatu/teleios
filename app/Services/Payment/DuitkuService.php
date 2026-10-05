@@ -103,7 +103,9 @@ class DuitkuService
         $deposit->loadMissing('user');
         $user = $deposit->user;
 
-        $amount = (int) round((float) $deposit->amount);
+        $topup = (int) round((float) $deposit->amount);
+        $fee = (int) round((float) $deposit->fee_amount);
+        $amount = $deposit->chargedAmount(); // top up + biaya QRIS (kalau ada)
         $name = $user?->name ?: 'Customer';
         [$firstName, $lastName] = $this->splitName($name);
         $phone = $user?->handphone ?: '';
@@ -118,13 +120,11 @@ class DuitkuService
             'customerVaName' => $name,
             'email' => $email,
             'phoneNumber' => $phone,
-            'itemDetails' => [
-                [
-                    'name' => 'Top Up Saldo Wallet',
-                    'price' => $amount,
-                    'quantity' => 1,
-                ],
-            ],
+            // Jumlah itemDetails wajib sama dengan paymentAmount.
+            'itemDetails' => array_values(array_filter([
+                ['name' => 'Top Up Saldo Wallet', 'price' => $topup, 'quantity' => 1],
+                $fee > 0 ? ['name' => 'Biaya QRIS', 'price' => $fee, 'quantity' => 1] : null,
+            ])),
             'customerDetail' => [
                 'firstName' => $firstName,
                 'lastName' => $lastName,
@@ -137,6 +137,12 @@ class DuitkuService
             'returnUrl' => route('deposit.duitku.return', $deposit),
             'expiryPeriod' => (int) config('services.duitku.expiry_minutes', 60),
         ];
+
+        // Customer sudah memilih metode di teleios (mis. QRIS): popup Duitku
+        // langsung ke metode itu, tidak pilih ulang.
+        if ($deposit->payment_method) {
+            $payload['paymentMethod'] = $deposit->payment_method;
+        }
 
         $timestamp = (string) round(microtime(true) * 1000);
         $signature = hash_hmac('sha256', $this->merchantCode . $timestamp, $this->apiKey);

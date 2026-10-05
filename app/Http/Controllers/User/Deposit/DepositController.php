@@ -5,6 +5,7 @@ namespace App\Http\Controllers\User\Deposit;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Deposit;
+use App\Models\DuitkuSetting;
 use App\Models\PaymentTransaction;
 use App\Models\TransactionStatusHistory;
 use App\Services\Payment\DuitkuService;
@@ -144,7 +145,14 @@ class DepositController extends Controller
 
         $checkoutTimeoutMinutes = (int) config('services.duitku.checkout_timeout_minutes', 10);
 
-        return view('user.deposit.checkout', compact('deposit', 'checkoutTimeoutMinutes'));
+        // Biaya QRIS hanya ditampilkan kalau superadmin mengaktifkan
+        // "dibebankan ke customer" (Pengaturan Duitku). Angka final tetap
+        // dihitung ulang di server saat lanjut ke Duitku.
+        $duitkuSetting = DuitkuSetting::current();
+        $qrisFee = $duitkuSetting->qrisFeeFor((int) round((float) $deposit->amount));
+        $qrisFeePercent = (float) $duitkuSetting->qris_fee_percent;
+
+        return view('user.deposit.checkout', compact('deposit', 'checkoutTimeoutMinutes', 'qrisFee', 'qrisFeePercent'));
     }
 
     /**
@@ -231,6 +239,25 @@ class DepositController extends Controller
 
         $duitku = DuitkuService::make();
 
+        // Biaya QRIS dihitung di server dari pengaturan superadmin (bukan dari
+        // form), disimpan di deposit dalam transaksi + lock supaya klik ganda
+        // tidak menulis angka berbeda. Pilih "metode lain" = tanpa biaya.
+        $duitkuSetting = DuitkuSetting::current();
+        $payWithQris = $duitkuSetting->qris_fee_to_customer && $request->input('method') === 'qris';
+
+        $deposit = DB::transaction(function () use ($deposit, $duitkuSetting, $payWithQris) {
+            $locked = Deposit::whereKey($deposit->id)->lockForUpdate()->firstOrFail();
+            $fee = $payWithQris ? $duitkuSetting->qrisFeeFor((int) round((float) $locked->amount)) : 0;
+
+            $locked->update([
+                'fee_amount' => $fee,
+                'payment_amount' => (int) round((float) $locked->amount) + $fee,
+                'payment_method' => $payWithQris ? $duitkuSetting->qris_payment_code : null,
+            ]);
+
+            return $locked->fresh();
+        });
+
         try {
             $result = $duitku->createInvoice($deposit);
         } catch (\Throwable $e) {
@@ -250,7 +277,7 @@ class DepositController extends Controller
                 'reference_id' => $deposit->id,
                 'provider' => 'DUITKU',
                 'provider_transaction_id' => $result['reference'],
-                'amount' => $deposit->amount,
+                'amount' => $deposit->chargedAmount(),
                 'currency' => 'IDR',
                 'status' => 'FAILED',
                 'request_payload' => $result['request_payload'],
@@ -269,7 +296,7 @@ class DepositController extends Controller
                 'reference_id' => $deposit->id,
                 'provider' => 'DUITKU',
                 'provider_transaction_id' => $result['reference'],
-                'amount' => $deposit->amount,
+                'amount' => $deposit->chargedAmount(),
                 'currency' => 'IDR',
                 'status' => 'PENDING',
                 'request_payload' => $result['request_payload'],

@@ -42,6 +42,38 @@
                         </tr>
                     </table>
 
+                    @if ($qrisFee > 0)
+                        {{-- Biaya QRIS dibebankan ke customer (Pengaturan Duitku). Hanya tampilan --
+                             total sebenarnya dihitung ulang di server (DepositController::proceedToDuitku). --}}
+                        <p class="fw-semibold mb-2">Mau bayar pakai apa?</p>
+                        <label class="d-block border rounded-3 p-3 mb-2" style="cursor: pointer;">
+                            <div class="form-check mb-0">
+                                <input class="form-check-input" type="radio" name="method" value="qris" form="proceedForm" checked>
+                                <span class="form-check-label fw-semibold">QRIS</span>
+                            </div>
+                            <table class="table table-sm table-borderless mb-0 mt-2 small">
+                                <tr>
+                                    <td class="text-muted ps-0">Top up</td>
+                                    <td class="text-end pe-0">Rp {{ number_format($deposit->amount, 0, ',', '.') }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted ps-0">Biaya QRIS ({{ rtrim(rtrim(number_format($qrisFeePercent, 2, ',', '.'), '0'), ',') }}%)</td>
+                                    <td class="text-end pe-0">Rp {{ number_format($qrisFee, 0, ',', '.') }}</td>
+                                </tr>
+                                <tr class="border-top">
+                                    <td class="fw-bold ps-0">Total</td>
+                                    <td class="fw-bold text-end pe-0">Rp {{ number_format($deposit->amount + $qrisFee, 0, ',', '.') }}</td>
+                                </tr>
+                            </table>
+                        </label>
+                        <label class="d-block border rounded-3 p-3 mb-4" style="cursor: pointer;">
+                            <div class="form-check mb-0">
+                                <input class="form-check-input" type="radio" name="method" value="other" form="proceedForm">
+                                <span class="form-check-label fw-semibold">Virtual Account / e-wallet</span>
+                            </div>
+                            <div class="text-muted small mt-1">Pilih bank atau e-wallet di langkah berikutnya.</div>
+                        </label>
+                    @else
                     <div class="alert alert-info d-flex align-items-start gap-2 border-0" role="alert">
                         <i class="ri-information-line fs-4"></i>
                         <div class="small">
@@ -52,6 +84,8 @@
                         </div>
                     </div>
 
+                    @endif
+
                     <div class="d-flex gap-2">
                         {{-- Same form the countdown timer below auto-submits on
                              timeout — "Batalkan" and "waktu habis" both end up
@@ -61,10 +95,10 @@
                             @csrf
                             <button type="submit" class="btn btn-light w-100">Batalkan</button>
                         </form>
-                        <form action="{{ route('deposit.checkout.duitku', $deposit) }}" method="POST" class="w-50">
+                        <form action="{{ route('deposit.checkout.duitku', $deposit) }}" method="POST" class="w-50" id="proceedForm">
                             @csrf
                             <button type="submit" class="btn btn-primary w-100 d-flex align-items-center justify-content-center gap-2">
-                                Lanjutkan ke Duitku <i class="ri-arrow-right-line"></i>
+                                {{ $qrisFee > 0 ? 'Bayar Sekarang' : 'Lanjutkan ke Duitku' }} <i class="ri-arrow-right-line"></i>
                             </button>
                         </form>
                     </div>

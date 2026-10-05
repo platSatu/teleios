@@ -37,6 +37,9 @@ class DuitkuSetting extends Model
 
     protected $fillable = [
         'mode',
+        'qris_fee_to_customer',
+        'qris_fee_percent',
+        'qris_payment_code',
         'sandbox_merchant_code',
         'sandbox_api_key',
         'production_merchant_code',
@@ -47,6 +50,8 @@ class DuitkuSetting extends Model
     protected $casts = [
         'sandbox_api_key' => 'encrypted',
         'production_api_key' => 'encrypted',
+        'qris_fee_to_customer' => 'boolean',
+        'qris_fee_percent' => 'decimal:2',
     ];
 
     public function updatedBy(): BelongsTo
@@ -63,6 +68,24 @@ class DuitkuSetting extends Model
     public static function current(): self
     {
         return static::query()->first() ?? static::create(['mode' => self::MODE_SANDBOX]);
+    }
+
+    /**
+     * Biaya QRIS yang dibayar customer untuk top up $amount (Rupiah bulat).
+     * Duitku memotong tarif dari TOTAL yang dibayar, jadi total dihitung
+     * total = ceil(amount / (1 - tarif)) supaya yang diterima tetap utuh
+     * (contoh 0,7%: top up 100.000 -> biaya 705 -> total 100.705).
+     * 0 kalau saklar "dibebankan ke customer" mati.
+     */
+    public function qrisFeeFor(int $amount): int
+    {
+        $rate = (float) $this->qris_fee_percent / 100;
+
+        if (! $this->qris_fee_to_customer || $amount <= 0 || $rate <= 0 || $rate >= 0.5) {
+            return 0;
+        }
+
+        return (int) ceil(round($amount / (1 - $rate), 4)) - $amount;
     }
 
     public function isSandbox(): bool
