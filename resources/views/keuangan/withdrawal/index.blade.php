@@ -37,8 +37,6 @@
                         <input type="hidden" name="branch_office_id" value="{{ $branch->id }}">
                         <div class="col-md-4">
                             <label class="form-label">Jumlah (Rp)</label>
-                            <input type="number" name="amount" class="form-control @error('amount') is-invalid @enderror" min="10000" step="1" value="{{ old('amount') }}" required>
-                            @error('amount')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             @include('wallet.withdrawal._fee-preview')
                         </div>
                         <div class="col-md-4">
