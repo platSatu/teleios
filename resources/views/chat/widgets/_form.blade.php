@@ -16,7 +16,7 @@
 <div class="mb-3">
     <label class="form-label">Domain website</label>
     <textarea name="allowed_domains" class="form-control" rows="2" required placeholder="tokosaya.com">{{ $domains }}</textarea>
-    <div class="form-text">Satu domain per baris. Subdomain ikut diizinkan. Widget tidak akan tampil di website lain.</div>
+    <div class="form-text">Domain website <b>tempat widget dipasang</b> (bukan alamat dashboard ini), mis. <code>konexa.id</code>. Satu domain per baris, subdomain ikut diizinkan. Widget tidak akan tampil di website lain.</div>
 </div>
 
 @if ($isOwner)
