@@ -148,9 +148,8 @@ class PackageController extends Controller
         if ($jwt) {
             $liveCountResolvers['device_count'] = function () use ($jwt, $branch) {
                 try {
-                    return collect(app(\App\Services\Chat\ConnectDeviceService::class)->listDevices($jwt))
-                        ->where('branch_office_id', $branch?->id)
-                        ->count();
+                    // Sama dengan kuota saat tambah device: hanya yang terhubung.
+                    return app(\App\Services\Chat\ConnectDeviceService::class)->connectedCount($jwt, $branch?->id);
                 } catch (\Throwable $e) {
                     return null;
                 }

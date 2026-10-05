@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Chat;
 use App\Exceptions\PackageLimitExceededException;
 use App\Http\Controllers\Concerns\ResolvesCompanyContext;
 use App\Http\Controllers\Controller;
+use App\Models\BranchOffice;
 use App\Services\Chat\ConnectDeviceService;
 use App\Services\Chat\DeviceDirectory;
+use App\Services\Company\CompanyContext;
 use App\Services\PackageLimitService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -73,16 +75,7 @@ class ConnectDeviceController extends Controller
      * AJAX: register a new device and start pairing it. The frontend
      * opens a modal with the returned QR code right after this call.
      *
-     * Package quota guard: "device_count" is a 'stock' metric (see
-     * App\Models\LimitMetric) — checked live against how many devices
-     * this user already has via connectDeviceService->listDevices()
-     * rather than a separately-tracked counter (there's no local devices
-     * table to keep in sync — see the class docblock). Resolving a
-     * company context is best-effort here: this controller is otherwise
-     * purely session/JWT-scoped, not company-scoped, so if a context
-     * can't be resolved the guard simply doesn't apply (fails open,
-     * same as everywhere else PackageLimitService is used) rather than
-     * blocking a device connection outright.
+     * Package quota guard: lihat deviceLimitError().
      */
     public function add(Request $request): JsonResponse
     {
@@ -92,39 +85,10 @@ class ConnectDeviceController extends Controller
             return response()->json(['error' => 'Sesi WhatsApp tidak ditemukan.'], 401);
         }
 
-        try {
-            $context = $this->companyContext($request);
-        } catch (Throwable $e) {
-            $context = null;
-        }
+        [$context, $branch] = $this->activeContext($request);
 
-        // Device selalu milik satu branch (paket & kuota berlaku per
-        // branch). Company tanpa branch belum bisa menambah device.
-        $branch = $context?->activeBranch();
-
-        if ($context && ! $branch) {
-            return response()->json(['error' => 'Buat branch terlebih dahulu sebelum menghubungkan device.'], 403);
-        }
-
-        if ($context) {
-            try {
-                $this->packageLimits->assertWithinLimit(
-                    $context->company,
-                    'device_count',
-                    1,
-                    $branch,
-                    fn () => collect($this->connectDeviceService->listDevices($jwt))
-                        ->where('branch_office_id', $branch->id)
-                        ->count(),
-                );
-            } catch (PackageLimitExceededException $e) {
-                return response()->json(['error' => $e->getMessage()], 403);
-            } catch (Throwable $e) {
-                // listDevices() itself failing shouldn't block adding a
-                // device — report it and fall through to addDevice()'s
-                // own error handling (safeJson below) instead.
-                report($e);
-            }
+        if ($error = $this->deviceLimitError($context, $branch, $jwt)) {
+            return $error;
         }
 
         return $this->safeJson(function (string $jwt) use ($context, $branch) {
@@ -152,8 +116,18 @@ class ConnectDeviceController extends Controller
      * AJAX: request a fresh QR code for a device the user already owns
      * (typically one that's currently disconnected).
      */
-    public function reconnect(string $device): JsonResponse
+    public function reconnect(Request $request, string $device): JsonResponse
     {
+        // Menyambungkan ulang device lama juga memakan jatah -- tanpa ini
+        // kuota bisa diakali dengan reconnect device putus satu per satu.
+        if ($jwt = session('golang_jwt_token')) {
+            [$context, $branch] = $this->activeContext($request);
+
+            if ($error = $this->deviceLimitError($context, $branch, $jwt, $device)) {
+                return $error;
+            }
+        }
+
         return $this->safeJson(fn (string $jwt) => $this->connectDeviceService->reconnect($jwt, $device));
     }
 
@@ -191,6 +165,61 @@ class ConnectDeviceController extends Controller
      * @param  array<int, array<string, mixed>>  $devices
      * @return array<int, array<string, mixed>>
      */
+    /**
+     * Company context + branch aktif, best-effort: controller ini aslinya
+     * hanya berbasis sesi/JWT, jadi kalau context tidak bisa di-resolve
+     * guard kuota tidak berlaku (fail open, sama seperti PackageLimitService).
+     *
+     * @return array{0: ?CompanyContext, 1: ?BranchOffice}
+     */
+    protected function activeContext(Request $request): array
+    {
+        try {
+            $context = $this->companyContext($request);
+        } catch (Throwable $e) {
+            $context = null;
+        }
+
+        return [$context, $context?->activeBranch()];
+    }
+
+    /**
+     * Kuota "device_count" (metric 'stock'): yang dihitung hanya device
+     * yang SEDANG TERHUBUNG di branch aktif (perbaikan 6 Oktober 2026 --
+     * dulu semua baris ikut terhitung, termasuk QR yang tidak jadi di-scan,
+     * sehingga device baru ditolak padahal yang terhubung belum penuh).
+     * Null = boleh lanjut.
+     */
+    protected function deviceLimitError(?CompanyContext $context, ?BranchOffice $branch, string $jwt, ?string $exceptDeviceId = null): ?JsonResponse
+    {
+        if (! $context) {
+            return null;
+        }
+
+        // Device selalu milik satu branch (paket & kuota berlaku per branch).
+        if (! $branch) {
+            return response()->json(['error' => 'Buat branch terlebih dahulu sebelum menghubungkan device.'], 403);
+        }
+
+        try {
+            $this->packageLimits->assertWithinLimit(
+                $context->company,
+                'device_count',
+                1,
+                $branch,
+                fn () => $this->connectDeviceService->connectedCount($jwt, $branch->id, $exceptDeviceId),
+            );
+        } catch (PackageLimitExceededException $e) {
+            return response()->json(['error' => 'Jatah device di paket Anda sudah penuh oleh device yang sedang terhubung. Putuskan (logout) salah satu device, atau upgrade paket untuk menambah device.'], 403);
+        } catch (Throwable $e) {
+            // listDevices() gagal tidak boleh memblokir; error asli
+            // ditangani safeJson() di pemanggil.
+            report($e);
+        }
+
+        return null;
+    }
+
     protected function devicesOfActiveBranch(Request $request, array $devices): array
     {
         try {

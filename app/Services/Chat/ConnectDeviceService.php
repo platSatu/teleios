@@ -39,6 +39,21 @@ class ConnectDeviceService
      *
      * @return array{device_id: string, status: string, qr_string: string}
      */
+    /**
+     * Jumlah device yang SEDANG TERHUBUNG di satu branch -- dasar kuota
+     * device_count (6 Oktober 2026). Device putus / QR yang tidak jadi
+     * di-scan tidak memakan jatah. $exceptDeviceId: device yang sedang
+     * di-reconnect tidak ikut dihitung.
+     */
+    public function connectedCount(string $jwt, ?string $branchId, ?string $exceptDeviceId = null): int
+    {
+        return collect($this->listDevices($jwt))
+            ->where('branch_office_id', $branchId)
+            ->where('status', 'connected')
+            ->reject(fn (array $device) => $exceptDeviceId && ($device['id'] ?? null) === $exceptDeviceId)
+            ->count();
+    }
+
     public function addDevice(string $jwt): array
     {
         return $this->request('post', '/api/wa/devices', $jwt);
