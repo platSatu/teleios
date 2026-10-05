@@ -2,6 +2,7 @@
 @if (isset($packageLimit))
     @method('PUT')
 @endif
+@php $source = $packageLimit ?? $copyFrom ?? null; @endphp
 
 @if ($errors->any())
     <div class="alert alert-danger">
@@ -18,7 +19,7 @@
     <select name="package_id" id="package_id" class="form-select" required>
         <option value="">— Pilih package —</option>
         @foreach ($packages as $package)
-            <option value="{{ $package->id }}" @selected(old('package_id', $packageLimit->package_id ?? '') == $package->id)>
+            <option value="{{ $package->id }}" @selected(old('package_id', $source->package_id ?? '') == $package->id)>
                 {{ $package->name }}
             </option>
         @endforeach
@@ -30,7 +31,7 @@
     <select name="limit_metric_id" id="limit_metric_id" class="form-select" required>
         <option value="">— Pilih metric —</option>
         @foreach ($limitMetrics as $metric)
-            <option value="{{ $metric->id }}" @selected(old('limit_metric_id', $packageLimit->limit_metric_id ?? '') == $metric->id)>
+            <option value="{{ $metric->id }}" @selected(old('limit_metric_id', $source->limit_metric_id ?? '') == $metric->id)>
                 {{ $metric->name }} @if ($metric->unit) ({{ $metric->unit }}) @endif
             </option>
         @endforeach
@@ -40,7 +41,7 @@
 <div class="mb-4">
     <label for="max_value" class="form-label">Batas Maksimal <span class="text-danger">*</span></label>
     <input type="number" name="max_value" id="max_value" class="form-control" min="1" placeholder="10000"
-        value="{{ old('max_value', $packageLimit->max_value ?? '') }}" required>
+        value="{{ old('max_value', $source->max_value ?? '') }}" required>
     <div class="form-text">Untuk metric bertipe "Consumable", ini adalah kuota per periode subscription. Untuk "Stock", ini adalah batas jumlah data yang boleh ada sekaligus.</div>
 </div>
 

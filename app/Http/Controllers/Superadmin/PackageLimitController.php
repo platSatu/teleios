@@ -9,6 +9,7 @@ use App\Models\Package;
 use App\Models\PackageLimit;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 /**
@@ -32,11 +33,13 @@ class PackageLimitController extends Controller
         return view('superadmin.package-limit.index', compact('packageLimits'));
     }
 
-    public function create(): View
+    /** ?copy={id}: form Tambah diisi dari limit yang sudah ada (tombol Copy di index). */
+    public function create(Request $request): View
     {
         [$packages, $limitMetrics] = $this->formOptions();
+        $copyFrom = $request->filled('copy') ? PackageLimit::find($request->query('copy')) : null;
 
-        return view('superadmin.package-limit.create', compact('packages', 'limitMetrics'));
+        return view('superadmin.package-limit.create', compact('packages', 'limitMetrics', 'copyFrom'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -60,7 +63,7 @@ class PackageLimitController extends Controller
 
     public function update(Request $request, string $id): RedirectResponse
     {
-        $validated = $this->validated($request);
+        $validated = $this->validated($request, $id);
 
         CrudAdmin::update(PackageLimit::class, $id, $validated);
 
@@ -81,12 +84,18 @@ class PackageLimitController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function validated(Request $request): array
+    private function validated(Request $request, ?string $ignoreId = null): array
     {
         return $request->validate([
             'package_id' => ['required', 'uuid', 'exists:packages,id'],
-            'limit_metric_id' => ['required', 'uuid', 'exists:limit_metrics,id'],
+            // Satu package hanya boleh punya 1 limit per metric (unique index di DB).
+            'limit_metric_id' => [
+                'required', 'uuid', 'exists:limit_metrics,id',
+                Rule::unique('package_limits')->where('package_id', $request->input('package_id'))->ignore($ignoreId),
+            ],
             'max_value' => ['required', 'integer', 'min:1'],
+        ], [
+            'limit_metric_id.unique' => 'Package ini sudah punya limit untuk metric tersebut. Pilih package atau metric lain, atau edit limit yang sudah ada.',
         ]);
     }
 

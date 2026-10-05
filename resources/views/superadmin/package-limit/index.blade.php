@@ -40,6 +40,9 @@
                                         <a href="{{ route('package-limit.edit', $item->id) }}" class="btn btn-outline-secondary">
                                             <i class="ri-edit-line"></i> Edit
                                         </a>
+                                        <a href="{{ route('package-limit.create', ['copy' => $item->id]) }}" class="btn btn-outline-primary">
+                                            <i class="ri-file-copy-line"></i> Copy
+                                        </a>
                                         <button type="submit" form="delete-package-limit-{{ $item->id }}" class="btn btn-outline-danger" onclick="return confirm('Hapus package limit ini?');">
                                             <i class="ri-delete-bin-line"></i> Hapus
                                         </button>
