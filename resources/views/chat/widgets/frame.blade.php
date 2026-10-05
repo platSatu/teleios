@@ -14,6 +14,9 @@
     <style>
         :root { --brand: {{ $widget->setting('color') }}; }
         * { box-sizing: border-box; }
+        /* Atribut hidden harus menang atas display:grid/flex di bawah --
+           tanpa ini form nama/WA tetap tampil bersamaan dengan chat. */
+        [hidden] { display: none !important; }
         html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 14px; color: #1f2937; background: #fff; }
         .cw { display: flex; flex-direction: column; height: 100%; }
         .cw-head { background: var(--brand); color: #fff; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; }
@@ -27,7 +30,7 @@
         .cw-ai, .cw-agent { background: #fff; border: 1px solid #e5e7eb; border-bottom-left-radius: 4px; }
         .cw-system { margin: 8px auto; background: transparent; color: #6b7280; font-size: 12px; text-align: center; }
         .cw-typing { color: #6b7280; font-size: 12px; padding: 0 14px 6px; min-height: 18px; background: #f5f6f8; }
-        .cw-start { padding: 16px; display: grid; gap: 8px; }
+        .cw-start { flex: 1; padding: 16px; display: grid; gap: 8px; align-content: start; overflow-y: auto; }
         .cw-input, .cw-start input { width: 100%; border: 1px solid #d1d5db; border-radius: 10px; padding: 9px 11px; font: inherit; }
         .cw-foot { border-top: 1px solid #e5e7eb; padding: 8px; display: flex; gap: 6px; align-items: flex-end; }
         .cw-foot textarea { resize: none; max-height: 90px; }
