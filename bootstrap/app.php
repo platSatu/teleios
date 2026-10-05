@@ -156,6 +156,14 @@ return Application::configure(basePath: dirname(__DIR__))
             ->everyFifteenMinutes()
             ->withoutOverlapping();
 
+        // Live Chat Widget (6 Oktober 2026): tanya "masih terhubung?" lalu
+        // tutup percakapan yang ditinggal pengunjung -- lihat
+        // ChatWidgetService::handleIdle() & docs/live-chat-widget.md.
+        $schedule->call(fn () => app(\App\Services\Chat\Widget\ChatWidgetService::class)->handleIdle())
+            ->name('chat-widget:idle')
+            ->everyMinute()
+            ->withoutOverlapping();
+
         // CRM Roadmap Fase 4 — fires 'no_contact_days' automation rules
         // (App\Models\WaCustomerAutomationRule). The other two trigger
         // types (deal stage changed, tag added) fire synchronously from

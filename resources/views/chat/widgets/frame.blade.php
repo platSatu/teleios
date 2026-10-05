@@ -59,6 +59,9 @@
     <div class="cw-body" id="cwBody" hidden></div>
     <div class="cw-typing" id="cwTyping" hidden></div>
     <button class="cw-link" id="cwHuman" type="button" hidden>Bicara dengan tim kami</button>
+    <div class="cw-start" id="cwEnded" hidden style="flex: 0;">
+        <button class="cw-btn" id="cwRestart" type="button">Mulai chat baru</button>
+    </div>
     <form class="cw-foot" id="cwForm" hidden>
         <textarea class="cw-input" id="cwText" rows="1" maxlength="1000" placeholder="Tulis pesan..." required></textarea>
         <button class="cw-btn" type="submit" id="cwSend">Kirim</button>
@@ -110,6 +113,13 @@
         el('cwHuman').hidden = status !== 'ai';
         el('cwNote').hidden = !(aiEnabled && status === 'ai');
         el('cwSub').textContent = status === 'agent' ? 'Terhubung dengan tim kami' : status === 'waiting' ? 'Menunggu tim kami' : 'Kami siap membantu';
+
+        // Percakapan selesai (ditutup CS / tidak ada balasan): kolom pesan
+        // diganti tombol "Mulai chat baru" -> sesi baru dari awal.
+        var ended = status === 'closed';
+        el('cwForm').hidden = ended;
+        el('cwEnded').hidden = !ended;
+        if (ended) clearInterval(timer);
     }
 
     function poll() {
@@ -120,7 +130,9 @@
     }
 
     function forget() {
-        token = null; lastId = 0; el('cwBody').innerHTML = '';
+        token = null; lastId = 0; status = null; clearInterval(timer);
+        el('cwBody').innerHTML = '';
+        ['cwBody', 'cwForm', 'cwEnded', 'cwHuman', 'cwNote', 'cwTyping'].forEach(function (id) { el(id).hidden = true; });
         try { localStorage.removeItem(storeKey); } catch (e) {}
         boot();
     }
@@ -128,7 +140,7 @@
     function openChat(data) {
         if (data.token) { token = data.token; try { localStorage.setItem(storeKey, token); } catch (e) {} }
         el('cwStart').hidden = true;
-        el('cwBody').hidden = el('cwForm').hidden = false;
+        el('cwBody').hidden = false;
         render(data.messages);
         setStatus(data.status);
         clearInterval(timer);
@@ -171,6 +183,8 @@
     el('cwText').addEventListener('keydown', function (e) {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); el('cwForm').requestSubmit(); }
     });
+
+    el('cwRestart').addEventListener('click', forget);
 
     el('cwHuman').addEventListener('click', function () {
         call('POST', '/handover').then(function (r) { if (r.ok) poll(); });

@@ -51,7 +51,7 @@ class AiReplyGenerator
     }
 
     /** Aturan gaya balasan WA (5 Oktober 2026), selalu ditambahkan di akhir instruksi. */
-    private const CHAT_STYLE = 'Kamu membalas lewat chat WhatsApp: jawab singkat, jelas, dan ramah (paling banyak sekitar 3 paragraf pendek), tanpa format markdown seperti ** atau #. Kalau informasinya tidak ada, katakan terus terang dan tawarkan untuk dihubungkan ke admin. Jangan mengarang harga, promo, atau janji. Kamu TIDAK bisa melihat atau mengecek data transaksi, saldo, invoice, pesanan, atau akun pelanggan: jangan pernah mengaku sudah mengecek. Kalau pelanggan memberi data seperti itu, ucapkan terima kasih, sampaikan bahwa datanya akan diteruskan ke tim admin untuk dicek, dan tawarkan untuk dihubungkan ke admin.';
+    private const CHAT_STYLE = 'Kamu membalas lewat chat WhatsApp: jawab singkat, jelas, dan ramah (paling banyak sekitar 3 paragraf pendek), tanpa format markdown seperti ** atau #. Ucapkan salam (halo / selamat pagi, siang, sore, malam) HANYA di balasan pertama percakapan; balasan berikutnya langsung ke inti tanpa salam pembuka. Kalau informasinya tidak ada, katakan terus terang dan tawarkan untuk dihubungkan ke admin. Jangan mengarang harga, promo, atau janji. Kamu TIDAK bisa melihat atau mengecek data transaksi, saldo, invoice, pesanan, atau akun pelanggan: jangan pernah mengaku sudah mengecek. Kalau pelanggan memberi data seperti itu, ucapkan terima kasih, sampaikan bahwa datanya akan diteruskan ke tim admin untuk dicek, dan tawarkan untuk dihubungkan ke admin.';
 
     /**
      * Combines the free-text "Perilaku AI" instructions with the

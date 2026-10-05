@@ -28,6 +28,16 @@ class ChatWidgetService
      */
     private const HANDOVER_WORDS = ['cs', 'customer service', 'operator', 'bicara dengan tim', 'bicara dengan orang', 'ngobrol sama orang', 'hubungi admin', 'chat admin', 'sama manusia', 'dengan manusia'];
 
+    /** Pengunjung diam sekian menit setelah dibalas -> ditanya apakah masih terhubung. */
+    public const IDLE_PING_MINUTES = 3;
+
+    /** Masih diam sekian menit setelah ditanya -> percakapan ditutup, widget mulai dari awal. */
+    public const IDLE_CLOSE_MINUTES = 2;
+
+    public const IDLE_PING_TEXT = 'Apakah Anda masih terhubung dengan kami?';
+
+    public const IDLE_CLOSED_TEXT = 'Percakapan ditutup karena tidak ada balasan. Silakan mulai chat baru kapan saja.';
+
     /**
      * Lanjutkan sesi dari token pengunjung, atau buat sesi baru.
      *
@@ -160,6 +170,46 @@ class ChatWidgetService
         ChatWidgetConversation::whereKey($conversation->id)->update(['last_message_at' => now()]);
 
         return $message;
+    }
+
+    /**
+     * Dipanggil scheduler tiap menit (bootstrap/app.php). Hanya percakapan
+     * yang sedang dijawab AI / CS (bukan yang menunggu CS): kalau balasan
+     * terakhir dari kita dan pengunjung diam IDLE_PING_MINUTES -> ditanya;
+     * kalau setelah ditanya masih diam IDLE_CLOSE_MINUTES -> ditutup, dan
+     * widget pengunjung otomatis mulai percakapan baru.
+     *
+     * @return array{pinged: int, closed: int}
+     */
+    public function handleIdle(): array
+    {
+        $result = ['pinged' => 0, 'closed' => 0];
+
+        ChatWidgetConversation::whereIn('status', [ChatWidgetConversation::STATUS_AI, ChatWidgetConversation::STATUS_AGENT])
+            ->where('last_message_at', '<=', now()->subMinutes(min(self::IDLE_PING_MINUTES, self::IDLE_CLOSE_MINUTES)))
+            ->chunkById(100, function ($conversations) use (&$result) {
+                foreach ($conversations as $conversation) {
+                    $last = ChatWidgetMessage::where('chat_widget_conversation_id', $conversation->id)->latest('id')->first();
+
+                    if (! $last) {
+                        continue;
+                    }
+
+                    $isPing = $last->sender === ChatWidgetMessage::SENDER_SYSTEM && $last->body === self::IDLE_PING_TEXT;
+
+                    if ($isPing && $last->created_at->lte(now()->subMinutes(self::IDLE_CLOSE_MINUTES))) {
+                        $conversation->update(['status' => ChatWidgetConversation::STATUS_CLOSED]);
+                        $this->addMessage($conversation, ChatWidgetMessage::SENDER_SYSTEM, self::IDLE_CLOSED_TEXT);
+                        $result['closed']++;
+                    } elseif (in_array($last->sender, [ChatWidgetMessage::SENDER_AI, ChatWidgetMessage::SENDER_AGENT], true)
+                        && $last->created_at->lte(now()->subMinutes(self::IDLE_PING_MINUTES))) {
+                        $this->addMessage($conversation, ChatWidgetMessage::SENDER_SYSTEM, self::IDLE_PING_TEXT);
+                        $result['pinged']++;
+                    }
+                }
+            });
+
+        return $result;
     }
 
     private function wantsHuman(string $body): bool

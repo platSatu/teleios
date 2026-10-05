@@ -17,6 +17,10 @@ otomatis, dan CS bisa mengambil alih dari **Chat > Live Chat Inbox**.
 5. Pengunjung klik "Bicara dengan tim" / menulis "cs", atau AI tidak
    tersedia -> status `waiting`. CS "Ambil alih" -> `agent` (AI berhenti).
 
+6. Pengunjung diam 3 menit setelah dibalas -> ditanya "masih terhubung?";
+   diam 2 menit lagi -> percakapan ditutup dan widget mulai dari awal
+   (scheduler `chat-widget:idle`, `ChatWidgetService::handleIdle()`).
+
 ## File fitur ini
 
 Baru (hapus semua untuk membuang fitur):
@@ -36,6 +40,7 @@ Titik sentuh di file lama (cari teks "Live Chat Widget"):
 - `routes/api.php`: 1 grup route `chat-widget/{key}` di paling bawah
 - `resources/views/layouts/partials/menu.blade.php`: 2 item menu setelah "AI Bot"
 - `app/Http/Middleware/SecurityHeaders.php`: `'chat-widget.frame'` di `routeIs()`
+- `bootstrap/app.php`: 1 jadwal `chat-widget:idle`
 
 ## Cara membuang fitur dengan bersih
 
