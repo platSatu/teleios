@@ -5,12 +5,16 @@ namespace App\Http\Controllers\Chat;
 use App\Http\Controllers\Concerns\ResolvesCompanyContext;
 use App\Http\Controllers\Controller;
 use App\Models\BranchOffice;
+use App\Models\Company;
 use App\Models\WaAiBot;
 use App\Models\WaAiBotModel;
 use App\Models\WaAiBotProvider;
 use App\Services\AiBot\KnowledgeBaseExtractor;
+use App\Services\Company\CompanyContext;
+use App\Services\PackageLimitService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\View\View;
@@ -26,13 +30,17 @@ use Illuminate\View\View;
  * create bots in their own branch, the owner sees and controls every
  * branch. api_configuration is stored `encrypted` on the model (a
  * tenant's own AI provider API key/config).
+ *
+ * 1 AI PER CABANG (5 Oktober 2026): lihat saveForDevice().
  */
 class AiBotController extends Controller
 {
     use ResolvesCompanyContext;
 
-    public function __construct(private readonly KnowledgeBaseExtractor $knowledgeBaseExtractor)
-    {
+    public function __construct(
+        private readonly KnowledgeBaseExtractor $knowledgeBaseExtractor,
+        private readonly PackageLimitService $packageLimits,
+    ) {
     }
 
     public function index(Request $request): View
@@ -47,13 +55,9 @@ class AiBotController extends Controller
             ->paginate(15);
 
         $providers = $this->activeCatalog();
-        $branchOffices = $context->isOwner
-            ? BranchOffice::where('company_id', $company->id)->orderBy('name')->get(['id', 'name'])
-            : collect();
 
-        return view('chat.ai-bots.index', compact('bots', 'providers', 'branchOffices'))
-            ->with('isOwner', $context->isOwner)
-            ->with('lockedBranchOffice', $context->branchOffice);
+        return view('chat.ai-bots.index', compact('bots', 'providers'))
+            ->with('isOwner', $context->isOwner);
     }
 
     public function store(Request $request): RedirectResponse
@@ -74,14 +78,13 @@ class AiBotController extends Controller
         $validated['company_id'] = $company->id;
         $validated['active_bot_immediately'] = $request->boolean('active_bot_immediately');
         $validated['custom_activation_time'] = $request->boolean('custom_activation_time');
-        $validated['branch_office_id'] = $context->isOwner
-            ? ($validated['branch_office_id'] ?? null)
-            : $context->branchOffice?->id;
 
-        $this->fillLegacyCatalogNames($validated);
-        $this->attachFile($request, $validated);
-
-        WaAiBot::create($validated);
+        if ($error = $this->saveForDevice($context, $request, $validated)) {
+            return redirect()
+                ->route('chat.ai-bots.index')
+                ->withErrors(['device_id' => $error], 'newBot')
+                ->withInput();
+        }
 
         return redirect()
             ->route('chat.ai-bots.index')
@@ -98,7 +101,7 @@ class AiBotController extends Controller
             ->where('id', $id)
             ->firstOrFail();
 
-        $validator = $this->validator($request);
+        $validator = $this->validator($request, $bot->id);
 
         if ($validator->fails()) {
             return redirect()
@@ -110,14 +113,13 @@ class AiBotController extends Controller
         $validated = $validator->validated();
         $validated['active_bot_immediately'] = $request->boolean('active_bot_immediately');
         $validated['custom_activation_time'] = $request->boolean('custom_activation_time');
-        $validated['branch_office_id'] = $context->isOwner
-            ? ($validated['branch_office_id'] ?? null)
-            : $context->branchOffice?->id;
 
-        $this->fillLegacyCatalogNames($validated);
-        $this->attachFile($request, $validated, $bot);
-
-        $bot->update($validated);
+        if ($error = $this->saveForDevice($context, $request, $validated, $bot)) {
+            return redirect()
+                ->route('chat.ai-bots.index')
+                ->withErrors(['device_id' => $error], 'editBot'.$id)
+                ->withInput();
+        }
 
         return redirect()
             ->route('chat.ai-bots.index')
@@ -212,11 +214,15 @@ class AiBotController extends Controller
         unset($validated['attach_file']); // not a fillable column — only *_path/*_original_name are
     }
 
-    private function validator(Request $request)
+    private function validator(Request $request, ?string $ignoreBotId = null)
     {
         return Validator::make($request->all(), [
-            'device_id' => ['required', 'string', 'max:36'],
-            'branch_office_id' => ['nullable', 'uuid', 'exists:branch_offices,id'],
+            // 1 device = 1 AI Bot (juga dijaga unique index di DB). Cabang
+            // tidak lagi dari form -- selalu mengikuti device (saveForDevice()).
+            'device_id' => [
+                'required', 'string', 'max:36',
+                \Illuminate\Validation\Rule::unique('wa_ai_bots', 'device_id')->ignore($ignoreBotId),
+            ],
             'wa_ai_bot_provider_id' => [
                 'required', 'uuid',
                 \Illuminate\Validation\Rule::exists('wa_ai_bot_providers', 'id')->where('status', 'active'),
@@ -235,7 +241,60 @@ class AiBotController extends Controller
             'activation_start_at' => ['required_if:custom_activation_time,1', 'nullable', 'date'],
             'activation_end_at' => ['required_if:custom_activation_time,1', 'nullable', 'date', 'after:activation_start_at'],
             'status' => ['required', 'in:active,inactive'],
+        ], [
+            'device_id.unique' => 'Device ini sudah dipakai AI Bot lain. Satu device hanya bisa memakai 1 AI Bot.',
         ]);
+    }
+
+    /**
+     * Simpan bot -- dipakai store() & update(). Null = tersimpan, string =
+     * pesan error untuk ditampilkan.
+     *
+     * - Device wajib milik company yang login (staff cabang: cabangnya
+     *   sendiri), dicek di server -- device_id dari form tidak dipercaya.
+     * - Cabang bot SELALU mengikuti cabang device (null = Pusat).
+     * - Jumlah AI per cabang = Package Limit metric "ai_bot" (default 1),
+     *   dihitung di dalam transaksi + lock baris company supaya dua simpan
+     *   bersamaan tidak menembus batas.
+     */
+    private function saveForDevice(CompanyContext $context, Request $request, array $validated, ?WaAiBot $bot = null): ?string
+    {
+        $company = $context->company;
+        $device = DB::table('wa_devices')->where('id', $validated['device_id'])->first(['company_id', 'branch_office_id', 'user_id']);
+
+        // Device lama (sebelum ada kolom company_id) dikenali dari user pemilik company.
+        $ownsDevice = $device && ($device->company_id
+            ? $device->company_id === $company->id
+            : $device->user_id === $company->user_id);
+
+        if (! $ownsDevice || (! $context->isOwner && $device->branch_office_id !== $context->branchOffice?->id)) {
+            return 'Device ini tidak terdaftar di perusahaan/cabang Anda.';
+        }
+
+        $validated['branch_office_id'] = $device->branch_office_id;
+
+        return DB::transaction(function () use ($company, $request, $validated, $bot) {
+            Company::whereKey($company->id)->lockForUpdate()->first();
+
+            $branch = $validated['branch_office_id'] ? BranchOffice::find($validated['branch_office_id']) : null;
+            $max = $this->packageLimits->limitFor($company, 'ai_bot', $branch)?->max_value ?? 1;
+
+            $used = WaAiBot::where('company_id', $company->id)
+                ->where('branch_office_id', $validated['branch_office_id'])
+                ->when($bot, fn ($query) => $query->whereKeyNot($bot->id))
+                ->count();
+
+            if ($used >= $max) {
+                return ($branch ? 'Cabang '.$branch->name : 'Pusat')." sudah punya {$max} AI Bot (batas paket). Edit AI Bot yang sudah ada kalau ingin memindahkan ke device lain.";
+            }
+
+            $this->fillLegacyCatalogNames($validated);
+            $this->attachFile($request, $validated, $bot);
+
+            $bot ? $bot->update($validated) : WaAiBot::create($validated);
+
+            return null;
+        });
     }
 
 }

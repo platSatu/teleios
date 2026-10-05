@@ -48,9 +48,11 @@ use Throwable;
  * Pembayaran, 3. Daftar User, ketik salah satu nomor"), and "1"/"2"/"3"
  * are then just ordinary keyword rules a level down.
  *
- * If THAT also doesn't exist, this falls back one level further to the
- * device's AI Bot config (App\Models\WaAiBot), if one is set up and
- * currently active — see App\Jobs\SendAiBotReply. Keyword rules always
+ * UPDATE 5 Oktober 2026: kalau device punya AI Bot yang aktif
+ * (App\Models\WaAiBot, lihat App\Jobs\SendAiBotReply), AI dicoba
+ * SEBELUM balasan default -- dulu default selalu menang sehingga AI
+ * tidak pernah terpanggil. Default tetap jadi cadangan saat AI mati /
+ * di luar jam aktif. Keyword rules always
  * take priority over the AI bot: a company that configured both gets
  * predictable, free, instant answers for known keywords, and the AI
  * bot only ever has to handle the open-ended long tail.
@@ -222,12 +224,21 @@ class WaIncomingMessageWebhookController extends Controller
         $matchedDefault = false;
 
         if (! $rule) {
+            if ($aiBotResponse = $this->tryAiBotFallback($validated)) {
+                return $aiBotResponse;
+            }
+
             $rule = $activeRules->firstWhere('is_default', true);
             $matchedDefault = (bool) $rule;
         }
 
         if (! $rule) {
-            return $this->tryAiBotFallback($validated);
+            Log::info('wa-auto-reply: no rule matched and no active AI bot configured', [
+                'device_id' => $validated['device_id'],
+                'body' => $validated['body'],
+            ]);
+
+            return response()->json(['status' => 'no match']);
         }
 
         Log::info($matchedDefault ? 'wa-auto-reply: no keyword matched, falling back to default rule' : 'wa-auto-reply: rule matched, dispatching reply job', [
@@ -294,27 +305,24 @@ class WaIncomingMessageWebhookController extends Controller
     }
 
     /**
-     * Last resort when no keyword rule (and no default rule) matched:
-     * hand the incoming message to the device's AI Bot, if one is
-     * configured and currently switched on (see
-     * App\Models\WaAiBot::isCurrentlyActive). If there's no bot, or it's
-     * off, this is exactly the old "no match, do nothing" behaviour.
+     * No keyword rule matched: hand the incoming message to the device's
+     * AI Bot, if one is configured and currently switched on (see
+     * App\Models\WaAiBot::isCurrentlyActive). Null = tidak ada AI aktif,
+     * pemanggil lanjut ke balasan default. Bot wajib milik company yang
+     * sama dengan device-nya, jadi AI company lain tidak pernah membalas
+     * di nomor ini.
      *
      * @param  array<string, mixed>  $validated
      */
-    protected function tryAiBotFallback(array $validated): JsonResponse
+    protected function tryAiBotFallback(array $validated): ?JsonResponse
     {
         $bot = WaAiBot::with(['provider', 'model'])
             ->where('device_id', $validated['device_id'])
+            ->where('company_id', $this->devices->companyFor($validated['device_id']))
             ->first();
 
         if (! $bot || ! $bot->isCurrentlyActive()) {
-            Log::info('wa-auto-reply: no rule matched and no active AI bot configured', [
-                'device_id' => $validated['device_id'],
-                'body' => $validated['body'],
-            ]);
-
-            return response()->json(['status' => 'no match']);
+            return null;
         }
 
         Log::info('wa-auto-reply: no keyword matched, falling back to AI bot', [

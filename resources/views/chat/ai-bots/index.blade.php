@@ -101,7 +101,7 @@
                                                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                                 </div>
                                                 <div class="modal-body">
-                                                    @include('chat.ai-bots._form', ['bot' => $bot, 'errorBag' => 'editBot'.$bot->id, 'providers' => $providers, 'branchOffices' => $branchOffices, 'isOwner' => $isOwner, 'lockedBranchOffice' => $lockedBranchOffice])
+                                                    @include('chat.ai-bots._form', ['bot' => $bot, 'errorBag' => 'editBot'.$bot->id, 'providers' => $providers])
                                                 </div>
                                                 <div class="modal-footer">
                                                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
@@ -139,7 +139,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    @include('chat.ai-bots._form', ['bot' => null, 'errorBag' => 'newBot', 'providers' => $providers, 'branchOffices' => $branchOffices, 'isOwner' => $isOwner, 'lockedBranchOffice' => $lockedBranchOffice])
+                    @include('chat.ai-bots._form', ['bot' => null, 'errorBag' => 'newBot', 'providers' => $providers])
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>

@@ -29,7 +29,8 @@ class AnthropicClient implements AiProviderClient
 
         $body = [
             'model' => $model,
-            'max_tokens' => 800,
+            'max_tokens' => self::MAX_OUTPUT_TOKENS,
+            'temperature' => self::TEMPERATURE,
             'messages' => $messages,
         ];
 
@@ -47,7 +48,8 @@ class AnthropicClient implements AiProviderClient
             throw new RuntimeException('Anthropic API error ('.$response->status().'): '.$response->body());
         }
 
-        $text = $response->json('content.0.text');
+        // Gabungkan semua blok teks (dulu hanya blok pertama yang dibaca).
+        $text = collect($response->json('content', []))->where('type', 'text')->pluck('text')->implode('');
 
         if (! is_string($text) || trim($text) === '') {
             throw new RuntimeException('Anthropic API mengembalikan respons kosong: '.$response->body());

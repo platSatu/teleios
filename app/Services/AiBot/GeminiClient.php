@@ -36,8 +36,10 @@ class GeminiClient implements AiProviderClient
         $body = [
             'contents' => $contents,
             'generationConfig' => [
-                'maxOutputTokens' => 800,
-                'temperature' => 0.7,
+                // Model Gemini 2.5+ ikut memakai jatah ini untuk "berpikir",
+                // jadi diberi ruang 2x supaya jawabannya tidak habis duluan.
+                'maxOutputTokens' => self::MAX_OUTPUT_TOKENS * 2,
+                'temperature' => self::TEMPERATURE,
             ],
         ];
 
@@ -54,7 +56,13 @@ class GeminiClient implements AiProviderClient
             throw new RuntimeException('Gemini API error ('.$response->status().'): '.$response->body());
         }
 
-        $text = $response->json('candidates.0.content.parts.0.text');
+        // Jawaban bisa datang dalam beberapa "part" (dulu hanya part
+        // pertama yang dibaca); part berisi proses berpikir (thought) dibuang.
+        $text = collect($response->json('candidates.0.content.parts', []))
+            ->reject(fn ($part) => ! empty($part['thought']))
+            ->pluck('text')
+            ->filter(fn ($chunk) => is_string($chunk))
+            ->implode('');
 
         if (! is_string($text) || trim($text) === '') {
             // A common non-error cause: candidates.0.finishReason ==

@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Exceptions\PackageLimitExceededException;
 use App\Models\JadwalReminderSetting;
 use App\Models\WaAiBot;
+use App\Models\WaMessageScheduleLog;
 use App\Services\AiBot\AiReplyGenerator;
 use App\Services\Chat\BroadcastThrottleService;
 use App\Services\Chat\InboxService;
@@ -15,14 +16,16 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
  * Sends one AI-generated reply — dispatched by
- * App\Http\Controllers\Api\WaIncomingMessageWebhookController as the
- * final fallback, only once no "Auto Reply (Kata Kunci)" rule (including
- * the device's default rule) matched the incoming message. Structured
+ * App\Http\Controllers\Api\WaIncomingMessageWebhookController once no
+ * "Auto Reply (Kata Kunci)" keyword matched -- sejak 5 Oktober 2026 AI
+ * didahulukan dari balasan default (default jadi cadangan saat AI mati). Structured
  * exactly like App\Jobs\SendAutoReplyMessage (ShouldQueue, retry/
  * backoff, system JWT mint, persisted last_error, and the same
  * per-device BroadcastThrottleService ceiling — see that job's docblock
@@ -48,6 +51,9 @@ class SendAiBotReply implements ShouldQueue
         protected string $incomingBody,
         protected int $throttleAttempts = 0,
     ) {
+        // Antrean AI terpisah (config queue.ai_queue / env AI_QUEUE, default
+        // 'default') supaya AI yang lambat tidak menahan job lain.
+        $this->onQueue(config('queue.ai_queue', 'default'));
     }
 
     public function handle(SystemJwtService $jwtService, InboxService $inbox, AiReplyGenerator $generator, BroadcastThrottleService $throttle, PackageLimitService $packageLimits): void
@@ -113,6 +119,20 @@ class SendAiBotReply implements ShouldQueue
             return;
         }
 
+        // Satu balasan AI per chat dalam satu waktu: pesan beruntun dari
+        // orang yang sama menunggu balasan sebelumnya selesai (lalu ikut
+        // membaca balasan itu di riwayat), bukan dibalas dobel bersamaan.
+        $chatLock = Cache::lock("ai-bot-reply:{$bot->device_id}:{$this->chatJid}", 120);
+
+        if (! $chatLock->get()) {
+            if ($this->throttleAttempts < self::MAX_THROTTLE_REDISPATCHES) {
+                self::dispatch($this->aiBotId, $this->chatJid, $this->incomingBody, $this->throttleAttempts + 1)
+                    ->delay(now()->addSeconds(10));
+            }
+
+            return;
+        }
+
         try {
             $token = $jwtService->mintFor($owner);
 
@@ -145,6 +165,8 @@ class SendAiBotReply implements ShouldQueue
             $this->markFailed($bot, $e->getMessage());
 
             throw $e;
+        } finally {
+            $chatLock->release();
         }
     }
 
@@ -178,8 +200,26 @@ class SendAiBotReply implements ShouldQueue
             return [];
         }
 
-        return collect($messages)
-            ->sortBy('id')
+        // Perbaikan 5 Oktober 2026: urut pakai seq (id itu UUID acak, urutan
+        // percakapan jadi kacau), hanya 24 jam terakhir, dan broadcast
+        // terjadwal (tercatat di WaMessageScheduleLog) tidak dianggap
+        // ucapan AI.
+        $messages = collect($messages)
+            ->sortBy('seq')
+            ->filter(fn (array $message) => empty($message['sent_at']) || Carbon::parse($message['sent_at'])->gt(now()->subDay()));
+
+        $broadcastIds = WaMessageScheduleLog::whereIn('message_id', $messages->where('from_me', true)->pluck('message_id')->filter()->all())
+            ->pluck('message_id')
+            ->all();
+
+        // Pesan masuk yang sedang dibalas sudah ikut tersimpan di thread --
+        // dibuang (beserta yang sesudahnya) karena dikirim terpisah sebagai
+        // pertanyaan, supaya tidak terbaca dua kali.
+        $current = $messages->last(fn (array $message) => empty($message['from_me']) && trim((string) ($message['body'] ?? '')) === trim($this->incomingBody));
+
+        return $messages
+            ->when($current, fn ($items) => $items->filter(fn (array $message) => $message['seq'] < $current['seq']))
+            ->reject(fn (array $message) => ! empty($message['from_me']) && in_array($message['message_id'] ?? null, $broadcastIds, true))
             ->slice(-10)
             ->map(fn (array $message) => [
                 'role' => ! empty($message['from_me']) ? 'assistant' : 'user',

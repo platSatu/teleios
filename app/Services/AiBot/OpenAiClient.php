@@ -36,8 +36,8 @@ class OpenAiClient implements AiProviderClient
             ->post('https://api.openai.com/v1/chat/completions', [
                 'model' => $model,
                 'messages' => $messages,
-                'max_tokens' => 800,
-                'temperature' => 0.7,
+                'max_tokens' => self::MAX_OUTPUT_TOKENS,
+                'temperature' => self::TEMPERATURE,
             ]);
 
         if ($response->failed()) {

@@ -15,6 +15,11 @@ return [
 
     'default' => env('QUEUE_CONNECTION', 'database'),
 
+    // Nama antrean khusus balasan AI Bot (App\Jobs\SendAiBotReply). Default
+    // 'default' supaya worker yang sudah ada tetap memprosesnya; isi AI_QUEUE=ai
+    // di .env HANYA setelah ada worker yang mendengarkan antrean "ai".
+    'ai_queue' => env('AI_QUEUE', 'default'),
+
     /*
     |--------------------------------------------------------------------------
     | Queue Connections

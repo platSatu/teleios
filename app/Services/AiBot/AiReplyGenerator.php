@@ -50,6 +50,9 @@ class AiReplyGenerator
         return $client->generateReply($apiKey, $model, $this->buildSystemPrompt($bot), $userMessage, $history);
     }
 
+    /** Aturan gaya balasan WA (5 Oktober 2026), selalu ditambahkan di akhir instruksi. */
+    private const CHAT_STYLE = 'Kamu membalas lewat chat WhatsApp: jawab singkat, jelas, dan ramah (paling banyak sekitar 3 paragraf pendek), tanpa format markdown seperti ** atau #. Kalau informasinya tidak ada, katakan terus terang dan tawarkan untuk dihubungkan ke admin. Jangan mengarang harga, promo, atau janji.';
+
     /**
      * Combines the free-text "Perilaku AI" instructions with the
      * extracted text of the optional "Lampiran Knowledge Base" upload
@@ -58,18 +61,17 @@ class AiReplyGenerator
      * App\Http\Controllers\Chat\AiBotController::attachFile()), so a bot
      * with a catalog/FAQ document attached actually uses it when
      * answering instead of the file just sitting in storage unused.
+     * CHAT_STYLE selalu ditambahkan paling akhir.
      */
-    private function buildSystemPrompt(WaAiBot $bot): ?string
+    private function buildSystemPrompt(WaAiBot $bot): string
     {
         $behaviour = trim((string) $bot->ai_behaviour_prompt);
         $knowledge = trim((string) $bot->knowledge_base_text);
 
-        if ($knowledge === '') {
-            return $behaviour !== '' ? $behaviour : null;
-        }
+        $knowledgeBlock = $knowledge !== ''
+            ? "Berikut informasi referensi (knowledge base) dari dokumen yang diunggah — gunakan ini sebagai sumber jawaban jika relevan dengan pertanyaan pelanggan, dan jangan mengarang informasi yang tidak ada di sini atau di instruksi di atas:\n\n".$knowledge
+            : '';
 
-        $knowledgeBlock = "Berikut informasi referensi (knowledge base) dari dokumen yang diunggah — gunakan ini sebagai sumber jawaban jika relevan dengan pertanyaan pelanggan, dan jangan mengarang informasi yang tidak ada di sini atau di instruksi di atas:\n\n".$knowledge;
-
-        return $behaviour !== '' ? $behaviour."\n\n---\n\n".$knowledgeBlock : $knowledgeBlock;
+        return implode("\n\n---\n\n", array_filter([$behaviour, $knowledgeBlock, self::CHAT_STYLE]));
     }
 }

@@ -11,24 +11,8 @@
     @error('device_id', $errorBag)<div class="invalid-feedback">{{ $message }}</div>@enderror
 </div>
 
-@if ($isOwner)
-    <div class="mb-3">
-        <label class="form-label">Cabang</label>
-        <select name="branch_office_id" class="form-select @error('branch_office_id', $errorBag) is-invalid @enderror">
-            <option value="">-- Semua / Belum ditentukan --</option>
-            @foreach($branchOffices as $branch)
-                <option value="{{ $branch->id }}" @selected(old('branch_office_id', $bot->branch_office_id ?? '') == $branch->id)>{{ $branch->name }}</option>
-            @endforeach
-        </select>
-        @error('branch_office_id', $errorBag)<div class="invalid-feedback">{{ $message }}</div>@enderror
-    </div>
-@else
-    <input type="hidden" name="branch_office_id" value="{{ $lockedBranchOffice?->id }}">
-    <div class="mb-3">
-        <label class="form-label">Cabang</label>
-        <input type="text" class="form-control" value="{{ $lockedBranchOffice->name ?? '-' }}" disabled>
-    </div>
-@endif
+{{-- Cabang tidak dipilih di sini: selalu mengikuti cabang device (AiBotController::saveForDevice()). --}}
+<div class="form-text mt-n2 mb-3">Cabang mengikuti cabang device yang dipilih. Satu cabang hanya bisa memakai 1 AI Bot.</div>
 
 <div class="row">
     <div class="col-6 mb-3">
