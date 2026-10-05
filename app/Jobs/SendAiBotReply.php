@@ -162,9 +162,13 @@ class SendAiBotReply implements ShouldQueue
                 'error' => $e->getMessage(),
             ]);
 
-            $this->markFailed($bot, $e->getMessage());
+            $this->markFailed($bot, AiReplyGenerator::friendlyError($e));
 
-            throw $e;
+            // Hanya error sementara yang dicoba ulang ($tries/$backoff); error
+            // permanen (kuota harian habis, API key salah) cukup dicatat.
+            if (AiReplyGenerator::isTransient($e)) {
+                throw $e;
+            }
         } finally {
             $chatLock->release();
         }

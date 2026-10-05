@@ -64,14 +64,39 @@ class AiReplyGenerator
      * CHAT_STYLE selalu ditambahkan paling akhir.
      */
     /**
-     * Error sementara dari provider AI (server sibuk / rate limit / koneksi
-     * putus) yang layak dicoba ulang -- beda dengan error permanen seperti
-     * API key salah atau paket habis. Client melempar "... API error (503): ...".
+     * Error sementara dari provider AI (server sibuk / rate limit per menit /
+     * koneksi putus) yang layak dicoba ulang. Kuota HARIAN / billing habis
+     * (429 "PerDay" Gemini, "insufficient_quota" OpenAI) TIDAK dicoba ulang
+     * -- tidak akan pulih dalam hitungan detik, hanya membuang permintaan.
+     * Client melempar "... API error (503): ...".
      */
     public static function isTransient(\Throwable $e): bool
     {
+        $message = $e->getMessage();
+
         return $e instanceof \Illuminate\Http\Client\ConnectionException
-            || (bool) preg_match('/API error \((429|500|502|503|504)\)/', $e->getMessage());
+            || (preg_match('/API error \((429|500|502|503|504)\)/', $message) && ! self::isQuotaExhausted($message));
+    }
+
+    /** Pesan error AI yang mudah dipahami pemilik toko (disimpan di AI Bot > last_error). */
+    public static function friendlyError(\Throwable $e): string
+    {
+        $message = $e->getMessage();
+        preg_match('/API error \((\d{3})\)/', $message, $match);
+
+        return match (true) {
+            self::isQuotaExhausted($message) => 'Kuota API AI habis (batas harian / billing). Aktifkan billing di akun provider AI atau ganti API key.',
+            in_array($match[1] ?? null, ['401', '403'], true) => 'API key AI ditolak (salah / tidak punya akses). Periksa API key di pengaturan AI Bot.',
+            ($match[1] ?? null) === '404' => 'Model AI tidak ditemukan / tidak tersedia untuk API key ini. Pilih model lain.',
+            ($match[1] ?? null) === '429' => 'Terlalu banyak permintaan ke AI dalam waktu singkat (rate limit). Coba lagi sebentar.',
+            in_array($match[1] ?? null, ['500', '502', '503', '504'], true) || $e instanceof \Illuminate\Http\Client\ConnectionException => 'Server AI sedang sibuk / tidak bisa dihubungi. Coba lagi beberapa saat.',
+            default => mb_substr($message, 0, 300),
+        };
+    }
+
+    private static function isQuotaExhausted(string $message): bool
+    {
+        return str_contains($message, '(429)') && (bool) preg_match('/PerDay|insufficient_quota/i', $message);
     }
 
     private function buildSystemPrompt(WaAiBot $bot): string

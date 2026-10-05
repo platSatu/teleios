@@ -31,14 +31,27 @@ class OpenAiClient implements AiProviderClient
 
         $messages[] = ['role' => 'user', 'content' => $userMessage];
 
+        // Disamakan dengan GeminiClient (6 Oktober 2026):
+        // - max_completion_tokens (pengganti max_tokens, wajib untuk model
+        //   baru seperti gpt-5 / o-series; tetap didukung gpt-4o/4.1);
+        // - model reasoning (o1/o3/o4/gpt-5) ikut memakai jatah token untuk
+        //   "berpikir", jadi diberi ruang 2x, dan TIDAK menerima temperature
+        //   selain bawaan -- dikirim hanya untuk model biasa.
+        $isReasoning = (bool) preg_match('/^(o\d|gpt-5)/i', $model);
+
+        $body = [
+            'model' => $model,
+            'messages' => $messages,
+            'max_completion_tokens' => self::MAX_OUTPUT_TOKENS * ($isReasoning ? 2 : 1),
+        ];
+
+        if (! $isReasoning) {
+            $body['temperature'] = self::TEMPERATURE;
+        }
+
         $response = Http::withToken($apiKey)
-            ->timeout(30)
-            ->post('https://api.openai.com/v1/chat/completions', [
-                'model' => $model,
-                'messages' => $messages,
-                'max_tokens' => self::MAX_OUTPUT_TOKENS,
-                'temperature' => self::TEMPERATURE,
-            ]);
+            ->timeout(60)
+            ->post('https://api.openai.com/v1/chat/completions', $body);
 
         if ($response->failed()) {
             throw new RuntimeException('OpenAI API error ('.$response->status().'): '.$response->body());

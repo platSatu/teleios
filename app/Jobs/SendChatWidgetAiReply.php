@@ -111,6 +111,8 @@ class SendChatWidgetAiReply implements ShouldQueue
             if ($conversation->fresh()?->status === ChatWidgetConversation::STATUS_AI) {
                 $chats->addMessage($conversation, ChatWidgetMessage::SENDER_AI, $reply);
             }
+
+            $bot->forceFill(['last_error' => null, 'last_triggered_at' => now()])->save();
         } catch (Throwable $e) {
             if (AiReplyGenerator::isTransient($e) && isset(self::RETRY_DELAYS[$this->retries])) {
                 Log::info('chat-widget-ai: provider sibuk, dicoba ulang', ['conversation_id' => $this->conversationId, 'retry' => $this->retries + 1]);
@@ -122,6 +124,11 @@ class SendChatWidgetAiReply implements ShouldQueue
 
             Log::warning('chat-widget-ai: gagal membalas, dioper ke CS', ['conversation_id' => $this->conversationId, 'error' => $e->getMessage()]);
             $chats->handover($conversation);
+
+            // Tampil di halaman AI Bot supaya pemilik toko tahu penyebabnya.
+            if (isset($bot)) {
+                $bot->forceFill(['last_error' => 'Live Chat: '.AiReplyGenerator::friendlyError($e)])->save();
+            }
         } finally {
             $lock->release();
         }
