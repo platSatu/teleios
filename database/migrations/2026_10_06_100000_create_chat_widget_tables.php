@@ -38,7 +38,7 @@ return new class extends Migration
             $table->string('last_seen_domain')->nullable();
             $table->timestamps();
 
-            $table->index(['company_id', 'branch_office_id']);
+            $table->index(['company_id', 'branch_office_id'], 'cw_widget_company_branch_idx');
         });
 
         Schema::create('chat_widget_conversations', function (Blueprint $table) {
@@ -55,7 +55,8 @@ return new class extends Migration
             $table->timestamp('last_message_at')->nullable();
             $table->timestamps();
 
-            $table->index(['chat_widget_id', 'status', 'last_message_at']);
+            // Nama index dibuat pendek: nama otomatis Laravel melebihi batas 64 karakter MySQL.
+            $table->index(['chat_widget_id', 'status', 'last_message_at'], 'cw_conv_widget_status_idx');
         });
 
         Schema::create('chat_widget_messages', function (Blueprint $table) {
@@ -66,7 +67,7 @@ return new class extends Migration
             $table->text('body');
             $table->timestamp('created_at')->useCurrent();
 
-            $table->index(['chat_widget_conversation_id', 'id']);
+            $table->index(['chat_widget_conversation_id', 'id'], 'cw_msg_conv_idx');
         });
 
         $this->seedMenus();
