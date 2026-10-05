@@ -379,6 +379,21 @@
                                     </a>
                                 </li>
                             @endif
+                            {{-- Live Chat Widget (6 Oktober 2026), lihat docs/live-chat-widget.md --}}
+                            @if ($canSeeMenu('chat.widget-inbox.index'))
+                                <li class="pe-slide-item">
+                                    <a href="{{ route('chat.widget-inbox.index') }}" class="pe-nav-link">
+                                        Live Chat Inbox
+                                    </a>
+                                </li>
+                            @endif
+                            @if ($canSeeMenu('chat.widgets.index'))
+                                <li class="pe-slide-item">
+                                    <a href="{{ route('chat.widgets.index') }}" class="pe-nav-link">
+                                        Live Chat Widget
+                                    </a>
+                                </li>
+                            @endif
 
                             {{-- Fitur #1 — antrian chat ops company-wide
                                      (status/SLA/assignee), lintas device.
@@ -527,21 +542,6 @@
                                         <li class="pe-slide-item">
                                             <a href="{{ route('chat.ai-bots.index') }}" class="pe-nav-link">
                                                 AI Bot
-                                            </a>
-                                        </li>
-                                    @endif
-                                    {{-- Live Chat Widget (6 Oktober 2026), lihat docs/live-chat-widget.md --}}
-                                    @if ($canSeeMenu('chat.widgets.index'))
-                                        <li class="pe-slide-item">
-                                            <a href="{{ route('chat.widgets.index') }}" class="pe-nav-link">
-                                                Live Chat Widget
-                                            </a>
-                                        </li>
-                                    @endif
-                                    @if ($canSeeMenu('chat.widget-inbox.index'))
-                                        <li class="pe-slide-item">
-                                            <a href="{{ route('chat.widget-inbox.index') }}" class="pe-nav-link">
-                                                Live Chat Inbox
                                             </a>
                                         </li>
                                     @endif
