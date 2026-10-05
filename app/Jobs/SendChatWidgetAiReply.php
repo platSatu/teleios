@@ -18,9 +18,15 @@ use Throwable;
 
 /**
  * Balasan AI untuk Live Chat Widget -- pasangan App\Jobs\SendAiBotReply
- * (WA), memakai AiReplyGenerator & AI Bot cabang yang sama. Kalau AI
- * gagal / paket tidak aktif, percakapan dioper ke CS (tidak dibiarkan
- * menggantung).
+ * (WA), memakai AiReplyGenerator & AI Bot cabang yang sama.
+ *
+ * - Satu percakapan dibalas satu per satu (lock per percakapan), dan hanya
+ *   pesan pengunjung TERAKHIR yang dijawab: pesan beruntun dijawab sekali
+ *   dengan riwayat lengkap, tidak dobel / tidak lompat urutan.
+ * - Semua data (AI Bot, riwayat) diambil dari percakapan ini sendiri, jadi
+ *   tidak pernah tertukar antar pengunjung / cabang / company.
+ * - Error sementara provider (503, timeout) dicoba ulang 2x (5s, 15s);
+ *   baru dioper ke CS kalau tetap gagal atau errornya permanen.
  */
 class SendChatWidgetAiReply implements ShouldQueue
 {
@@ -28,10 +34,14 @@ class SendChatWidgetAiReply implements ShouldQueue
 
     public int $tries = 1;
 
+    /** Jeda coba ulang (detik) untuk error sementara provider AI. */
+    private const RETRY_DELAYS = [5, 15];
+
     public function __construct(
         protected string $conversationId,
         protected int $visitorMessageId,
         protected int $attempt = 0,
+        protected int $retries = 0,
     ) {
         $this->onQueue(config('queue.ai_queue', 'default'));
     }
@@ -50,7 +60,7 @@ class SendChatWidgetAiReply implements ShouldQueue
 
         if (! $lock->get()) {
             if ($this->attempt < 10) {
-                self::dispatch($this->conversationId, $this->visitorMessageId, $this->attempt + 1)->delay(now()->addSeconds(5));
+                self::dispatch($this->conversationId, $this->visitorMessageId, $this->attempt + 1, $this->retries)->delay(now()->addSeconds(5));
             }
 
             return;
@@ -79,7 +89,14 @@ class SendChatWidgetAiReply implements ShouldQueue
 
             $question = $messages->pop();
 
-            if (! $question || $question->id !== $this->visitorMessageId) {
+            // Sudah ada pesan pengunjung yang lebih baru: job pesan itu yang
+            // menjawab (dengan riwayat yang mencakup pesan ini juga).
+            $hasNewer = ChatWidgetMessage::where('chat_widget_conversation_id', $conversation->id)
+                ->where('sender', ChatWidgetMessage::SENDER_VISITOR)
+                ->where('id', '>', $this->visitorMessageId)
+                ->exists();
+
+            if (! $question || $question->id !== $this->visitorMessageId || $hasNewer) {
                 return;
             }
 
@@ -95,6 +112,14 @@ class SendChatWidgetAiReply implements ShouldQueue
                 $chats->addMessage($conversation, ChatWidgetMessage::SENDER_AI, $reply);
             }
         } catch (Throwable $e) {
+            if (AiReplyGenerator::isTransient($e) && isset(self::RETRY_DELAYS[$this->retries])) {
+                Log::info('chat-widget-ai: provider sibuk, dicoba ulang', ['conversation_id' => $this->conversationId, 'retry' => $this->retries + 1]);
+                self::dispatch($this->conversationId, $this->visitorMessageId, $this->attempt, $this->retries + 1)
+                    ->delay(now()->addSeconds(self::RETRY_DELAYS[$this->retries]));
+
+                return;
+            }
+
             Log::warning('chat-widget-ai: gagal membalas, dioper ke CS', ['conversation_id' => $this->conversationId, 'error' => $e->getMessage()]);
             $chats->handover($conversation);
         } finally {
