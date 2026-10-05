@@ -101,7 +101,7 @@ class ChatWidgetController extends Controller
         $validator = Validator::make($request->all() + ['domains' => $domains->all()], [
             'name' => ['required', 'string', 'max:100'],
             'domains' => ['required', 'array', 'min:1', 'max:10'],
-            'domains.*' => ['regex:/^(localhost|([a-z0-9-]+\.)+[a-z]{2,})$/'],
+            'domains.*' => ['regex:/^(localhost|(\d{1,3}\.){3}\d{1,3}|([a-z0-9-]+\.)+[a-z]{2,})$/'],
             'branch_office_id' => ['nullable', 'uuid', Rule::exists('branch_offices', 'id')->where('company_id', $context->company->id)],
             'color' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'position' => ['required', 'in:left,right'],
@@ -110,7 +110,7 @@ class ChatWidgetController extends Controller
             'status' => ['required', 'in:active,inactive'],
         ], [
             'domains.required' => 'Isi minimal 1 domain website, mis. tokosaya.com.',
-            'domains.*.regex' => 'Format domain tidak valid. Contoh: tokosaya.com',
+            'domains.*.regex' => 'Format domain tidak valid. Contoh: tokosaya.com (untuk uji coba: localhost atau 127.0.0.1)',
         ]);
 
         if ($validator->fails()) {
