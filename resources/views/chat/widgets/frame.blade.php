@@ -18,22 +18,29 @@
            tanpa ini form nama/WA tetap tampil bersamaan dengan chat. */
         [hidden] { display: none !important; }
         html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 14px; color: #1f2937; background: #fff; }
-        .cw { display: flex; flex-direction: column; height: 100%; }
+        /* Kolom flex: header & kolom pesan tetap, hanya area chat yang
+           scroll. min-height: 0 wajib -- tanpa itu chat panjang mendorong
+           kolom pesan & tombol keluar dari layar. */
+        .cw { display: flex; flex-direction: column; height: 100%; height: 100dvh; overflow: hidden; }
+        .cw > * { flex-shrink: 0; }
         .cw-head { background: var(--brand); color: #fff; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; }
         .cw-head b { font-size: 15px; }
         .cw-head small { display: block; opacity: .85; font-size: 12px; }
         .cw-close { background: none; border: 0; color: #fff; font-size: 22px; cursor: pointer; line-height: 1; }
-        .cw-body { flex: 1; overflow-y: auto; padding: 12px; background: #f5f6f8; }
+        .cw-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px; background: #f5f6f8; }
         .cw-msg { max-width: 82%; margin: 6px 0; padding: 8px 11px; border-radius: 14px; white-space: pre-wrap; word-wrap: break-word; line-height: 1.4; }
         .cw-msg small { display: block; font-size: 11px; opacity: .6; margin-top: 3px; }
         .cw-visitor { margin-left: auto; background: var(--brand); color: #fff; border-bottom-right-radius: 4px; }
         .cw-ai, .cw-agent { background: #fff; border: 1px solid #e5e7eb; border-bottom-left-radius: 4px; }
         .cw-system { margin: 8px auto; background: transparent; color: #6b7280; font-size: 12px; text-align: center; }
         .cw-typing { color: #6b7280; font-size: 12px; padding: 0 14px 6px; min-height: 18px; background: #f5f6f8; }
-        .cw-start { flex: 1; padding: 16px; display: grid; gap: 8px; align-content: start; overflow-y: auto; }
+        .cw-start { flex: 1 1 auto; min-height: 0; padding: 16px; display: grid; gap: 8px; align-content: start; overflow-y: auto; }
         .cw-input, .cw-start input { width: 100%; border: 1px solid #d1d5db; border-radius: 10px; padding: 9px 11px; font: inherit; }
         .cw-foot { border-top: 1px solid #e5e7eb; padding: 8px; display: flex; gap: 6px; align-items: flex-end; }
-        .cw-foot textarea { resize: none; max-height: 90px; }
+        .cw-foot textarea { flex: 1; min-width: 0; resize: none; max-height: 96px; overflow-y: auto; line-height: 1.4; }
+        .cw-foot .cw-btn { flex-shrink: 0; }
+        /* Font 16px di HP supaya iOS tidak zoom saat kolom diketik. */
+        @media (max-width: 480px) { .cw-input, .cw-start input { font-size: 16px; } }
         .cw-btn { background: var(--brand); color: #fff; border: 0; border-radius: 10px; padding: 9px 14px; font: inherit; cursor: pointer; }
         .cw-btn:disabled { opacity: .5; cursor: default; }
         .cw-link { background: none; border: 0; color: var(--brand); font: inherit; font-size: 12px; cursor: pointer; padding: 4px 12px 8px; text-align: left; }
@@ -175,10 +182,19 @@
             if (r.status === 429) { el('cwTyping').hidden = false; el('cwTyping').textContent = 'Terlalu banyak pesan, tunggu sebentar ya.'; return; }
             if (!r.ok) return;
             el('cwText').value = '';
+            autosize();
             render([r.data.message]);
             setStatus(status === 'closed' ? 'ai' : status);
         });
     });
+
+    // Kolom pesan ikut tinggi teks (maks. sekitar 4 baris, sisanya scroll).
+    function autosize() {
+        var t = el('cwText');
+        t.style.height = 'auto';
+        t.style.height = Math.min(t.scrollHeight, 96) + 'px';
+    }
+    el('cwText').addEventListener('input', autosize);
 
     el('cwText').addEventListener('keydown', function (e) {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); el('cwForm').requestSubmit(); }

@@ -24,23 +24,51 @@
 
     var frame = null;
 
+    // HP (layar kecil): jendela chat layar penuh supaya kolom pesan & tombol
+    // selalu terlihat. Desktop: jendela mengambang di pojok.
+    function isMobile() {
+        return window.matchMedia('(max-width: 480px)').matches;
+    }
+
+    function layout() {
+        if (!frame) return;
+        frame.style.cssText = isMobile()
+            ? 'position:fixed;inset:0;width:100%;height:100%;height:100dvh;border:0;border-radius:0;z-index:2147483647;background:#fff'
+            : 'position:fixed;bottom:90px;' + side + ':20px;width:370px;max-width:calc(100vw - 24px);height:560px;max-height:calc(100vh - 110px);border:0;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.25);z-index:2147483647;background:#fff';
+    }
+
+    function setOpen(isOpen) {
+        frame.style.display = isOpen ? 'block' : 'none';
+        // Di HP tombol bulat disembunyikan selama chat terbuka (tutup lewat tombol x).
+        button.style.display = isOpen && isMobile() ? 'none' : 'flex';
+    }
+
     function open() {
         if (!frame) {
             frame = document.createElement('iframe');
             frame.src = base + '/chat-widget/' + encodeURIComponent(key) + '?page=' + encodeURIComponent(location.href.slice(0, 480));
             frame.title = 'Live chat';
-            frame.style.cssText = 'position:fixed;bottom:90px;' + side + ':20px;width:370px;max-width:calc(100vw - 24px);height:560px;max-height:calc(100vh - 110px);border:0;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.25);z-index:2147483647;background:#fff';
+            layout();
             document.body.appendChild(frame);
+            setOpen(true);
         } else {
-            frame.style.display = frame.style.display === 'none' ? 'block' : 'none';
+            setOpen(frame.style.display === 'none');
         }
     }
+
+    window.addEventListener('resize', function () {
+        if (frame) {
+            var isOpen = frame.style.display !== 'none';
+            layout();
+            setOpen(isOpen);
+        }
+    });
 
     button.addEventListener('click', open);
 
     window.addEventListener('message', function (event) {
         if (frame && event.source === frame.contentWindow && event.data && event.data.cw === 'close') {
-            frame.style.display = 'none';
+            setOpen(false);
         }
     });
 
