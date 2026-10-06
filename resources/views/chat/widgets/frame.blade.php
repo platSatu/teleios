@@ -66,7 +66,7 @@
     <div class="cw-body" id="cwBody" hidden></div>
     <div class="cw-typing" id="cwTyping" hidden></div>
     <button class="cw-link" id="cwHuman" type="button" hidden>Bicara dengan tim kami</button>
-    <div class="cw-start" id="cwEnded" hidden style="flex: 0;">
+    <div class="cw-start" id="cwEnded" hidden style="flex: none;">
         <button class="cw-btn" id="cwRestart" type="button">Mulai chat baru</button>
     </div>
     <form class="cw-foot" id="cwForm" hidden>
