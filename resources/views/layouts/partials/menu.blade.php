@@ -379,7 +379,10 @@
                                     </a>
                                 </li>
                             @endif
-                            {{-- Live Chat Widget (6 Oktober 2026), lihat docs/live-chat-widget.md --}}
+                            {{-- Live Chat Widget (6 Oktober 2026), lihat docs/live-chat-widget.md.
+                                 DISEMBUNYIKAN SEMENTARA (7 Oktober 2026) -- fitur widget ikut di-merge ke
+                                 main tapi belum dibuka untuk umum. Untuk mengaktifkan lagi: hapus baris
+                                 pembuka komentar ini dan baris penutup "AKHIR LIVE CHAT WIDGET" di bawah.
                             @if ($canSeeMenu('chat.widget-inbox.index'))
                                 <li class="pe-slide-item">
                                     <a href="{{ route('chat.widget-inbox.index') }}" class="pe-nav-link">
@@ -394,6 +397,7 @@
                                     </a>
                                 </li>
                             @endif
+                            AKHIR LIVE CHAT WIDGET --}}
 
                             {{-- Fitur #1 — antrian chat ops company-wide
                                      (status/SLA/assignee), lintas device.
