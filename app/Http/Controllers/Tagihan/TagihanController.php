@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\Tagihan;
 use App\Models\TagihanCategory;
+use App\Models\TagihanCategoryPelanggan;
 use App\Models\TagihanPelanggan;
 use App\Models\TagihanPenerima;
 use App\Jobs\SendTagihanLinkWaMessage;
@@ -246,7 +247,7 @@ class TagihanController extends Controller
                 'tagihan_pelanggan_id' => $pelanggan->id,
                 'company_id' => $tagihan->company_id,
                 'branch_office_id' => $tagihan->branch_office_id,
-                'amount' => $tagihan->amount,
+                'amount' => $this->amountFor($tagihan, $pelanggan->id),
                 'status' => TagihanPenerima::STATUS_BELUM_BAYAR,
             ]);
         }
@@ -293,7 +294,7 @@ class TagihanController extends Controller
                 'tagihan_pelanggan_id' => $pelanggan->id,
                 'company_id' => $tagihan->company_id,
                 'branch_office_id' => $tagihan->branch_office_id,
-                'amount' => $tagihan->amount,
+                'amount' => $this->amountFor($tagihan, $pelanggan->id),
                 'status' => TagihanPenerima::STATUS_BELUM_BAYAR,
             ]);
 
@@ -366,6 +367,24 @@ class TagihanController extends Controller
                 'status' => TagihanPenerima::STATUS_BELUM_BAYAR,
             ]);
         }
+    }
+
+    /**
+     * Nominal untuk penerima yang ditambahkan manual (Tambah Penerima /
+     * Setting User), 7 Oktober 2026: sama aturannya dengan
+     * generatePenerimaFromLangganan() -- nominal_override langganan aktif
+     * pelanggan ini di kategori Tagihan ini menang (mis. harga Grade murid
+     * dari tombol "Daftarkan Tagihan"), kalau tidak ada pakai nominal Tagihan.
+     * Sebelumnya dua tombol itu selalu memakai nominal Tagihan.
+     */
+    private function amountFor(Tagihan $tagihan, string $pelangganId)
+    {
+        $override = TagihanCategoryPelanggan::where('tagihan_category_id', $tagihan->tagihan_category_id)
+            ->where('tagihan_pelanggan_id', $pelangganId)
+            ->where('status', 'active')
+            ->value('nominal_override');
+
+        return $override ?? $tagihan->amount;
     }
 
     private function findOrFail($context, string $id): Tagihan
