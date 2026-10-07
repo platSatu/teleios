@@ -285,7 +285,17 @@ return Application::configure(basePath: dirname(__DIR__))
         // PreventBackHistoryCache, the same exception-unwind gap applies
         // here, so the no-store headers are set explicitly rather than
         // relying on that middleware.
-        $exceptions->render(function (\Illuminate\Session\TokenMismatchException $e, \Illuminate\Http\Request $request) {
+        //
+        // FIX (7 Oktober 2026): Handler::render() mengubah TokenMismatchException
+        // jadi HttpException(419) LEBIH DULU (prepareException) sebelum callback
+        // render dijalankan, jadi callback yang type-hint TokenMismatchException
+        // tidak pernah terpanggil dan user tetap melihat halaman 419 mentah.
+        // Sekarang tangkap HttpException 419 yang asalnya TokenMismatchException.
+        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\HttpException $e, \Illuminate\Http\Request $request) {
+            if ($e->getStatusCode() !== 419 || ! $e->getPrevious() instanceof \Illuminate\Session\TokenMismatchException) {
+                return null;
+            }
+
             $response = $request->expectsJson()
                 ? response()->json(['message' => 'Sesi Anda telah berakhir, silakan login kembali.'], 419)
                 : redirect()->guest(route('login'))
