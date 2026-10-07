@@ -33,7 +33,7 @@
                 </form>
 
                 <div class="table-responsive">
-                    <table class="table table-centered table-hover align-middle mb-0">
+                    <table class="table table-centered table-hover align-middle mb-0 text-nowrap">
                         <thead class="table-light">
                             <tr>
                                 <th>Nama</th>
@@ -59,17 +59,19 @@
                                         <span class="badge {{ $t->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $t->status }}</span>
                                     </td>
                                     <td class="text-end">
+                                        <div class="d-inline-flex flex-nowrap align-items-center gap-1">
                                         <a href="{{ route('tagihan.show', $t->id) }}" class="btn btn-sm btn-outline-primary">Setting User</a>
                                         <a href="{{ route('tagihan.edit', $t->id) }}" class="btn btn-sm btn-light" title="Edit"><i class="ri-edit-line"></i></a>
-                                        <form action="{{ route('tagihan.copy', $t->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Salin Tagihan ini beserta pengingat dan semua penerimanya (sebagai tagihan baru yang belum dibayar)?');">
+                                        <form action="{{ route('tagihan.copy', $t->id) }}" method="POST" class="m-0" onsubmit="return confirm('Salin Tagihan ini beserta pengingat dan semua penerimanya (sebagai tagihan baru yang belum dibayar)?');">
                                             @csrf
                                             <button type="submit" class="btn btn-sm btn-light" title="Salin Tagihan"><i class="ri-file-copy-line"></i> Copy</button>
                                         </form>
-                                        <form action="{{ route('tagihan.destroy', $t->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Hapus Tagihan ini beserta semua penerimanya? Tagihan yang sudah ada pembayaran lunas tidak bisa dihapus.');">
+                                        <form action="{{ route('tagihan.destroy', $t->id) }}" method="POST" class="m-0" onsubmit="return confirm('Hapus Tagihan ini beserta semua penerimanya? Tagihan yang sudah ada pembayaran lunas tidak bisa dihapus.');">
                                             @csrf
                                             @method('DELETE')
                                             <button type="submit" class="btn btn-sm btn-light text-danger" title="Hapus"><i class="ri-delete-bin-line"></i></button>
                                         </form>
+                                        </div>
                                     </td>
                                 </tr>
                             @empty
