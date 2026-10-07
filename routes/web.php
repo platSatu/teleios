@@ -571,6 +571,7 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::get('/{id}/edit', 'edit')->name('tagihan.category.edit');
                 Route::put('/{id}', 'update')->name('tagihan.category.update');
                 Route::delete('/{id}', 'destroy')->name('tagihan.category.destroy');
+                Route::post('/{id}/copy', 'copy')->middleware('throttle:20,1')->name('tagihan.category.copy');
             });
 
         // Aturan denda bertingkat milik satu category -- PENINGGALAN,
@@ -624,6 +625,7 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 Route::get('/{id}/edit', 'edit')->name('tagihan.edit');
                 Route::put('/{id}', 'update')->name('tagihan.update');
                 Route::delete('/{id}', 'destroy')->name('tagihan.destroy');
+                Route::post('/{id}/copy', 'copy')->middleware('throttle:20,1')->name('tagihan.copy');
                 // Tambah/hapus baris TagihanPenerima secara manual tanpa
                 // mengubah daftar langganan category (lihat docblock
                 // tagihan_category_pelanggan) -- checklist pelanggan mana

@@ -25,6 +25,15 @@
                     </div>
                     <div class="d-flex gap-2">
                         <a href="{{ route('tagihan.edit', $tagihan->id) }}" class="btn btn-light"><i class="ri-edit-line"></i> Edit</a>
+                        <form action="{{ route('tagihan.copy', $tagihan->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Salin Tagihan ini beserta pengingat dan semua penerimanya (sebagai tagihan baru yang belum dibayar)?');">
+                            @csrf
+                            <button type="submit" class="btn btn-light"><i class="ri-file-copy-line"></i> Copy</button>
+                        </form>
+                        <form action="{{ route('tagihan.destroy', $tagihan->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Hapus Tagihan ini beserta semua penerimanya? Tagihan yang sudah ada pembayaran lunas tidak bisa dihapus.');">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="btn btn-light text-danger"><i class="ri-delete-bin-line"></i> Hapus</button>
+                        </form>
                         <a href="{{ route('tagihan.index') }}" class="btn btn-light">Kembali</a>
                     </div>
                 </div>

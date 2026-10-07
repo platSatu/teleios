@@ -59,6 +59,10 @@
                                         <a href="{{ route('tagihan.category.setting', $category->id) }}" class="btn btn-sm btn-light">
                                             <i class="ri-settings-3-line"></i> Setting
                                         </a>
+                                        <form action="{{ route('tagihan.category.copy', $category->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Salin kategori ini beserta pengaturan denda, pengingat, dan daftar pelanggannya?');">
+                                            @csrf
+                                            <button type="submit" class="btn btn-sm btn-light" title="Salin kategori"><i class="ri-file-copy-line"></i> Copy</button>
+                                        </form>
                                         <form action="{{ route('tagihan.category.destroy', $category->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Hapus kategori ini?');">
                                             @csrf
                                             @method('DELETE')

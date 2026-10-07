@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\BranchOffice;
 use App\Models\Company;
 use App\Models\TagihanCategory;
+use App\Services\Tagihan\TagihanCopier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -169,6 +170,22 @@ class TagihanCategoryController extends Controller
         return redirect()
             ->route('tagihan.category.index', ['branch_office_id' => $branchOfficeId])
             ->with('success', 'Kategori Tagihan berhasil dihapus.');
+    }
+
+    /**
+     * Salin kategori beserta pengaturan denda, pengingat & daftar langganan
+     * pelanggannya (lihat App\Services\Tagihan\TagihanCopier). Salinan
+     * langsung dibuka di halaman Edit supaya admin bisa mengganti namanya.
+     */
+    public function copy(Request $request, string $id, TagihanCopier $copier): RedirectResponse
+    {
+        $context = $this->companyContext($request);
+
+        $copy = $copier->copyCategory($this->findOrFail($context, $id));
+
+        return redirect()
+            ->route('tagihan.category.edit', $copy->id)
+            ->with('success', "Kategori berhasil disalin menjadi \"{$copy->name}\". Silakan ubah nama atau pengaturannya bila perlu.");
     }
 
     private function branchOfficesFor(Company $company, $context)

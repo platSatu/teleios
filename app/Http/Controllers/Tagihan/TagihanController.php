@@ -11,6 +11,7 @@ use App\Models\TagihanCategoryPelanggan;
 use App\Models\TagihanPelanggan;
 use App\Models\TagihanPenerima;
 use App\Jobs\SendTagihanLinkWaMessage;
+use App\Services\Tagihan\TagihanCopier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -196,6 +197,22 @@ class TagihanController extends Controller
         return redirect()
             ->route('tagihan.show', $tagihan->id)
             ->with('success', 'Tagihan berhasil diperbarui.');
+    }
+
+    /**
+     * Salin Tagihan beserta pengingat & daftar penerimanya sebagai invoice
+     * baru yang belum dibayar (lihat App\Services\Tagihan\TagihanCopier).
+     * Link WA tidak dikirim otomatis -- admin cek/ubah salinannya dulu.
+     */
+    public function copy(Request $request, string $id, TagihanCopier $copier): RedirectResponse
+    {
+        $context = $this->companyContext($request);
+
+        $copy = $copier->copyTagihan($this->findOrFail($context, $id));
+
+        return redirect()
+            ->route('tagihan.show', $copy->id)
+            ->with('success', "Tagihan berhasil disalin menjadi \"{$copy->name}\" dengan {$copy->penerima()->count()} penerima (semua belum bayar). Link WA belum dikirim -- ubah nama/jatuh tempo lewat tombol Edit bila perlu.");
     }
 
     /**
