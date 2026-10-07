@@ -21,6 +21,8 @@ use App\Services\Jadwal\JadwalRutinConflictService;
 use App\Services\Jadwal\JadwalRutinSesiGenerator;
 use App\Services\Jadwal\JadwalScheduleChangeNotifier;
 use App\Services\Jadwal\StudentFromFormSubmission;
+use App\Services\Jadwal\StudentTagihanLink;
+use App\Models\TagihanCategory;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -100,7 +102,7 @@ class JadwalStudentController extends Controller
     ) {
     }
 
-    public function index(Request $request): View
+    public function index(Request $request, StudentTagihanLink $tagihanLink): View
     {
         $context = $this->companyContext($request);
         $company = $context->company;
@@ -115,7 +117,7 @@ class JadwalStudentController extends Controller
         $gradeId = $request->query('jadwal_grade_id');
 
         $query = JadwalStudent::where('company_id', $company->id)
-            ->with(['mataPelajaran:id,name', 'pengajar:id,name', 'branchOffice:id,name']);
+            ->with(['mataPelajaran:id,name', 'pengajar:id,name', 'branchOffice:id,name', 'tagihanPelanggan.categoryPelanggan' => fn ($q) => $q->where('status', 'active')->with('category:id,name')]);
 
         if ($context->isLockedToBranch()) {
             $query->where(function ($q) use ($context) {
@@ -217,7 +219,19 @@ class JadwalStudentController extends Controller
             ? $this->companyTeamMembers($company)->firstWhere('id', $pengajarId)
             : null;
 
-        return view('jadwal.jadwal-student.index', compact('students', 'mataPelajaran', 'pengajar', 'mataPelajaranId', 'pengajarId', 'gradeId'));
+        // Popup "Daftarkan Tagihan": nominal awal dari harga bulanan Grade &
+        // kategori Tagihan per cabang (hanya untuk cabang murid di halaman ini).
+        $tagihanAmounts = $tagihanLink->monthlyAmounts($company->id, $studentIds);
+        $tagihanCategoriesByBranch = TagihanCategory::where('company_id', $company->id)
+            ->whereIn('branch_office_id', collect($students->items())->pluck('branch_office_id')->filter()->unique())
+            ->orderBy('name')
+            ->get(['id', 'name', 'branch_office_id'])
+            ->groupBy('branch_office_id')
+            ->map(fn ($rows) => $rows->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->values());
+
+        return view('jadwal.jadwal-student.index', compact('students', 'mataPelajaran', 'pengajar', 'mataPelajaranId', 'pengajarId', 'gradeId', 'tagihanAmounts', 'tagihanCategoriesByBranch') + [
+            'canTagihan' => $context->canAccessRoute('tagihan.pelanggan.index'),
+        ]);
     }
 
     public function create(Request $request, StudentFromFormSubmission $fromForm): View
@@ -1385,6 +1399,9 @@ class JadwalStudentController extends Controller
             $this->scheduleChangeNotifier->flushPengajarNotifications();
 
             $student->update(['status' => JadwalStudent::STATUS_INACTIVE]);
+
+            // Bulan depan tidak ikut ditagih lagi (tagihan lama tetap ada).
+            app(StudentTagihanLink::class)->deactivate($student);
         });
 
         return redirect()

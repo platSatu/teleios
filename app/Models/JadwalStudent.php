@@ -42,6 +42,9 @@ class JadwalStudent extends Model
         // Form asal (form_headers) kalau dibuat dari Form > Submission, lihat
         // migration add_form_id_to_jadwal_student_table. Nullable.
         'form_id',
+        // Pelanggan Tagihan milik murid ini (tombol "Daftarkan Tagihan"),
+        // lihat App\Services\Jadwal\StudentTagihanLink. Nullable.
+        'tagihan_pelanggan_id',
     ];
 
     public function company()
@@ -57,6 +60,11 @@ class JadwalStudent extends Model
     public function mataPelajaran()
     {
         return $this->belongsTo(JadwalMataPelajaran::class, 'jadwal_mata_pelajaran_id');
+    }
+
+    public function tagihanPelanggan()
+    {
+        return $this->belongsTo(TagihanPelanggan::class, 'tagihan_pelanggan_id');
     }
 
     /** Form pendaftaran asal Student ini (null kalau dibuat manual). */

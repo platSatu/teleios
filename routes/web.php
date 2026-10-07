@@ -461,6 +461,10 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
                 // docblock JadwalStudentController::deactivate()/destroy().
                 Route::patch('/{id}/deactivate', 'deactivate')->name('jadwal.student.deactivate');
                 Route::delete('/{id}', 'destroy')->name('jadwal.student.destroy');
+                // Popup "Daftarkan Tagihan" -- lihat JadwalStudentTagihanController.
+                Route::post('/{id}/tagihan', [\App\Http\Controllers\Jadwal\JadwalStudentTagihanController::class, 'store'])
+                    ->middleware('throttle:30,1')
+                    ->name('jadwal.student.tagihan');
             });
 
         // Jadwal Rutin milik satu Student (Jadwal v2, spec poin 4) --
