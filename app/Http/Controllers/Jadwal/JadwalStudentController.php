@@ -20,6 +20,7 @@ use App\Services\Jadwal\JadwalCountsService;
 use App\Services\Jadwal\JadwalRutinConflictService;
 use App\Services\Jadwal\JadwalRutinSesiGenerator;
 use App\Services\Jadwal\JadwalScheduleChangeNotifier;
+use App\Services\Jadwal\StudentFromFormSubmission;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -219,9 +220,13 @@ class JadwalStudentController extends Controller
         return view('jadwal.jadwal-student.index', compact('students', 'mataPelajaran', 'pengajar', 'mataPelajaranId', 'pengajarId', 'gradeId'));
     }
 
-    public function create(Request $request): View
+    public function create(Request $request, StudentFromFormSubmission $fromForm): View
     {
         $context = $this->companyContext($request);
+
+        // "+ Add Student" dari Form > Submission: isian awal diambil dari
+        // jawaban form (lihat App\Services\Jadwal\StudentFromFormSubmission).
+        $fromSubmission = $fromForm->find($context, $request->query('form_submission_id'));
 
         $gradeId = $request->query('jadwal_grade_id');
         $pengajarId = $request->query('pengajar_id');
@@ -324,6 +329,8 @@ class JadwalStudentController extends Controller
 
         return view('jadwal.jadwal-student.create', [
             'student' => null,
+            'fromSubmission' => $fromSubmission,
+            'prefill' => $fromSubmission ? $fromForm->prefill($fromSubmission) : [],
             'selectedBranchOfficeId' => $lockedMataPelajaranForBranch?->branch_office_id,
             'selectedMataPelajaranId' => $mataPelajaranId,
             'selectedPengajarId' => $pengajarId,
@@ -348,10 +355,17 @@ class JadwalStudentController extends Controller
         ] + $this->formData($context));
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, StudentFromFormSubmission $fromForm): RedirectResponse
     {
         $context = $this->companyContext($request);
         $company = $context->company;
+
+        // Asal form (opsional) -- dicek ulang milik company/branch ini,
+        // bukan dipercaya dari hidden input.
+        $fromSubmission = $fromForm->find($context, $request->input('form_submission_id'));
+        if ($request->filled('form_submission_id') && ! $fromSubmission) {
+            return redirect()->route('jadwal.student.create')->withErrors(['form_submission_id' => 'Data form pendaftaran tidak ditemukan.']);
+        }
 
         if (! $context->isOwner) {
             $request->merge(['branch_office_id' => $context->branchOffice?->id]);
@@ -363,7 +377,7 @@ class JadwalStudentController extends Controller
 
         if ($validator->fails()) {
             return redirect()
-                ->route('jadwal.student.create', $request->only(['jadwal_mata_pelajaran_id', 'pengajar_id', 'jadwal_grade_id']))
+                ->route('jadwal.student.create', $request->only(['jadwal_mata_pelajaran_id', 'pengajar_id', 'jadwal_grade_id', 'form_submission_id']))
                 ->withErrors($validator)
                 ->withInput();
         }
@@ -391,7 +405,7 @@ class JadwalStudentController extends Controller
         // createRutinFromSlots() untuk detail pengecekan bentroknya.
         $ruanganId = $validated['jadwal_ruangan_id'] ?? null;
 
-        [$student, $rutinCreated, $rutinSkipped] = DB::transaction(function () use ($company, $validated, $mataPelajaran, $slotIdsByGrade, $ruanganId) {
+        [$student, $rutinCreated, $rutinSkipped] = DB::transaction(function () use ($company, $validated, $mataPelajaran, $slotIdsByGrade, $ruanganId, $fromSubmission) {
             $student = JadwalStudent::create([
                 'company_id' => $company->id,
                 'branch_office_id' => $validated['branch_office_id'] ?? $mataPelajaran?->branch_office_id,
@@ -401,6 +415,7 @@ class JadwalStudentController extends Controller
                 'parent_phone_number' => $validated['parent_phone_number'] ?? null,
                 'student_phone_number' => $validated['student_phone_number'] ?? null,
                 'status' => $validated['status'] ?? 'active',
+                'form_id' => $fromSubmission?->form_header_id,
             ]);
 
             $created = 0;

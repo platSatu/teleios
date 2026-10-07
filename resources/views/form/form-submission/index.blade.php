@@ -65,6 +65,9 @@
                                         <span class="badge bg-light text-dark border fw-normal">{{ $submission->answers->count() }}</span>
                                     </td>
                                     <td class="text-nowrap text-end">
+                                        <a href="{{ route('jadwal.student.create', ['form_submission_id' => $submission->id]) }}" class="btn btn-sm btn-outline-success" title="Jadikan Student (data diisi dari jawaban form ini)">
+                                            <i class="ri-user-add-line"></i> Add Student
+                                        </a>
                                         <a href="{{ route('form.submission.show', [$header->id, $submission->id]) }}" class="btn btn-sm btn-outline-primary">
                                             <i class="ri-eye-line"></i> Detail
                                         </a>

@@ -13,6 +13,11 @@
     // ditampilkan sebagai select manual di sini supaya akses langsung
     // lewat menu sidebar "Student" bisa pilih branch sendiri tanpa
     // harus lewat index Branch/Mata Pelajaran dulu.
+    // "+ Add Student" dari Form > Submission: query ini ikut dibawa di semua
+    // link/reload Tambah Student supaya isian awal dari form tidak hilang.
+    $prefill = $prefill ?? [];
+    $fromFormQuery = ($fromSubmission ?? null) ? ['form_submission_id' => $fromSubmission->id] : [];
+
     $lockedBranchOfficeId = old('branch_office_id', $selectedBranchOfficeId ?? null);
     $lockedBranch = $lockedBranchOfficeId ? $branchOffices->firstWhere('id', $lockedBranchOfficeId) : null;
 
@@ -37,6 +42,20 @@
     $lockedPengajar = $lockedPengajarId ? $teamMembers->firstWhere('id', $lockedPengajarId) : null;
 @endphp
 
+@if ($fromSubmission ?? null)
+    <input type="hidden" name="form_submission_id" value="{{ $fromSubmission->id }}">
+    <div class="alert alert-info py-2 px-3 small">
+        <i class="ri-file-list-3-line"></i>
+        Data awal diambil dari form <strong>{{ $fromSubmission->formHeader->name ?? '-' }}</strong>
+        (submit {{ optional($fromSubmission->submitted_at)->format('d M Y H:i') }}). Periksa lagi sebelum disimpan.
+    </div>
+@elseif (($student ?? null)?->form_id)
+    <div class="alert alert-light border py-2 px-3 small">
+        <i class="ri-file-list-3-line"></i>
+        Mendaftar dari form: <strong>{{ $student->form->name ?? 'Form sudah dihapus' }}</strong>
+    </div>
+@endif
+
 <div class="mb-3">
     <label class="form-label">Branch (opsional)</label>
     @if ($lockedBranch && !$errors->has('branch_office_id'))
@@ -45,7 +64,7 @@
         <div class="form-text">
             Student ini akan dikaitkan ke branch di atas.
             @if ($branchOffices->count() > 1)
-                <a href="{{ route('jadwal.student.create') }}">Ganti branch</a>
+                <a href="{{ route('jadwal.student.create', $fromFormQuery) }}">Ganti branch</a>
             @endif
         </div>
     @elseif ($branchOffices->count() <= 1 && $branchOffices->isNotEmpty())
@@ -57,7 +76,7 @@
         <select name="branch_office_id" class="form-select @error('branch_office_id') is-invalid @enderror">
             <option value="">- Ikuti Mata Pelajaran / Bidang -</option>
             @foreach ($branchOffices as $branch)
-                <option value="{{ $branch->id }}" @selected(old('branch_office_id', $student->branch_office_id ?? '') == $branch->id)>{{ $branch->name }}</option>
+                <option value="{{ $branch->id }}" @selected(old('branch_office_id', $student->branch_office_id ?? ($prefill['branch_office_id'] ?? '')) == $branch->id)>{{ $branch->name }}</option>
             @endforeach
         </select>
         @error('branch_office_id')
@@ -74,7 +93,7 @@
         <input type="hidden" name="jadwal_mata_pelajaran_id" value="{{ $lockedMataPelajaran->id }}">
         <div class="form-text">
             Student ini akan dikaitkan ke Mata Pelajaran / Bidang di atas.
-            <a href="{{ route('jadwal.student.create') }}">Ganti Mata Pelajaran / Bidang</a>
+            <a href="{{ route('jadwal.student.create', $fromFormQuery) }}">Ganti Mata Pelajaran / Bidang</a>
         </div>
     @else
         {{--
@@ -99,7 +118,7 @@
                 ? route('jadwal.student.edit', $student->id)
                 : route('jadwal.student.create', array_filter([
                     'jadwal_grade_id' => $selectedGradeId ?? null,
-                ]));
+                ]) + $fromFormQuery);
             $mataPelajaranReloadSeparator = str_contains($mataPelajaranReloadUrl, '?') ? '&' : '?';
             $currentPengajarIdForReload = old('pengajar_id', $previewPengajarId ?? ($student->pengajar_id ?? null));
             $currentMataPelajaranIdSelected = old('jadwal_mata_pelajaran_id', $previewMataPelajaranId ?? $selectedMataPelajaranId ?? ($student->jadwal_mata_pelajaran_id ?? ''));
@@ -125,7 +144,7 @@
         <input type="hidden" name="pengajar_id" value="{{ $lockedPengajar->id }}">
         <div class="form-text">
             Student ini akan dikaitkan ke Pengajar di atas.
-            <a href="{{ route('jadwal.student.create', array_filter(['jadwal_mata_pelajaran_id' => $lockedMataPelajaranId])) }}">Ganti Pengajar</a>
+            <a href="{{ route('jadwal.student.create', array_filter(['jadwal_mata_pelajaran_id' => $lockedMataPelajaranId]) + $fromFormQuery) }}">Ganti Pengajar</a>
         </div>
     @else
         {{--
@@ -155,7 +174,7 @@
                 : route('jadwal.student.create', array_filter([
                     'jadwal_mata_pelajaran_id' => $selectedMataPelajaranId ?? null,
                     'jadwal_grade_id' => $selectedGradeId ?? null,
-                ]));
+                ]) + $fromFormQuery);
             // create() bisa menghasilkan URL yang SUDAH punya query
             // string sendiri (jadwal_mata_pelajaran_id/jadwal_kategori_id)
             // -- pakai `&` kalau begitu, `?` kalau belum ada query sama
@@ -220,7 +239,7 @@
 <div class="mb-3">
     <label class="form-label">Nama Student</label>
     <input type="text" name="name" class="form-control @error('name') is-invalid @enderror"
-        value="{{ old('name', $student->name ?? '') }}" placeholder="Nama murid" required>
+        value="{{ old('name', $student->name ?? ($prefill['name'] ?? '')) }}" placeholder="Nama murid" required>
     @error('name')
         <div class="invalid-feedback">{{ $message }}</div>
     @enderror
@@ -230,7 +249,7 @@
     <div class="col-md-6 mb-3">
         <label class="form-label">No. HP Orang Tua (opsional)</label>
         <input type="text" name="parent_phone_number" class="form-control @error('parent_phone_number') is-invalid @enderror"
-            value="{{ old('parent_phone_number', $student->parent_phone_number ?? '') }}" placeholder="Contoh: 6281234567890">
+            value="{{ old('parent_phone_number', $student->parent_phone_number ?? ($prefill['parent_phone_number'] ?? '')) }}" placeholder="Contoh: 6281234567890">
         @error('parent_phone_number')
             <div class="invalid-feedback">{{ $message }}</div>
         @enderror
@@ -240,7 +259,7 @@
     <div class="col-md-6 mb-3">
         <label class="form-label">No. HP Murid (opsional)</label>
         <input type="text" name="student_phone_number" class="form-control @error('student_phone_number') is-invalid @enderror"
-            value="{{ old('student_phone_number', $student->student_phone_number ?? '') }}" placeholder="Contoh: 6281234567890">
+            value="{{ old('student_phone_number', $student->student_phone_number ?? ($prefill['student_phone_number'] ?? '')) }}" placeholder="Contoh: 6281234567890">
         @error('student_phone_number')
             <div class="invalid-feedback">{{ $message }}</div>
         @enderror

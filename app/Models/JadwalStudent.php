@@ -39,6 +39,9 @@ class JadwalStudent extends Model
         'parent_phone_number',
         'student_phone_number',
         'status',
+        // Form asal (form_headers) kalau dibuat dari Form > Submission, lihat
+        // migration add_form_id_to_jadwal_student_table. Nullable.
+        'form_id',
     ];
 
     public function company()
@@ -54,6 +57,12 @@ class JadwalStudent extends Model
     public function mataPelajaran()
     {
         return $this->belongsTo(JadwalMataPelajaran::class, 'jadwal_mata_pelajaran_id');
+    }
+
+    /** Form pendaftaran asal Student ini (null kalau dibuat manual). */
+    public function form()
+    {
+        return $this->belongsTo(FormHeader::class, 'form_id');
     }
 
     public function pengajar()
