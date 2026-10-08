@@ -62,6 +62,7 @@ class AppServiceProvider extends ServiceProvider
                 'hasActiveJadwalPackage' => $covers(MenuGateCategories::JADWAL_CATEGORY_NAMES),
                 'hasActiveTagihanPackage' => $covers(MenuGateCategories::TAGIHAN_CATEGORY_NAMES),
                 'hasActiveMarketplacePackage' => $covers(MenuGateCategories::MARKETPLACE_CATEGORY_NAMES),
+                'hasActivePaymentGatewayPackage' => $covers(MenuGateCategories::PAYMENT_GATEWAY_CATEGORY_NAMES),
                 // Aturan menu per role -- sama dengan middleware
                 // 'menu.access', lihat CompanyContext::canAccessRoute().
                 'canSeeMenu' => fn (string $routeName) => ! $context || $context->canAccessRoute($routeName),

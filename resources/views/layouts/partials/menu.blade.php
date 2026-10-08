@@ -348,6 +348,17 @@
                 @endif
                 AKHIR MARKETPLACE --}}
 
+                {{-- Menu "Payment Gateway" -- modul berdiri sendiri (8 Okt 2026),
+                     gate 'active.package:Payment Gateway'. --}}
+                @if (($hasActivePaymentGatewayPackage ?? false) && $canSeeMenu('payment-gateway.index') && ! (auth()->user()?->user_type === 'SUPERADMIN'))
+                    <li class="pe-slide">
+                        <a href="{{ route('payment-gateway.index') }}" class="pe-nav-link">
+                            <i class="uil uil-credit-card pe-nav-icon"></i>
+                            <span class="pe-nav-content">Payment Gateway</span>
+                        </a>
+                    </li>
+                @endif
+
                 {{-- Chat menu (and its whole "Pengaturan" sub-tree) only
                          shown while the user has at least one active,
                          not-yet-expired package — same rule as the routes
@@ -1039,6 +1050,11 @@
                             <li class="pe-slide-item">
                                 <a href="{{ route('duitku-disbursement-setting.edit') }}" class="pe-nav-link">
                                     Pengaturan Duitku Disbursement
+                                </a>
+                            </li>
+                            <li class="pe-slide-item">
+                                <a href="{{ route('superadmin.payment-gateway.index') }}" class="pe-nav-link">
+                                    Payment Gateway
                                 </a>
                             </li>
                         </ul>

@@ -669,6 +669,19 @@ Route::prefix('dashboard')->middleware(['auth', 'verified'])->group(function () 
         Route::get('/pesanan', [LazadaOrderController::class, 'index'])->name('marketplace.lazada.orders.index');
     });
 
+    // Layanan "Payment Gateway" (8 Oktober 2026) -- website company menerima
+    // pembayaran lewat teleios. Modul berdiri sendiri (App\Http\Controllers\
+    // PaymentGateway, tabel pg_*). API & callback ada di routes/api.php.
+    Route::prefix('payment-gateway')
+        ->middleware(['active.package:Payment Gateway', 'menu.access'])
+        ->controller(\App\Http\Controllers\PaymentGateway\PgMerchantController::class)
+        ->group(function () {
+            Route::get('/', 'index')->name('payment-gateway.index');
+            Route::post('/', 'save')->middleware('throttle:20,1')->name('payment-gateway.save');
+            Route::post('/secret', 'regenerateSecret')->middleware('throttle:5,1')->name('payment-gateway.secret');
+            Route::post('/invoice/{id}/webhook', 'resendWebhook')->middleware('throttle:30,1')->name('payment-gateway.webhook.resend');
+        });
+
     // Fitur "Keuangan" -- Saldo Branch/Company/Reseller & Tarik Saldo
     // (diskusi 22 September 2026, lihat App\Models\Wallet,
     // App\Models\PengajarFeeTransfer, App\Models\WalletWithdrawal).
@@ -1720,6 +1733,16 @@ Route::prefix('dashboard')->middleware(['auth', 'verified', 'superadmin'])->grou
                 Route::post('/test', 'test')->name('duitku-disbursement-setting.test');
             });
 
+        // Payment Gateway: aktivasi website, tarif per metode, transaksi.
+        Route::prefix('payment-gateway')
+            ->controller(\App\Http\Controllers\Superadmin\PgAdminController::class)
+            ->group(function () {
+                Route::get('/', 'index')->name('superadmin.payment-gateway.index');
+                Route::put('/merchant/{id}', 'updateMerchant')->name('superadmin.payment-gateway.merchant');
+                Route::post('/fee', 'saveFee')->name('superadmin.payment-gateway.fee.save');
+                Route::delete('/fee/{id}', 'deleteFee')->name('superadmin.payment-gateway.fee.delete');
+            });
+
         Route::prefix('roles')
             ->controller(RoleController::class)
             ->group(function () {
@@ -2255,3 +2278,8 @@ Route::get('/{slug}', [PublicFormController::class, 'show'])->name('form.public.
 // Maks 10 kiriman per menit per IP (anti-spam); lapis lain di PublicFormController.
 Route::post('/{slug}', [PublicFormController::class, 'store'])->middleware('throttle:10,1')->name('form.public.store');
 
+// Halaman/popup checkout Payment Gateway (publik, akses lewat token acak
+// invoice). Boleh di-iframe domain merchant (CSP frame-ancestors di controller).
+Route::get('/pay/{token}', [\App\Http\Controllers\PaymentGateway\PgCheckoutController::class, 'show'])
+    ->middleware('throttle:600,1')
+    ->name('pg.checkout.show');

@@ -57,4 +57,7 @@ class MenuGateCategories
      * seed_marketplace_application_catalog.
      */
     public const MARKETPLACE_CATEGORY_NAMES = ['Marketplace'];
+
+    /** Layanan Payment Gateway (website company terima pembayaran lewat teleios). */
+    public const PAYMENT_GATEWAY_CATEGORY_NAMES = ['Payment Gateway'];
 }

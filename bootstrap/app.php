@@ -118,6 +118,11 @@ return Application::configure(basePath: dirname(__DIR__))
             ->everyMinute()
             ->withoutOverlapping();
 
+        // Payment Gateway: invoice yang lewat batas waktu -> expired + webhook.
+        $schedule->command('pg:expire-invoices')
+            ->everyMinute()
+            ->withoutOverlapping();
+
         // Pengingat WA Tagihan (H-7/H-3/H-1/dst sebelum due_date) --
         // lihat App\Console\Commands\DispatchDueTagihanReminders. Sengaja
         // terpisah total dari tagihan:process-expiry di atas (beda
@@ -208,6 +213,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'menu.access' => \App\Http\Middleware\EnsureMenuAccess::class,
             'wa.api-key' => \App\Http\Middleware\VerifyWaApiKey::class,
             'frontend.api-key' => \App\Http\Middleware\VerifyFrontendApiKey::class,
+            'pg.signature' => \App\Http\Middleware\VerifyPgSignature::class,
         ]);
 
         // Stops the browser Back/Forward button from repainting a cached

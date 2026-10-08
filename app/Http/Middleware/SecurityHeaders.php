@@ -30,7 +30,7 @@ class SecurityHeaders
 
         // Form publik & Live Chat Widget boleh di-embed pelanggan di website
         // mereka (iframe). Widget dibatasi lagi oleh CSP frame-ancestors.
-        if (! $request->routeIs('form.public.*', 'chat-widget.frame')) {
+        if (! $request->routeIs('form.public.*', 'chat-widget.frame', 'pg.checkout.show')) {
             $headers['X-Frame-Options'] = 'SAMEORIGIN';
         }
 

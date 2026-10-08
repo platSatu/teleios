@@ -222,3 +222,30 @@ Route::prefix('chat-widget/{key}')
         Route::post('/messages', 'send')->middleware('throttle:30,1,chat-widget-send');
         Route::post('/handover', 'handover')->middleware('throttle:10,1,chat-widget-handover');
     });
+
+// Payment Gateway (8 Oktober 2026) -- lihat App\Http\Controllers\PaymentGateway.
+// API server-ke-server: signature HMAC + rate limit per merchant (pg.signature).
+Route::prefix('pay/v1')
+    ->middleware('pg.signature')
+    ->controller(\App\Http\Controllers\PaymentGateway\PgApiController::class)
+    ->group(function () {
+        Route::post('/invoices', 'store')->name('pg.api.invoices.store');
+        Route::get('/invoices/{id}', 'show')->name('pg.api.invoices.show');
+        Route::post('/invoices/{id}/cancel', 'cancel')->name('pg.api.invoices.cancel');
+        Route::get('/balance', 'balance')->name('pg.api.balance');
+    });
+
+// Dipanggil popup checkout (tanpa sesi/CSRF karena berjalan di iframe website lain).
+// Batas per IP dibuat longgar: banyak pembeli bisa berbagi satu IP (wifi kampus/kantor).
+Route::prefix('pay/checkout/{token}')
+    ->controller(\App\Http\Controllers\PaymentGateway\PgCheckoutController::class)
+    ->group(function () {
+        Route::post('/method', 'chooseMethod')->middleware('throttle:120,1')->name('pg.checkout.method');
+        Route::get('/status', 'status')->middleware('throttle:1200,1')->name('pg.checkout.status');
+    });
+
+// Callback Duitku khusus Payment Gateway (order "PG-"). Batas longgar:
+// saat ramai semua callback datang dari IP Duitku yang sama.
+Route::post('/pay/duitku/callback', [\App\Http\Controllers\PaymentGateway\PgDuitkuCallbackController::class, 'handle'])
+    ->middleware('throttle:3000,1')
+    ->name('pg.duitku.callback');
