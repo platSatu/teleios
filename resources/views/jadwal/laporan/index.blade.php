@@ -16,7 +16,7 @@
                 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
                     <div>
                         <h4 class="mb-1">Laporan Jadwal</h4>
-                        <p class="text-muted mb-0">Pilih rentang tanggal untuk melihat detail sesi & rekap (murid, fee, jam mengajar per pengajar), lalu export ke Excel.</p>
+                        <p class="text-muted mb-0">Pilih rentang tanggal untuk melihat ringkasan murid & omset, absensi per murid, dan fee per pengajar, lalu export ke Excel.</p>
                     </div>
                 </div>
 
@@ -50,7 +50,12 @@
                     </div>
                 </form>
 
-                @if($rekap)
+                @if($laporan)
+                    @php
+                        $rp = fn ($v) => 'Rp '.number_format($v, 0, ',', '.');
+                        $jam = fn ($m) => \App\Services\Jadwal\JadwalLaporanService::formatJam((int) $m);
+                    @endphp
+
                     <p class="text-muted">
                         Periode:
                         <strong>{{ $dari->isSameDay($sampai) ? $dari->translatedFormat('d F Y') : $dari->translatedFormat('d M Y').' - '.$sampai->translatedFormat('d M Y') }}</strong>
@@ -58,124 +63,140 @@
 
                     <div class="row g-3 mb-4">
                         <div class="col-6 col-lg-3">
-                            <div class="border rounded p-3 h-100">
-                                <div class="text-muted small">Murid Aktif</div>
-                                <div class="fs-4 fw-semibold">{{ $rekap['activeStudentCount'] }}</div>
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="d-flex align-items-center gap-2 text-muted small"><i class="ri-group-line fs-5 text-primary"></i> Total Murid</div>
+                                <div class="fs-3 fw-semibold mt-1">{{ number_format($laporan['totalMurid'], 0, ',', '.') }}</div>
+                                <div class="text-muted small">murid aktif</div>
                             </div>
                         </div>
                         <div class="col-6 col-lg-3">
-                            <div class="border rounded p-3 h-100">
-                                <div class="text-muted small">Murid Baru</div>
-                                <div class="fs-4 fw-semibold">{{ $rekap['newStudentCount'] }}</div>
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="d-flex align-items-center gap-2 text-muted small"><i class="ri-user-add-line fs-5 text-success"></i> Murid Baru</div>
+                                <div class="fs-3 fw-semibold mt-1">{{ number_format($laporan['muridBaru'], 0, ',', '.') }}</div>
+                                <div class="text-muted small">terdaftar di periode ini</div>
                             </div>
                         </div>
                         <div class="col-6 col-lg-3">
-                            <div class="border rounded p-3 h-100">
-                                <div class="text-muted small">Reschedule</div>
-                                <div class="fs-4 fw-semibold">{{ $rekap['rescheduleCount'] }}</div>
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="d-flex align-items-center gap-2 text-muted small"><i class="ri-book-2-line fs-5 text-info"></i> Mata Pelajaran / Bidang</div>
+                                <div class="fs-3 fw-semibold mt-1">{{ number_format($laporan['mataPelajaranCount'], 0, ',', '.') }}</div>
+                                <div class="text-muted small">{{ $laporan['kategoriCount'] }} kategori &middot; {{ $laporan['gradeCount'] }} grade</div>
                             </div>
                         </div>
                         <div class="col-6 col-lg-3">
-                            <div class="border rounded p-3 h-100">
-                                <div class="text-muted small">Total Fee Company</div>
-                                <div class="fs-5 fw-semibold">Rp {{ number_format($rekap['feeCompanyTotal'], 0, ',', '.') }}</div>
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="d-flex align-items-center gap-2 text-muted small"><i class="ri-money-dollar-circle-line fs-5 text-warning"></i> Omset / Bulan</div>
+                                <div class="fs-4 fw-semibold mt-1">{{ $rp($laporan['omset']) }}</div>
+                                <div class="text-muted small">murid aktif &times; harga Grade</div>
                             </div>
                         </div>
                     </div>
 
-                    <p class="text-muted small mb-4">
-                        Fee &amp; jam mengajar dihitung dari sesi yang statusnya sudah ditandai Hadir/Tidak Hadir saja (sesi yang belum
-                        diabsen atau berstatus Izin/Sakit belum dihitung -- fee sesi izin pindah ke sesi penggantinya).
-                    </p>
+                    <ul class="nav nav-pills gap-2 mb-3" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active d-flex align-items-center gap-2" data-bs-toggle="pill" data-bs-target="#laporan-tab-student" type="button" role="tab">
+                                <i class="ri-user-line"></i> Student
+                                <span class="badge rounded-pill bg-light text-dark">{{ $laporan['students']->count() }}</span>
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link d-flex align-items-center gap-2" data-bs-toggle="pill" data-bs-target="#laporan-tab-pengajar" type="button" role="tab">
+                                <i class="ri-user-star-line"></i> Pengajar
+                                <span class="badge rounded-pill bg-light text-dark">{{ $laporan['pengajar']->count() }}</span>
+                            </button>
+                        </li>
+                    </ul>
 
-                    <h5 class="mb-2">Per Pengajar</h5>
-                    <div class="table-responsive mb-4">
-                        <table class="table table-centered table-hover align-middle mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Pengajar</th>
-                                    <th>Jumlah Sesi</th>
-                                    <th>Total Jam Mengajar</th>
-                                    <th>Fee Pengajar</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @forelse($rekap['perPengajar'] as $row)
-                                    <tr>
-                                        <td class="fw-semibold">{{ $row['nama'] }}</td>
-                                        <td>{{ $row['jumlah_sesi'] }}</td>
-                                        <td>{{ round($row['total_menit'] / 60, 1) }} jam</td>
-                                        <td>Rp {{ number_format($row['fee_pengajar'], 0, ',', '.') }}</td>
-                                    </tr>
-                                @empty
-                                    <tr>
-                                        <td colspan="4" class="text-center text-muted py-4">Belum ada sesi yang diabsen (Hadir/Tidak Hadir) di periode ini.</td>
-                                    </tr>
-                                @endforelse
-                            </tbody>
-                            @if($rekap['perPengajar']->isNotEmpty())
-                                <tfoot>
-                                    <tr class="fw-semibold">
-                                        <td>Total</td>
-                                        <td>{{ $rekap['perPengajar']->sum('jumlah_sesi') }}</td>
-                                        <td>{{ round($rekap['perPengajar']->sum('total_menit') / 60, 1) }} jam</td>
-                                        <td>Rp {{ number_format($rekap['feePengajarTotal'], 0, ',', '.') }}</td>
-                                    </tr>
-                                </tfoot>
-                            @endif
-                        </table>
-                    </div>
+                    <div class="tab-content">
+                        <div class="tab-pane fade show active" id="laporan-tab-student" role="tabpanel">
+                            <div class="table-responsive">
+                                <table class="table table-centered table-hover align-middle mb-0 text-nowrap">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Murid</th>
+                                            <th>Pengajar</th>
+                                            <th>Ruangan</th>
+                                            <th>Kelas</th>
+                                            <th>Kategori</th>
+                                            <th>Grade</th>
+                                            <th class="text-center">Hadir</th>
+                                            <th class="text-center">Tidak Hadir</th>
+                                            <th class="text-center">Izin</th>
+                                            <th class="text-center">Belum Diabsen</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @forelse($laporan['students'] as $row)
+                                            <tr>
+                                                <td class="fw-semibold">{{ $row['murid'] }}</td>
+                                                <td>{{ $row['pengajar'] }}</td>
+                                                <td>{{ $row['ruangan'] }}</td>
+                                                <td>{{ $row['kelas'] }}</td>
+                                                <td>{{ $row['kategori'] }}</td>
+                                                <td>{{ $row['grade'] }}</td>
+                                                <td class="text-center"><span class="badge bg-success-subtle text-success">{{ $row['hadir'] }}</span></td>
+                                                <td class="text-center"><span class="badge bg-secondary-subtle text-secondary">{{ $row['tidak_hadir'] }}</span></td>
+                                                <td class="text-center"><span class="badge bg-warning-subtle text-warning">{{ $row['izin'] }}</span></td>
+                                                <td class="text-center text-muted">{{ $row['belum'] }}</td>
+                                            </tr>
+                                        @empty
+                                            <tr>
+                                                <td colspan="10" class="text-center text-muted py-4">Tidak ada sesi murid aktif pada rentang tanggal ini.</td>
+                                            </tr>
+                                        @endforelse
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p class="text-muted small mt-2 mb-0">Izin sudah termasuk sakit. Hanya murid yang masih aktif yang dihitung.</p>
+                        </div>
 
-                    <h5 class="mb-2">Detail Sesi ({{ $sesi->count() }})</h5>
-                    <div class="table-responsive">
-                        <table class="table table-centered table-hover align-middle mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Tanggal</th>
-                                    <th>Jam</th>
-                                    <th>Kelas</th>
-                                    <th>Kategori</th>
-                                    <th>Ruangan</th>
-                                    <th>Murid</th>
-                                    <th>Pengajar</th>
-                                    <th>Kehadiran</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @forelse($sesi as $kelas)
-                                    <tr>
-                                        <td class="text-nowrap">{{ $kelas->start_time?->translatedFormat('d M Y') }}</td>
-                                        <td class="text-nowrap">{{ $kelas->start_time?->format('H:i') }}–{{ $kelas->end_time?->format('H:i') }}</td>
-                                        <td>{{ $kelas->mataPelajaran?->name ?? '-' }}</td>
-                                        <td>{{ $kelas->kategori?->name ?? '-' }}</td>
-                                        <td>{{ $kelas->ruangan?->name ?? '-' }}</td>
-                                        <td>{{ $kelas->student?->name ?? '-' }}</td>
-                                        <td>{{ $kelas->pengajar?->name ?? '-' }}</td>
-                                        <td>
-                                            @php
-                                                $badgeClass = match($kelas->attendance_status) {
-                                                    'hadir' => 'bg-success-subtle text-success',
-                                                    'tidak_hadir' => 'bg-secondary-subtle text-secondary',
-                                                    'izin' => 'bg-warning-subtle text-warning',
-                                                    default => 'bg-light text-dark',
-                                                };
-                                                $attendanceLabel = match($kelas->attendance_status) {
-                                                    'hadir' => 'Hadir',
-                                                    'tidak_hadir' => 'Tidak Hadir',
-                                                    'izin' => 'Izin/Sakit',
-                                                    default => 'Belum Diabsen',
-                                                };
-                                            @endphp
-                                            <span class="badge {{ $badgeClass }}">{{ $attendanceLabel }}</span>
-                                        </td>
-                                    </tr>
-                                @empty
-                                    <tr>
-                                        <td colspan="8" class="text-center text-muted py-4">Tidak ada sesi pada rentang tanggal ini.</td>
-                                    </tr>
-                                @endforelse
-                            </tbody>
-                        </table>
+                        <div class="tab-pane fade" id="laporan-tab-pengajar" role="tabpanel">
+                            <div class="table-responsive">
+                                <table class="table table-centered table-hover align-middle mb-0 text-nowrap">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Pengajar</th>
+                                            <th>Ruangan</th>
+                                            <th>Kelas</th>
+                                            <th>Kategori</th>
+                                            <th>Grade</th>
+                                            <th class="text-center">Jumlah Sesi</th>
+                                            <th>Total Jam Mengajar</th>
+                                            <th class="text-end">Fee Pengajar</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @forelse($laporan['pengajar'] as $row)
+                                            <tr>
+                                                <td class="fw-semibold">{{ $row['pengajar'] }}</td>
+                                                <td>{{ $row['ruangan'] }}</td>
+                                                <td>{{ $row['kelas'] }}</td>
+                                                <td>{{ $row['kategori'] }}</td>
+                                                <td>{{ $row['grade'] }}</td>
+                                                <td class="text-center">{{ $row['jumlah_sesi'] }}</td>
+                                                <td>{{ $jam($row['total_menit']) }}</td>
+                                                <td class="text-end">{{ $rp($row['fee_pengajar']) }}</td>
+                                            </tr>
+                                        @empty
+                                            <tr>
+                                                <td colspan="8" class="text-center text-muted py-4">Belum ada sesi yang diabsen Hadir/Tidak Hadir di periode ini.</td>
+                                            </tr>
+                                        @endforelse
+                                    </tbody>
+                                    @if($laporan['pengajar']->isNotEmpty())
+                                        <tfoot>
+                                            <tr class="fw-semibold">
+                                                <td colspan="5">Total</td>
+                                                <td class="text-center">{{ $laporan['pengajar']->sum('jumlah_sesi') }}</td>
+                                                <td>{{ $jam($laporan['pengajar']->sum('total_menit')) }}</td>
+                                                <td class="text-end">{{ $rp($laporan['pengajar']->sum('fee_pengajar')) }}</td>
+                                            </tr>
+                                        </tfoot>
+                                    @endif
+                                </table>
+                            </div>
+                            <p class="text-muted small mt-2 mb-0">Dihitung dari sesi Hadir &amp; Tidak Hadir (pengajar tetap dibayar). Sesi Izin dibayar lewat sesi penggantinya. Fee = harga per sesi Grade &times; % pengajar.</p>
+                        </div>
                     </div>
                 @else
                     <div class="text-center text-muted py-5">

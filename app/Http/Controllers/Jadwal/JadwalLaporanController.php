@@ -63,12 +63,10 @@ class JadwalLaporanController extends Controller
             $sampai = now()->startOfDay();
         }
 
-        $sesi = collect();
-        $rekap = null;
+        $laporan = null;
 
         if ($dari && $sampai && $sampai->gte($dari)) {
-            $sesi = $this->laporan->sesiUntukRentang($company->id, $branchOfficeId ?: null, $dari->copy()->startOfDay(), $sampai->copy()->endOfDay());
-            $rekap = $this->laporan->rekap($company->id, $branchOfficeId ?: null, $dari->copy()->startOfDay(), $sampai->copy()->endOfDay());
+            $laporan = $this->laporan->build($company->id, $branchOfficeId ?: null, $dari->copy()->startOfDay(), $sampai->copy()->endOfDay());
         }
 
         $branchOffices = $context->isLockedToBranch()
@@ -76,8 +74,7 @@ class JadwalLaporanController extends Controller
             : BranchOffice::where('company_id', $company->id)->orderBy('name')->get(['id', 'name']);
 
         return view('jadwal.laporan.index', [
-            'sesi' => $sesi,
-            'rekap' => $rekap,
+            'laporan' => $laporan,
             'dari' => $dari,
             'sampai' => $sampai,
             'branchOfficeId' => $branchOfficeId,
@@ -115,8 +112,7 @@ class JadwalLaporanController extends Controller
         $fromOfDay = $dari->copy()->startOfDay();
         $toOfDay = $sampai->copy()->endOfDay();
 
-        $sesi = $this->laporan->sesiUntukRentang($company->id, $branchOfficeId ?: null, $fromOfDay, $toOfDay);
-        $rekap = $this->laporan->rekap($company->id, $branchOfficeId ?: null, $fromOfDay, $toOfDay);
+        $laporan = $this->laporan->build($company->id, $branchOfficeId ?: null, $fromOfDay, $toOfDay);
 
         $rangeLabel = $dari->isSameDay($sampai)
             ? $dari->translatedFormat('d F Y')
@@ -124,7 +120,7 @@ class JadwalLaporanController extends Controller
 
         $filename = 'laporan-jadwal-'.$company->slug.'-'.$dari->format('Ymd').'-'.$sampai->format('Ymd').'.xlsx';
 
-        return Excel::download(new JadwalLaporanExport($sesi, $rekap, $rangeLabel), $filename);
+        return Excel::download(new JadwalLaporanExport($laporan, $rangeLabel), $filename);
     }
 
     /**
