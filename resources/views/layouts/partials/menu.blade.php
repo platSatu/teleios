@@ -1052,14 +1052,16 @@
                                     Pengaturan Duitku Disbursement
                                 </a>
                             </li>
-                            <li class="pe-slide-item">
-                                <a href="{{ route('superadmin.payment-gateway.index') }}" class="pe-nav-link">
-                                    Payment Gateway
-                                </a>
-                            </li>
                         </ul>
                     </li>
 
+                    {{-- Payment Gateway (8 Okt 2026): menu sendiri, tidak digabung grup lain. --}}
+                    <li class="pe-slide">
+                        <a href="{{ route('superadmin.payment-gateway.index') }}" class="pe-nav-link">
+                            <i class="uil uil-credit-card pe-nav-icon"></i>
+                            <span class="pe-nav-content">Payment Gateway</span>
+                        </a>
+                    </li>
                     <li class="pe-slide pe-has-sub">
                         <a href="#collapseVouchers" class="pe-nav-link" data-bs-toggle="collapse"
                             aria-expanded="false" aria-controls="collapseDashboards"
