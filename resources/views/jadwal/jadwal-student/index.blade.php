@@ -157,23 +157,12 @@
                                         sidebar-nya sendiri -- cuma shortcut per-baris ini yang hilang,
                                         Aksi di sini disederhanakan jadi Edit + Delete saja, sama
                                         seperti pola baris Pengajar (lihat jadwal-pengajar/index.blade.php). --}}
-                                        {{-- Daftarkan Tagihan (7 Okt 2026): branch ikut Student, nominal awal dari harga Grade. --}}
-                                        @if($canTagihan && $student->status === 'active')
-                                            @php $langganan = $student->tagihanPelanggan?->categoryPelanggan->first(); @endphp
-                                            <button type="button" class="btn btn-sm {{ $langganan ? 'btn-success' : 'btn-outline-success' }}"
-                                                data-bs-toggle="modal" data-bs-target="#studentTagihanModal"
-                                                data-url="{{ route('jadwal.student.tagihan', $student->id) }}"
-                                                data-name="{{ $student->name }}"
-                                                data-phone="{{ $student->parent_phone_number ?: $student->student_phone_number }}"
-                                                data-branch-id="{{ $student->branch_office_id }}"
-                                                data-branch-name="{{ $student->branchOffice->name ?? '' }}"
-                                                data-category="{{ $langganan?->tagihan_category_id }}"
-                                                data-amount="{{ $langganan ? (int) $langganan->nominal_override : ($tagihanAmounts[$student->id] ?? 0) }}"
-                                                data-grade-amount="{{ $tagihanAmounts[$student->id] ?? 0 }}"
-                                                data-kirim="{{ $student->tagihanPelanggan?->kirim_link_otomatis ?? true ? 1 : 0 }}"
-                                                title="{{ $langganan ? 'Tagihan: '.($langganan->category->name ?? '-').' · Rp '.number_format((int) $langganan->nominal_override, 0, ',', '.') : 'Daftarkan murid ini ke Tagihan bulanan' }}">
-                                                <i class="ri-wallet-3-line"></i> {{ $langganan ? 'Tagihan aktif' : 'Daftarkan Tagihan' }}
-                                            </button>
+                                        {{-- Paket Combo (8 Okt 2026): murid otomatis berlangganan Kategori Tagihan Grade-nya. --}}
+                                        @php $langganan = $canTagihan ? ($student->tagihanPelanggan?->categoryPelanggan ?? collect()) : collect(); @endphp
+                                        @if($langganan->isNotEmpty())
+                                            <span class="badge bg-success-subtle text-success me-1" title="{{ $langganan->map(fn ($l) => $l->category->name ?? '-')->implode(', ') }}">
+                                                <i class="ri-wallet-3-line"></i> Tagihan {{ $langganan->count() }}
+                                            </span>
                                         @endif
                                         <a href="{{ route('jadwal.student.edit', $student->id) }}" class="btn btn-sm btn-light">
                                             <i class="ri-edit-line"></i>
@@ -219,85 +208,4 @@
         </div>
     </div>
 </div>
-@if($canTagihan)
-{{-- Popup "Daftarkan Tagihan" -- lihat App\Http\Controllers\Jadwal\JadwalStudentTagihanController. --}}
-<div class="modal fade" id="studentTagihanModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <form class="modal-content" method="POST" id="studentTagihanForm" action="">
-            @csrf
-            <div class="modal-header">
-                <h6 class="modal-title mb-0"><i class="ri-wallet-3-line"></i> Tagihan Bulanan: <span id="stName"></span></h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
-            </div>
-            <div class="modal-body">
-                <div class="row g-2 mb-3">
-                    <div class="col-6">
-                        <label class="form-label small mb-1">Branch</label>
-                        <input type="text" class="form-control form-control-sm" id="stBranch" disabled>
-                    </div>
-                    <div class="col-6">
-                        <label class="form-label small mb-1">No. HP (penerima link)</label>
-                        <input type="text" class="form-control form-control-sm" id="stPhone" disabled>
-                    </div>
-                </div>
-                <div id="stNoCategory" class="alert alert-warning small py-2" style="display:none;">
-                    Branch ini belum punya Kategori Tagihan.
-                    <a href="#" id="stCreateCategory" class="alert-link">Buat Kategori Tagihan</a> dulu, lalu buka lagi popup ini.
-                </div>
-                <div id="stFields">
-                    <div class="mb-3">
-                        <label class="form-label">Kategori Tagihan</label>
-                        <select name="tagihan_category_id" id="stCategory" class="form-select" required></select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Nominal per bulan (Rp)</label>
-                        <input type="number" name="nominal" id="stAmount" class="form-control" min="0" step="1" required>
-                        <div class="form-text" id="stAmountHint"></div>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" name="kirim_link_otomatis" value="1" id="stKirim">
-                        <label class="form-check-label" for="stKirim">Kirim link tagihan otomatis lewat WhatsApp</label>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal">Batal</button>
-                <button type="submit" class="btn btn-success btn-sm" id="stSubmit">Simpan</button>
-            </div>
-        </form>
-    </div>
-</div>
-<script>
-(function () {
-    var categories = @json($tagihanCategoriesByBranch);
-    var createUrl = @json(route('tagihan.category.create'));
-    var modal = document.getElementById('studentTagihanModal');
-    var el = function (id) { return document.getElementById(id); };
-    var rupiah = function (n) { return 'Rp ' + Number(n || 0).toLocaleString('id-ID'); };
-
-    modal.addEventListener('show.bs.modal', function (event) {
-        var b = event.relatedTarget;
-        if (!b) return;
-        var d = b.dataset, list = categories[d.branchId] || [];
-        el('studentTagihanForm').action = d.url;
-        el('stName').textContent = d.name;
-        el('stBranch').value = d.branchName || '-';
-        el('stPhone').value = d.phone || '-';
-        el('stAmount').value = d.amount;
-        el('stAmountHint').textContent = 'Dari harga bulanan Grade yang diambil: ' + rupiah(d.gradeAmount) + '. Boleh diubah (diskon/beasiswa).';
-        el('stKirim').checked = d.kirim === '1';
-
-        var select = el('stCategory');
-        select.innerHTML = '';
-        list.forEach(function (c) { select.appendChild(new Option(c.name, c.id, false, c.id === d.category)); });
-
-        var empty = list.length === 0;
-        el('stNoCategory').style.display = empty ? '' : 'none';
-        el('stFields').style.display = empty ? 'none' : '';
-        el('stSubmit').disabled = empty;
-        el('stCreateCategory').href = createUrl + '?branch_office_id=' + encodeURIComponent(d.branchId || '');
-    });
-})();
-</script>
-@endif
 @endsection

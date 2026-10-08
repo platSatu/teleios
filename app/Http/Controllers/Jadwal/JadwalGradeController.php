@@ -7,8 +7,10 @@ use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\JadwalKategori;
 use App\Models\JadwalGrade;
+use App\Services\Jadwal\StudentTagihanLink;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Validator as ValidatorContract;
 use Illuminate\View\View;
@@ -73,7 +75,7 @@ class JadwalGradeController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, StudentTagihanLink $tagihanLink): RedirectResponse
     {
         $context = $this->companyContext($request);
         $company = $context->company;
@@ -91,7 +93,8 @@ class JadwalGradeController extends Controller
 
         $validated = $validator->validated();
 
-        JadwalGrade::create([
+        // Paket Combo: Kategori Tagihan Grade ini ikut dibuat (StudentTagihanLink).
+        DB::transaction(fn () => $tagihanLink->syncGrade(JadwalGrade::create([
             'company_id' => $company->id,
             'jadwal_kategori_id' => $kategori->id,
             'name' => $validated['name'],
@@ -99,7 +102,7 @@ class JadwalGradeController extends Controller
             'persentase_company' => $validated['persentase_company'],
             'persentase_pengajar' => $validated['persentase_pengajar'],
             'status' => $validated['status'] ?? 'active',
-        ]);
+        ])));
 
         return redirect()
             ->route('jadwal.grade.index', ['jadwal_kategori_id' => $kategori->id])
@@ -118,7 +121,7 @@ class JadwalGradeController extends Controller
         ]);
     }
 
-    public function update(Request $request, string $id): RedirectResponse
+    public function update(Request $request, string $id, StudentTagihanLink $tagihanLink): RedirectResponse
     {
         $context = $this->companyContext($request);
         $company = $context->company;
@@ -136,27 +139,34 @@ class JadwalGradeController extends Controller
 
         $validated = $validator->validated();
 
-        $grade->update([
-            'name' => $validated['name'],
-            'harga_bulanan' => $validated['harga_bulanan'],
-            'persentase_company' => $validated['persentase_company'],
-            'persentase_pengajar' => $validated['persentase_pengajar'],
-            'status' => $validated['status'] ?? 'active',
-        ]);
+        DB::transaction(function () use ($grade, $validated, $tagihanLink) {
+            $grade->update([
+                'name' => $validated['name'],
+                'harga_bulanan' => $validated['harga_bulanan'],
+                'persentase_company' => $validated['persentase_company'],
+                'persentase_pengajar' => $validated['persentase_pengajar'],
+                'status' => $validated['status'] ?? 'active',
+            ]);
+
+            $tagihanLink->syncGrade($grade);
+        });
 
         return redirect()
             ->route('jadwal.grade.index', ['jadwal_kategori_id' => $grade->jadwal_kategori_id])
             ->with('success', 'Grade berhasil diperbarui.');
     }
 
-    public function destroy(Request $request, string $id): RedirectResponse
+    public function destroy(Request $request, string $id, StudentTagihanLink $tagihanLink): RedirectResponse
     {
         $context = $this->companyContext($request);
 
         $grade = $this->findOrFail($context, $id);
         $kategoriId = $grade->jadwal_kategori_id;
 
-        $grade->delete();
+        DB::transaction(function () use ($grade, $tagihanLink) {
+            $tagihanLink->retireGrades([$grade->id]);
+            $grade->delete();
+        });
 
         return redirect()
             ->route('jadwal.grade.index', ['jadwal_kategori_id' => $kategoriId])

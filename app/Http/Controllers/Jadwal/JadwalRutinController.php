@@ -12,9 +12,11 @@ use App\Models\JadwalRuangan;
 use App\Models\JadwalRutin;
 use App\Models\JadwalStudent;
 use App\Services\Jadwal\JadwalRutinConflictService;
+use App\Services\Jadwal\StudentTagihanLink;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Validator as ValidatorContract;
 use Illuminate\View\View;
@@ -91,7 +93,7 @@ class JadwalRutinController extends Controller
         ] + $this->formData($context, $student));
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, StudentTagihanLink $tagihanLink): RedirectResponse
     {
         $context = $this->companyContext($request);
         $company = $context->company;
@@ -117,21 +119,26 @@ class JadwalRutinController extends Controller
 
         $grade = JadwalGrade::where('company_id', $company->id)->findOrFail($validated['jadwal_grade_id']);
 
-        JadwalRutin::create([
-            'company_id' => $company->id,
-            'branch_office_id' => $student->branch_office_id,
-            'student_id' => $student->id,
-            'jadwal_kategori_id' => $grade->jadwal_kategori_id,
-            'jadwal_grade_id' => $grade->id,
-            'pengajar_id' => $validated['pengajar_id'],
-            'jadwal_ruangan_id' => $validated['jadwal_ruangan_id'] ?? null,
-            'hari' => $validated['hari'],
-            'jam_mulai' => $validated['jam_mulai'],
-            'durasi_menit' => $validated['durasi_menit'] ?? null,
-            'efektif_mulai' => $validated['efektif_mulai'],
-            'efektif_selesai' => $validated['efektif_selesai'] ?? null,
-            'status' => $validated['status'] ?? 'active',
-        ]);
+        DB::transaction(function () use ($company, $student, $grade, $validated, $tagihanLink) {
+            JadwalRutin::create([
+                'company_id' => $company->id,
+                'branch_office_id' => $student->branch_office_id,
+                'student_id' => $student->id,
+                'jadwal_kategori_id' => $grade->jadwal_kategori_id,
+                'jadwal_grade_id' => $grade->id,
+                'pengajar_id' => $validated['pengajar_id'],
+                'jadwal_ruangan_id' => $validated['jadwal_ruangan_id'] ?? null,
+                'hari' => $validated['hari'],
+                'jam_mulai' => $validated['jam_mulai'],
+                'durasi_menit' => $validated['durasi_menit'] ?? null,
+                'efektif_mulai' => $validated['efektif_mulai'],
+                'efektif_selesai' => $validated['efektif_selesai'] ?? null,
+                'status' => $validated['status'] ?? 'active',
+            ]);
+
+            // Paket Combo: langganan Tagihan murid ikut Grade-nya.
+            $tagihanLink->syncStudent($student);
+        });
 
         return redirect()
             ->route('jadwal.rutin.index', ['student_id' => $student->id])
@@ -151,7 +158,7 @@ class JadwalRutinController extends Controller
         ] + $this->formData($context, $student));
     }
 
-    public function update(Request $request, string $id): RedirectResponse
+    public function update(Request $request, string $id, StudentTagihanLink $tagihanLink): RedirectResponse
     {
         $context = $this->companyContext($request);
         $company = $context->company;
@@ -174,32 +181,43 @@ class JadwalRutinController extends Controller
 
         $grade = JadwalGrade::where('company_id', $company->id)->findOrFail($validated['jadwal_grade_id']);
 
-        $rutin->update([
-            'jadwal_kategori_id' => $grade->jadwal_kategori_id,
-            'jadwal_grade_id' => $grade->id,
-            'pengajar_id' => $validated['pengajar_id'],
-            'jadwal_ruangan_id' => $validated['jadwal_ruangan_id'] ?? null,
-            'hari' => $validated['hari'],
-            'jam_mulai' => $validated['jam_mulai'],
-            'durasi_menit' => $validated['durasi_menit'] ?? null,
-            'efektif_mulai' => $validated['efektif_mulai'],
-            'efektif_selesai' => $validated['efektif_selesai'] ?? null,
-            'status' => $validated['status'] ?? 'active',
-        ]);
+        DB::transaction(function () use ($rutin, $student, $grade, $validated, $tagihanLink) {
+            $rutin->update([
+                'jadwal_kategori_id' => $grade->jadwal_kategori_id,
+                'jadwal_grade_id' => $grade->id,
+                'pengajar_id' => $validated['pengajar_id'],
+                'jadwal_ruangan_id' => $validated['jadwal_ruangan_id'] ?? null,
+                'hari' => $validated['hari'],
+                'jam_mulai' => $validated['jam_mulai'],
+                'durasi_menit' => $validated['durasi_menit'] ?? null,
+                'efektif_mulai' => $validated['efektif_mulai'],
+                'efektif_selesai' => $validated['efektif_selesai'] ?? null,
+                'status' => $validated['status'] ?? 'active',
+            ]);
+
+            $tagihanLink->syncStudent($student);
+        });
 
         return redirect()
             ->route('jadwal.rutin.index', ['student_id' => $student->id])
             ->with('success', 'Jadwal Rutin berhasil diperbarui.');
     }
 
-    public function destroy(Request $request, string $id): RedirectResponse
+    public function destroy(Request $request, string $id, StudentTagihanLink $tagihanLink): RedirectResponse
     {
         $context = $this->companyContext($request);
 
         $rutin = $this->findOrFail($context, $id);
         $studentId = $rutin->student_id;
 
-        $rutin->delete();
+        DB::transaction(function () use ($rutin, $tagihanLink) {
+            $student = $rutin->student;
+            $rutin->delete();
+
+            if ($student) {
+                $tagihanLink->syncStudent($student);
+            }
+        });
 
         return redirect()
             ->route('jadwal.rutin.index', ['student_id' => $studentId])

@@ -42,8 +42,8 @@ class JadwalStudent extends Model
         // Form asal (form_headers) kalau dibuat dari Form > Submission, lihat
         // migration add_form_id_to_jadwal_student_table. Nullable.
         'form_id',
-        // Pelanggan Tagihan milik murid ini (tombol "Daftarkan Tagihan"),
-        // lihat App\Services\Jadwal\StudentTagihanLink. Nullable.
+        // Pelanggan Tagihan milik murid ini (otomatis, paket Combo), lihat
+        // App\Services\Jadwal\StudentTagihanLink. Nullable.
         'tagihan_pelanggan_id',
     ];
 

@@ -7,8 +7,10 @@ use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\JadwalKategori;
 use App\Models\JadwalMataPelajaran;
+use App\Services\Jadwal\StudentTagihanLink;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Validator as ValidatorContract;
 use Illuminate\View\View;
@@ -114,7 +116,7 @@ class JadwalKategoriController extends Controller
         ]);
     }
 
-    public function update(Request $request, string $id): RedirectResponse
+    public function update(Request $request, string $id, StudentTagihanLink $tagihanLink): RedirectResponse
     {
         $context = $this->companyContext($request);
         $company = $context->company;
@@ -132,24 +134,32 @@ class JadwalKategoriController extends Controller
 
         $validated = $validator->validated();
 
-        $kategori->update([
-            'name' => $validated['name'],
-            'status' => $validated['status'] ?? 'active',
-        ]);
+        DB::transaction(function () use ($kategori, $validated, $tagihanLink) {
+            $kategori->update([
+                'name' => $validated['name'],
+                'status' => $validated['status'] ?? 'active',
+            ]);
+
+            // Nama & status Kategori Tagihan tiap Grade-nya ikut diperbarui.
+            $tagihanLink->syncGrades($kategori->grades()->get());
+        });
 
         return redirect()
             ->route('jadwal.kategori.index', ['jadwal_mata_pelajaran_id' => $kategori->jadwal_mata_pelajaran_id])
             ->with('success', 'Kategori berhasil diperbarui.');
     }
 
-    public function destroy(Request $request, string $id): RedirectResponse
+    public function destroy(Request $request, string $id, StudentTagihanLink $tagihanLink): RedirectResponse
     {
         $context = $this->companyContext($request);
 
         $kategori = $this->findOrFail($context, $id);
         $mataPelajaranId = $kategori->jadwal_mata_pelajaran_id;
 
-        $kategori->delete();
+        DB::transaction(function () use ($kategori, $tagihanLink) {
+            $tagihanLink->retireGrades($kategori->grades()->pluck('id'));
+            $kategori->delete();
+        });
 
         return redirect()
             ->route('jadwal.kategori.index', ['jadwal_mata_pelajaran_id' => $mataPelajaranId])

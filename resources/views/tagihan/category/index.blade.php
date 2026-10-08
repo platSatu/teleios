@@ -38,7 +38,12 @@
                         <tbody>
                             @forelse($categories as $category)
                                 <tr>
-                                    <td class="fw-semibold">{{ $category->name }}</td>
+                                    <td class="fw-semibold">
+                                        {{ $category->name }}
+                                        @if($category->jadwal_grade_id)
+                                            <span class="badge bg-info-subtle text-info fw-normal ms-1" title="Dibuat & diperbarui otomatis dari Grade di menu Jadwal">Dari Grade</span>
+                                        @endif
+                                    </td>
                                     <td>{{ $category->branchOffice->name ?? '-' }}</td>
                                     <td>{{ $category->tagihan_count }}</td>
                                     <td>

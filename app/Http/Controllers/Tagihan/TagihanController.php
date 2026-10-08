@@ -66,6 +66,7 @@ class TagihanController extends Controller
         $context = $this->companyContext($request);
 
         $categories = TagihanCategory::where('company_id', $context->company->id)
+            ->with(['branchOffice:id,name', 'grade:id,harga_bulanan'])
             ->where('status', 'active')
             ->when($context->isLockedToBranch(), fn ($q) => $q->where('branch_office_id', $context->branchOffice?->id))
             ->orderBy('name')

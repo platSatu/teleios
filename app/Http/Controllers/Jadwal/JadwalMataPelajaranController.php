@@ -8,11 +8,14 @@ use App\Http\Controllers\Controller;
 use App\Models\BranchOffice;
 use App\Models\Company;
 use App\Models\JadwalKelas;
+use App\Models\JadwalGrade;
 use App\Models\JadwalMataPelajaran;
 use App\Services\Jadwal\JadwalCountsService;
+use App\Services\Jadwal\StudentTagihanLink;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\View\View;
 
@@ -212,7 +215,7 @@ class JadwalMataPelajaranController extends Controller
         ]);
     }
 
-    public function update(Request $request, string $id): RedirectResponse
+    public function update(Request $request, string $id, StudentTagihanLink $tagihanLink): RedirectResponse
     {
         $context = $this->companyContext($request);
         $company = $context->company;
@@ -246,27 +249,36 @@ class JadwalMataPelajaranController extends Controller
             JadwalImageUploader::delete($mataPelajaran->image);
         }
 
-        $mataPelajaran->update([
-            'branch_office_id' => $validated['branch_office_id'] ?? null,
-            'name' => $validated['name'],
-            'description' => $validated['description'] ?? null,
-            'image' => $newImage,
-            'status' => $validated['status'] ?? 'active',
-        ]);
+        DB::transaction(function () use ($mataPelajaran, $validated, $newImage, $tagihanLink) {
+            $mataPelajaran->update([
+                'branch_office_id' => $validated['branch_office_id'] ?? null,
+                'name' => $validated['name'],
+                'description' => $validated['description'] ?? null,
+                'image' => $newImage,
+                'status' => $validated['status'] ?? 'active',
+            ]);
+
+            // Nama, status & branch Kategori Tagihan tiap Grade-nya ikut disamakan.
+            $tagihanLink->syncGrades($this->gradesOf($mataPelajaran));
+        });
 
         return redirect()
             ->route('jadwal.mata-pelajaran.index')
             ->with('success', 'Mata Pelajaran / Bidang berhasil diperbarui.');
     }
 
-    public function destroy(Request $request, string $id): RedirectResponse
+    public function destroy(Request $request, string $id, StudentTagihanLink $tagihanLink): RedirectResponse
     {
         $context = $this->companyContext($request);
 
         $mataPelajaran = $this->findOrFail($context, $id);
 
+        DB::transaction(function () use ($mataPelajaran, $tagihanLink) {
+            $tagihanLink->retireGrades($this->gradesOf($mataPelajaran)->pluck('id'));
+            $mataPelajaran->delete();
+        });
+
         JadwalImageUploader::delete($mataPelajaran->image);
-        $mataPelajaran->delete();
 
         return redirect()
             ->route('jadwal.mata-pelajaran.index')
@@ -401,5 +413,11 @@ class JadwalMataPelajaranController extends Controller
             ],
             'status' => ['nullable', 'in:active,inactive'],
         ]);
+    }
+
+    /** Semua Grade di bawah Mata Pelajaran ini (lewat Kategori-nya). */
+    private function gradesOf(JadwalMataPelajaran $mataPelajaran)
+    {
+        return JadwalGrade::whereHas('kategori', fn ($q) => $q->where('jadwal_mata_pelajaran_id', $mataPelajaran->id))->get();
     }
 }

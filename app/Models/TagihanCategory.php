@@ -51,6 +51,8 @@ class TagihanCategory extends Model
     protected $fillable = [
         'company_id',
         'branch_office_id',
+        // Grade asal (paket Combo, App\Services\Jadwal\StudentTagihanLink). Nullable.
+        'jadwal_grade_id',
         'name',
         'deskripsi',
         'denda_mode',
@@ -118,5 +120,11 @@ class TagihanCategory extends Model
     public function categoryPelanggan(): HasMany
     {
         return $this->hasMany(TagihanCategoryPelanggan::class);
+    }
+
+    /** Grade asal kategori ini (otomatis dari menu Jadwal), null kalau dibuat manual. */
+    public function grade(): BelongsTo
+    {
+        return $this->belongsTo(JadwalGrade::class, 'jadwal_grade_id');
     }
 }

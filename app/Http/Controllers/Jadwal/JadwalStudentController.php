@@ -22,7 +22,6 @@ use App\Services\Jadwal\JadwalRutinSesiGenerator;
 use App\Services\Jadwal\JadwalScheduleChangeNotifier;
 use App\Services\Jadwal\StudentFromFormSubmission;
 use App\Services\Jadwal\StudentTagihanLink;
-use App\Models\TagihanCategory;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -102,7 +101,7 @@ class JadwalStudentController extends Controller
     ) {
     }
 
-    public function index(Request $request, StudentTagihanLink $tagihanLink): View
+    public function index(Request $request): View
     {
         $context = $this->companyContext($request);
         $company = $context->company;
@@ -219,17 +218,7 @@ class JadwalStudentController extends Controller
             ? $this->companyTeamMembers($company)->firstWhere('id', $pengajarId)
             : null;
 
-        // Popup "Daftarkan Tagihan": nominal awal dari harga bulanan Grade &
-        // kategori Tagihan per cabang (hanya untuk cabang murid di halaman ini).
-        $tagihanAmounts = $tagihanLink->monthlyAmounts($company->id, $studentIds);
-        $tagihanCategoriesByBranch = TagihanCategory::where('company_id', $company->id)
-            ->whereIn('branch_office_id', collect($students->items())->pluck('branch_office_id')->filter()->unique())
-            ->orderBy('name')
-            ->get(['id', 'name', 'branch_office_id'])
-            ->groupBy('branch_office_id')
-            ->map(fn ($rows) => $rows->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->values());
-
-        return view('jadwal.jadwal-student.index', compact('students', 'mataPelajaran', 'pengajar', 'mataPelajaranId', 'pengajarId', 'gradeId', 'tagihanAmounts', 'tagihanCategoriesByBranch') + [
+        return view('jadwal.jadwal-student.index', compact('students', 'mataPelajaran', 'pengajar', 'mataPelajaranId', 'pengajarId', 'gradeId') + [
             'canTagihan' => $context->canAccessRoute('tagihan.pelanggan.index'),
         ]);
     }
@@ -369,7 +358,7 @@ class JadwalStudentController extends Controller
         ] + $this->formData($context));
     }
 
-    public function store(Request $request, StudentFromFormSubmission $fromForm): RedirectResponse
+    public function store(Request $request, StudentFromFormSubmission $fromForm, StudentTagihanLink $tagihanLink): RedirectResponse
     {
         $context = $this->companyContext($request);
         $company = $context->company;
@@ -419,7 +408,7 @@ class JadwalStudentController extends Controller
         // createRutinFromSlots() untuk detail pengecekan bentroknya.
         $ruanganId = $validated['jadwal_ruangan_id'] ?? null;
 
-        [$student, $rutinCreated, $rutinSkipped] = DB::transaction(function () use ($company, $validated, $mataPelajaran, $slotIdsByGrade, $ruanganId, $fromSubmission) {
+        [$student, $rutinCreated, $rutinSkipped] = DB::transaction(function () use ($company, $validated, $mataPelajaran, $slotIdsByGrade, $ruanganId, $fromSubmission, $tagihanLink) {
             $student = JadwalStudent::create([
                 'company_id' => $company->id,
                 'branch_office_id' => $validated['branch_office_id'] ?? $mataPelajaran?->branch_office_id,
@@ -456,6 +445,9 @@ class JadwalStudentController extends Controller
                 $created += $c;
                 $skipped = array_merge($skipped, $s);
             }
+
+            // Paket Combo: murid langsung berlangganan Kategori Tagihan Grade-nya.
+            $tagihanLink->syncStudent($student);
 
             return [$student, $created, $skipped];
         });
@@ -975,7 +967,7 @@ class JadwalStudentController extends Controller
         ];
     }
 
-    public function update(Request $request, string $id): RedirectResponse
+    public function update(Request $request, string $id, StudentTagihanLink $tagihanLink): RedirectResponse
     {
         $context = $this->companyContext($request);
         $company = $context->company;
@@ -1065,7 +1057,7 @@ class JadwalStudentController extends Controller
         // kehadiran yang sudah tercatat tidak diam-diam ditimpa.
         $ruanganId = $validated['jadwal_ruangan_id'] ?? null;
 
-        [$rutinCreated, $rutinSkipped, $rutinRemoved, $ruanganUpdated, $ruanganSkipped, $sesiRuanganUpdated] = DB::transaction(function () use ($context, $company, $validated, $mataPelajaran, $student, $slotIdsByGrade, $ruanganId) {
+        [$rutinCreated, $rutinSkipped, $rutinRemoved, $ruanganUpdated, $ruanganSkipped, $sesiRuanganUpdated] = DB::transaction(function () use ($context, $company, $validated, $mataPelajaran, $student, $slotIdsByGrade, $ruanganId, $tagihanLink) {
             $student->update([
                 'branch_office_id' => $validated['branch_office_id'] ?? $mataPelajaran?->branch_office_id,
                 'jadwal_mata_pelajaran_id' => $validated['jadwal_mata_pelajaran_id'],
@@ -1308,6 +1300,9 @@ class JadwalStudentController extends Controller
             // JadwalScheduleChangeNotifier::flushPengajarNotifications().
             $this->scheduleChangeNotifier->flushPengajarNotifications();
 
+            // Nama/No. HP, branch, status & Grade murid -> langganan Tagihan-nya.
+            $tagihanLink->syncStudent($student);
+
             return [$created, $skipped, $removed, $ruanganUpdatedCount, $ruanganSkippedMsgs, $sesiRuanganUpdatedCount];
         });
 
@@ -1401,7 +1396,7 @@ class JadwalStudentController extends Controller
             $student->update(['status' => JadwalStudent::STATUS_INACTIVE]);
 
             // Bulan depan tidak ikut ditagih lagi (tagihan lama tetap ada).
-            app(StudentTagihanLink::class)->deactivate($student);
+            app(StudentTagihanLink::class)->syncStudent($student);
         });
 
         return redirect()
@@ -1439,7 +1434,11 @@ class JadwalStudentController extends Controller
         $mataPelajaranId = $student->jadwal_mata_pelajaran_id;
         $pengajarId = $student->pengajar_id;
 
-        $student->delete();
+        DB::transaction(function () use ($student) {
+            // Langganan Tagihan-nya dihentikan dulu (invoice lama tetap ada).
+            app(StudentTagihanLink::class)->syncStudent($student, removing: true);
+            $student->delete();
+        });
 
         return redirect()
             ->route('jadwal.student.index', [

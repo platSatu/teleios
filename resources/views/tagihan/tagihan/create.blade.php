@@ -21,7 +21,7 @@
                             <select name="tagihan_category_id" id="categorySelect" class="form-select @error('tagihan_category_id') is-invalid @enderror" required>
                                 <option value="">- Pilih Kategori -</option>
                                 @foreach($categories as $cat)
-                                    <option value="{{ $cat->id }}" @selected(old('tagihan_category_id') == $cat->id)>
+                                    <option value="{{ $cat->id }}" data-amount="{{ $cat->grade ? (int) $cat->grade->harga_bulanan : '' }}" @selected(old('tagihan_category_id') == $cat->id)>
                                         {{ $cat->name }} ({{ $cat->branchOffice->name ?? '-' }})
                                     </option>
                                 @endforeach
@@ -44,6 +44,7 @@
                             <label class="form-label">Nominal</label>
                             <input type="number" step="0.01" min="0" name="amount" id="amountInput" class="form-control @error('amount') is-invalid @enderror"
                                 value="{{ old('amount') }}" required>
+                            <div class="form-text">Kategori dari Grade (menu Jadwal) otomatis terisi harga bulanan Grade-nya.</div>
                             @error('amount')
                                 <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
@@ -77,6 +78,13 @@
                             <a href="{{ route('tagihan.index') }}" class="btn btn-light">Batal</a>
                         </div>
                     </form>
+                    <script>
+                    // Isi nominal dari harga Grade saat kategori dipilih (masih bisa diubah).
+                    document.getElementById('categorySelect').addEventListener('change', function () {
+                        var amount = this.selectedOptions[0] ? this.selectedOptions[0].dataset.amount : '';
+                        if (amount) document.getElementById('amountInput').value = amount;
+                    });
+                    </script>
                 @endif
             </div>
         </div>

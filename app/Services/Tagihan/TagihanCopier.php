@@ -34,6 +34,8 @@ class TagihanCopier
             $source->load(['reminderRuleTemplates', 'dendaTiers', 'categoryPelanggan']);
 
             $copy = $source->replicate();
+            // Salinan = kategori biasa, tidak ikut tertaut ke Grade (kunci unik grade+branch).
+            $copy->jadwal_grade_id = null;
             $copy->name = $this->uniqueName($source->name, fn ($name) => TagihanCategory::where('company_id', $source->company_id)
                 ->where('branch_office_id', $source->branch_office_id)
                 ->where('name', $name)
