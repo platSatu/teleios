@@ -51,7 +51,7 @@ class JadwalMataPelajaranController extends Controller
             // Pelajaran, bukan diturunkan dari baris JadwalKelas. Dipakai
             // badge + modal "Kategori" di index.blade.php.
             ->withCount('kategoris')
-            ->with(['kategoris' => fn ($q) => $q->orderBy('name')])
+            ->with(['kategoris' => fn ($q) => $q->withCount('grades')->orderBy('name')])
             // Fix 4 September 2026 (laporan user: "di mata pelajaran ,
             // pada icon icon tersebut msh ada jumlahnya padahal sudah di
             // hapus") -- SEBELUMNYA pengajar_count/student_count/

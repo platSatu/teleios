@@ -84,8 +84,8 @@ class JadwalGrade extends Model
      * Harga per SESI, dihitung dari harga_bulanan dibagi jumlah
      * sesi/bulan -- kirim `$sesiPerBulan` dari
      * JadwalBranchSetting::sesi_per_bulan_default branch yang relevan.
-     * Kalau tidak dikirim, fallback ke 4 sesuai default umum (identik
-     * App\Models\JadwalKategori::hargaPerSesi()).
+     * Kalau tidak dikirim, fallback ke 4 sesuai default umum. Satu-satunya
+     * sumber harga sesi & fee pengajar (lihat JadwalRutinSesiGenerator).
      */
     public function hargaPerSesi(?int $sesiPerBulan = null): float
     {

@@ -16,12 +16,10 @@ use Illuminate\View\View;
 /**
  * CRUD "Kategori" (Jadwal v2, CLAUDE.md item #15, spec poin 3) -- level
  * BARU di bawah Kelas (App\Models\JadwalMataPelajaran), mis. Kelas
- * "Piano" punya Kategori "Classic Level 1" (harga 400rb/bulan) &
- * "Classic Level 2" (harga 500rb/bulan). Setiap Kategori punya harga
- * BULANAN (admin input harga bulanan, bukan per sesi -- harga per sesi
- * dihitung otomatis dari situ, lihat App\Models\JadwalKategori::
- * hargaPerSesi()) + persentase split company/pengajar SENDIRI (harus
- * berjumlah 100). Diakses lewat tombol "Kategori" di baris index Mata
+ * "Piano" punya Kategori "Classic" & "Pop". Kategori HANYA pengelompokan
+ * (nama + status) -- harga bulanan & persentase fee pengajar diatur di
+ * Grade di bawahnya (App\Models\JadwalGrade, 8 Oktober 2026: kolom harga
+ * di Kategori tidak lagi diisi/dipakai). Diakses lewat tombol "Kategori" di baris index Mata
  * Pelajaran / Bidang (jadwal.mata-pelajaran.index) --
  * jadwal_mata_pelajaran_id SELALU wajib ada di sini (beda dari Ruangan
  * yang wajib branch_office_id), karena Kategori tidak masuk akal
@@ -50,7 +48,7 @@ class JadwalKategoriController extends Controller
 
         $query = JadwalKategori::where('company_id', $company->id)
             ->where('jadwal_mata_pelajaran_id', $mataPelajaranId)
-            ->withCount('jadwalRutins');
+            ->withCount(['jadwalRutins', 'grades']);
 
         if ($request->filled('search')) {
             $query->where('name', 'like', '%'.$request->string('search').'%');
@@ -96,9 +94,6 @@ class JadwalKategoriController extends Controller
             'company_id' => $company->id,
             'jadwal_mata_pelajaran_id' => $mataPelajaran->id,
             'name' => $validated['name'],
-            'harga_bulanan' => $validated['harga_bulanan'],
-            'persentase_company' => $validated['persentase_company'],
-            'persentase_pengajar' => $validated['persentase_pengajar'],
             'status' => $validated['status'] ?? 'active',
         ]);
 
@@ -139,9 +134,6 @@ class JadwalKategoriController extends Controller
 
         $kategori->update([
             'name' => $validated['name'],
-            'harga_bulanan' => $validated['harga_bulanan'],
-            'persentase_company' => $validated['persentase_company'],
-            'persentase_pengajar' => $validated['persentase_pengajar'],
             'status' => $validated['status'] ?? 'active',
         ]);
 
@@ -191,23 +183,9 @@ class JadwalKategoriController extends Controller
 
     private function validator(Request $request, Company $company, ?string $ignoreId = null): ValidatorContract
     {
-        $validator = Validator::make($request->all(), [
+        return Validator::make($request->all(), [
             'name' => ['required', 'string', 'max:255'],
-            'harga_bulanan' => ['required', 'numeric', 'min:0', 'max:999999999.99'],
-            'persentase_company' => ['required', 'numeric', 'min:0', 'max:100'],
-            'persentase_pengajar' => ['required', 'numeric', 'min:0', 'max:100'],
             'status' => ['nullable', 'in:active,inactive'],
         ]);
-
-        $validator->after(function (ValidatorContract $v) use ($request) {
-            $companyPct = (float) $request->input('persentase_company');
-            $pengajarPct = (float) $request->input('persentase_pengajar');
-
-            if (abs(($companyPct + $pengajarPct) - 100) > 0.01) {
-                $v->errors()->add('persentase_pengajar', 'Persentase company + pengajar harus berjumlah 100.');
-            }
-        });
-
-        return $validator;
     }
 }

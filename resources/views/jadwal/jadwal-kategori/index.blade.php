@@ -16,7 +16,7 @@
                 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
                     <div>
                         <h4 class="mb-1">Kategori <span class="text-muted fs-6 fw-normal">— {{ $mataPelajaran->name }}</span></h4>
-                        <p class="text-muted mb-0">Level/varian di bawah kelas ini, masing-masing dengan harga & split fee sendiri.</p>
+                        <p class="text-muted mb-0">Level/varian di bawah kelas ini. Harga & fee pengajar diatur di Grade.</p>
                     </div>
                     <div class="d-flex gap-2 flex-wrap">
                         <a href="{{ route('jadwal.mata-pelajaran.index') }}" class="btn btn-light">
@@ -44,8 +44,7 @@
                         <thead class="table-light">
                             <tr>
                                 <th>Nama Kategori</th>
-                                <th>Harga Bulanan</th>
-                                <th>Split Company / Pengajar</th>
+                                <th>Jumlah Grade</th>
                                 <th>Jadwal Rutin Aktif</th>
                                 <th>Status</th>
                                 <th class="text-end">Aksi</th>
@@ -55,11 +54,7 @@
                             @forelse($kategoris as $kategori)
                                 <tr>
                                     <td class="fw-semibold">{{ $kategori->name }}</td>
-                                    <td>
-                                        Rp {{ number_format($kategori->harga_bulanan, 0, ',', '.') }}
-                                        <div class="text-muted small">≈ Rp {{ number_format($kategori->hargaPerSesi(), 0, ',', '.') }} / sesi</div>
-                                    </td>
-                                    <td>{{ rtrim(rtrim(number_format($kategori->persentase_company, 2), '0'), '.') }}% / {{ rtrim(rtrim(number_format($kategori->persentase_pengajar, 2), '0'), '.') }}%</td>
+                                    <td>{{ $kategori->grades_count }}</td>
                                     <td>{{ $kategori->jadwal_rutins_count }}</td>
                                     <td>
                                         <span class="badge {{ $kategori->status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }} text-capitalize">{{ $kategori->status }}</span>
@@ -78,7 +73,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="6" class="text-center text-muted py-4">Belum ada kategori. Tambahkan level/varian pertama untuk kelas ini.</td>
+                                    <td colspan="5" class="text-center text-muted py-4">Belum ada kategori. Tambahkan level/varian pertama untuk kelas ini.</td>
                                 </tr>
                             @endforelse
                         </tbody>

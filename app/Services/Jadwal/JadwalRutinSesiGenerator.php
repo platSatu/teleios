@@ -26,21 +26,18 @@ use Illuminate\Support\Facades\Log;
  * lihat createSesi()) -- baik dipanggil dari sini maupun dari command
  * bulanan, hasil akhirnya sama, tidak ada sesi dobel.
  *
- * Update 8 September 2026 (fitur Grade): harga/split fee sesi SEKARANG
- * diambil dari App\Models\JadwalGrade ($rutin->grade), BUKAN dari
- * Kategori langsung lagi -- Kategori tetap dipakai untuk hal yang
- * belum pindah (jadwal_mata_pelajaran_id, jadwal_kategori_id legacy).
- * Kalau satu JadwalRutin entah kenapa belum punya jadwal_grade_id
- * (data lama yang lolos dari migration backfill), FALLBACK ke kolom
- * harga lama di Kategori itu sendiri supaya generate sesi tidak
- * tiba-tiba berhenti/exception -- lihat createSesi().
+ * Harga & split fee sesi HANYA dari App\Models\JadwalGrade ($rutin->grade).
+ * Kategori dipakai untuk jadwal_mata_pelajaran_id & jadwal_kategori_id saja.
+ * Jadwal Rutin tanpa Grade TIDAK digenerate (dicatat ke log) -- sejak
+ * 8 Oktober 2026 tidak ada lagi fallback ke harga Kategori, supaya fee
+ * pengajar tidak pernah dihitung dari angka yang salah.
  */
 class JadwalRutinSesiGenerator
 {
     /**
      * Generate sesi untuk SATU Jadwal Rutin, bulan target (default bulan
      * berjalan). Return jumlah sesi baru yang benar-benar dibuat (0 kalau
-     * branch belum punya Jam Operasional, Kategori-nya sudah tidak ada,
+     * branch belum punya Jam Operasional, Kategori/Grade-nya tidak ada,
      * atau semua tanggal bulan itu sudah pernah digenerate sebelumnya).
      */
     public function generateForRutin(JadwalRutin $rutin, ?CarbonImmutable $targetMonth = null): int
@@ -86,6 +83,14 @@ class JadwalRutinSesiGenerator
         }
 
         $grade = $rutin->grade ?? ($rutin->jadwal_grade_id ? JadwalGrade::find($rutin->jadwal_grade_id) : null);
+
+        if (! $grade) {
+            Log::warning('JadwalRutinSesiGenerator: Jadwal Rutin tanpa Grade dilewati (harga & fee diambil dari Grade).', [
+                'jadwal_rutin_id' => $rutin->id,
+            ]);
+
+            return 0;
+        }
 
         $dates = $this->matchingDates($rutin->hari, $monthStart, $monthEnd);
 
@@ -151,13 +156,8 @@ class JadwalRutinSesiGenerator
      * (jadwal_rutin_id, start_time) sudah kepakai -- idempotent tanpa
      * perlu SELECT-then-INSERT.
      */
-    private function createSesi(JadwalRutin $rutin, JadwalKategori $kategori, ?JadwalGrade $grade, JadwalBranchSetting $branchSetting, CarbonImmutable $startTime, CarbonImmutable $endTime, int $durationMinutes): bool
+    private function createSesi(JadwalRutin $rutin, JadwalKategori $kategori, JadwalGrade $grade, JadwalBranchSetting $branchSetting, CarbonImmutable $startTime, CarbonImmutable $endTime, int $durationMinutes): bool
     {
-        // Sumber harga BARU adalah Grade (lihat class docblock) -- fallback
-        // ke Kategori legacy kalau entah kenapa Grade-nya tidak ada, supaya
-        // generate sesi tidak pernah exception gara-gara data lama.
-        $hargaSumber = $grade ?? $kategori;
-
         try {
             JadwalKelas::create([
                 'company_id' => $rutin->company_id,
@@ -167,17 +167,16 @@ class JadwalRutinSesiGenerator
                 'student_id' => $rutin->student_id,
                 'jadwal_rutin_id' => $rutin->id,
                 'jadwal_kategori_id' => $kategori->id,
-                'jadwal_grade_id' => $grade?->id,
+                'jadwal_grade_id' => $grade->id,
                 'jadwal_ruangan_id' => $rutin->jadwal_ruangan_id,
                 'start_time' => $startTime,
                 'end_time' => $endTime,
                 'duration_minutes' => $durationMinutes,
-                // Harga BULANAN Grade (fallback Kategori) dibagi sesi/bulan
-                // branch murid ini -- lihat App\Models\JadwalGrade::hargaPerSesi()
-                // / App\Models\JadwalKategori::hargaPerSesi().
-                'harga_sesi' => $hargaSumber->hargaPerSesi($branchSetting->sesi_per_bulan_default),
-                'persentase_company' => $hargaSumber->persentase_company,
-                'persentase_pengajar' => $hargaSumber->persentase_pengajar,
+                // Snapshot: harga BULANAN Grade dibagi sesi/bulan branch murid
+                // ini -- lihat App\Models\JadwalGrade::hargaPerSesi().
+                'harga_sesi' => $grade->hargaPerSesi($branchSetting->sesi_per_bulan_default),
+                'persentase_company' => $grade->persentase_company,
+                'persentase_pengajar' => $grade->persentase_pengajar,
                 'status' => JadwalKelas::STATUS_ACTIVE,
             ]);
 
